@@ -1,0 +1,315 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "mongodb"
+  url      = env("MONGODB_URL")
+  // relationMode = "prisma"
+}
+
+
+model User {
+  id       String   @id @default(auto()) @map("_id") @db.ObjectId
+  name     String?
+  email    String   @unique
+  password String
+  role     String   @default("customer") //professional admin staff
+  cart     Cart[]
+  //orders   Order[]
+  reviews  Review[]
+  addresses ShippingAddress[]
+  post Post[]
+  notification  Notification[]
+  avatarUrl   String?
+  contact  String?  @default("xxxx-xxx-xxxx")
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+model Post {
+  id        String   @id @default(auto()) @map("_id") @db.ObjectId
+  title     String?
+  description   String?
+  contentUrl   String?
+  author    User     @relation(fields: [authorId], references: [id])
+  authorId  String     @db.ObjectId
+  // product    Product?     @relation(fields: [productId], references: [id])
+  // productId   String?  @db.ObjectId
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+model Notification {
+  id       String   @id @default(auto()) @map("_id") @db.ObjectId
+  user     User     @relation(fields: [userId], references: [id])
+  userId   String   @db.ObjectId
+  message  String
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+model Category {
+  id       String   @id @default(auto()) @map("_id") @db.ObjectId
+  name     String   @unique
+  description String?
+  //slug     String   @unique
+  products Product[]
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+model Product {
+  id       String   @id @default(auto()) @map("_id") @db.ObjectId
+  name     String
+  description String?
+  category     Category     @relation(fields: [categoryId], references: [id])
+  categoryId    String    @db.ObjectId
+  activeIngredients    String[]
+  scarce      Boolean?
+  for       String[]  //patients like oncology/cancer, hiv, etc
+  brand      String?
+  price    Float
+  stock    Stock[]    //@relation(fields: [stockId], references: [id])
+  //stockId  String?   @db.ObjectId
+  reviews  Review[]
+  cartItems CartItem[]
+  Featured    FeaturedProduct?
+  images    String[]
+  //orderItems OrderItem[]
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+
+//for inputing available product, after sales, deduct the quantity
+//one to one relationship with a product, notice the unique then objectid
+model Stock {
+  id       String   @id @default(auto()) @map("_id") @db.ObjectId
+  product  Product  @relation(fields: [productId], references: [id])
+  productId String   @unique @db.ObjectId
+  addedQuantity Int?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+model Cart {
+  id       String   @id @default(auto()) @map("_id") @db.ObjectId
+  user     User     @relation(fields: [userId], references: [id])
+  userId   String    @db.ObjectId
+  products    CartItem[]
+  total     Float
+  payment Payment?
+  status    String   @default("pending")
+  refund    Refund?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+model CartItem {
+  id       String   @id @default(auto()) @map("_id") @db.ObjectId
+  cart     Cart     @relation(fields: [cartId], references: [id])
+  cartId   String    @db.ObjectId
+  product  Product  @relation(fields: [productId], references: [id])
+  productId String  @db.ObjectId
+  quantity Int
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+// model Order {
+//   id        String   @id @default(auto()) @map("_id") @db.ObjectId
+//   user      User     @relation(fields: [userId], references: [id])
+//   userId    String    @db.ObjectId
+//   products  CartItem[]
+//   total     Float
+//   payment Payment?
+//   status    String   @default("pending")
+//   createdAt DateTime @default(now())
+//   updatedAt DateTime @updatedAt
+// }
+
+// //same as cartitem, a cartitem converted after cart becomes an order
+// model OrderItem {
+//   id        String   @id @default(auto()) @map("_id") @db.ObjectId
+//   order     Order    @relation(fields: [orderId], references: [id])
+//   orderId   String    @db.ObjectId
+//   product   Product  @relation(fields: [productId], references: [id])
+//   productId String    @db.ObjectId
+//   quantity  Int
+//   createdAt DateTime @default(now())
+//   updatedAt DateTime @updatedAt
+// }
+
+
+model Payment {
+  id       String   @id @default(auto()) @map("_id") @db.ObjectId
+  cart    Cart    @relation(fields: [cartId], references: [id])
+  cartId  String   @unique @db.ObjectId
+  //method must be converted to an enum
+  method   String
+  amount   Float
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+
+model Coupon {
+  id       String   @id @default(auto()) @map("_id") @db.ObjectId
+  code     String   @unique
+  discount Float?
+  expiresAt DateTime?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+model ShippingAddress {
+  id       String   @id @default(auto()) @map("_id") @db.ObjectId
+  user     User     @relation(fields: [userId], references: [id])
+  userId   String    @db.ObjectId
+  address  String?
+  city     String?
+  state    String?
+  zip      String?
+  country  String?
+  phone    String?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+//one to one relation with cart, not d unique to avoid error
+model Refund {
+  id       String   @id @default(auto()) @map("_id") @db.ObjectId
+  cart    Cart    @relation(fields: [cartId], references: [id])
+  cartId  String   @unique @db.ObjectId
+  amount   Float
+  reason   String?
+  status    String   @default("pending")
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+
+// model Sale {
+//   id        String   @id @default(auto()) @map("_id") @db.ObjectId
+//   product   Product  @relation(fields: [productId], references: [id])
+//   productId String
+//   quantity  Int
+//   total     Float
+//   createdAt DateTime @default(now())
+//   updatedAt DateTime @updatedAt
+// }
+
+model FeaturedProduct {
+  id        String   @id @default(auto()) @map("_id") @db.ObjectId
+  product   Product  @relation(fields: [productId], references: [id])
+  productId String   @unique @db.ObjectId
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+
+
+// model Comment {
+//   id         String   @id @default(auto()) @map("_id") @db.ObjectId
+//   ministryId String?   @db.ObjectId @default("684f74ca135dd6d0efeab37d")
+//   contentId  String   @db.ObjectId
+//   userId     String   @db.ObjectId
+//   username     String
+//   comment  String?
+//   isArchived Boolean  @default(false)
+//   createdAt  DateTime @default(now())
+//   updatedAt  DateTime @updatedAt
+//   reply      Boolean  @default(false)
+//   // replyId   String       @db.ObjectId
+// }
+
+
+model Review {
+  id       String   @id @default(auto()) @map("_id") @db.ObjectId
+  user     User     @relation(fields: [userId], references: [id])
+  userId   String   @db.ObjectId
+  product  Product  @relation(fields: [productId], references: [id])
+  productId String    @db.ObjectId
+  rating   Int
+  comment  String?
+  isArchived Boolean  @default(false)
+  reply      Boolean  @default(false)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+//function also performed by review.rating
+// model Like {
+//   id         String   @id @default(auto()) @map("_id") @db.ObjectId
+//   //storeId String?   @db.ObjectId @default("684f74ca135dd6d0efeab37d")
+//   contentId  String   @db.ObjectId
+//   userId     String   @db.ObjectId
+//   // isArchived   Boolean      @default(false)
+//   createdAt  DateTime @default(now())
+//   updatedAt  DateTime @updatedAt
+// }
+
+
+
+
+//  $ prisma [command]
+
+//     Commands
+
+//                 init   Set up Prisma for your app
+//             generate   Generate artifacts (e.g. Prisma Client)
+//                   db   Manage your database schema and lifecycle
+//              migrate   Migrate your database
+//               studio   Browse your data with Prisma Studio
+//             validate   Validate your Prisma schema
+//               format   Format your Prisma schema
+//              version   Displays Prisma version info
+//                debug   Displays Prisma debug info
+//                  mcp   Starts an MCP server to use with AI development tools
+
+//     Flags
+
+//          --preview-feature   Run Preview Prisma commands
+//          --help, -h          Show additional information about a command
+
+// ┌──────────────────────────────────────────────────────────────────────────────────────┐
+// │  Optimize performance through connection pooling and caching with Prisma Accelerate  │
+// │  and capture real-time events from your database with Prisma Pulse.                  │
+// │  Learn more at https://pris.ly/cli/pdp                                               │
+// └──────────────────────────────────────────────────────────────────────────────────────┘
+
+//     Examples
+
+//       Set up a new Prisma project
+//       $ npx prisma init
+
+//       Generate artifacts (e.g. Prisma Client)
+//       $ prisma generate
+
+//       Browse your data
+//       $ prisma studio
+
+//       Create migrations from your Prisma schema, apply them to the database, generate artifacts (e.g. Prisma Client)
+//       $ prisma migrate dev
+
+//       Pull the schema from an existing database, updating the Prisma schema
+//       $ prisma db pull
+
+//       Push the Prisma schema state to the database
+//       $ prisma db push
+
+//       Validate your Prisma schema
+//       $ prisma validate
+
+//       Format your Prisma schema
+//       $ prisma format
+
+//       Display Prisma version info
+//       $ prisma version
+
+//       Display Prisma debug info
+//       $ prisma debug
