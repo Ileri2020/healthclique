@@ -1,5 +1,4 @@
-
-
+// @ts-nocheck
 import NextAuth, { CredentialsSignin } from "next-auth";
 // @ts-nocheck
 import Credentials from "next-auth/providers/credentials";
@@ -7,8 +6,8 @@ import Github from "next-auth/providers/github";
 import Google from "next-auth/providers/google";
 // import connectDB from "./lib/db";
 // import { User } from "./models/User";
-import bcrypt, { compare } from "bcryptjs";
-// import bcrypt, { compare } from 'bcrypt';
+// import bcrypt, { compare } from "bcryptjs";
+import bcrypt, { compare } from 'bcrypt';
 import { PrismaClient } from '@prisma/client';
 const prisma = new PrismaClient();
 

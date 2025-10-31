@@ -4,7 +4,7 @@
 // import connectDB from "@/lib/db";
 // import { User } from "@/models/User";
 import { redirect } from "next/navigation";
-import { hash } from "bcryptjs";
+import { hash } from "bcrypt";
 import { CredentialsSignin } from "next-auth";
 import { signIn } from "@/auth";
 import bcrypt, { compare } from 'bcrypt';
