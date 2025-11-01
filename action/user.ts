@@ -1,15 +1,14 @@
- // @ts-nocheck
+//  @ts-nocheck
 "use server";
 
 // import connectDB from "@/lib/db";
 // import { User } from "@/models/User";
 import { redirect } from "next/navigation";
-// import  { hashSync, compareSync } from "bcryptjs";
 import { CredentialsSignin } from "next-auth";
 import { signIn } from "@/auth";
-// import bcrypt, { compare } from 'bcrypt';
+import { compare, hash } from 'bcrypt';
 import { PrismaClient } from '@prisma/client';
-import { compareSync, hash, hashSync } from "bcryptjs";
+// import { compareSync, hashSync } from "bcryptjs";
 const prisma = new PrismaClient();
 
 const login = async (formData: FormData) => {
@@ -49,7 +48,7 @@ const register = async (formData: FormData) => {
   });
   if (existingUser) throw new Error("User already exists");
 
-  const hashedPassword = await hashSync(password, parseInt(process.env.SALT_ROUNDS));
+  const hashedPassword = await hash(password, parseInt(process.env.SALT_ROUNDS));
 
   // await User.create({ firstName, lastName, email, password: hashedPassword });
   await prisma.user.create({
