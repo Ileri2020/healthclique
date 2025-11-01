@@ -87,7 +87,7 @@ export default function FeaturedProductForm() {
     <div>
       
       <form onSubmit={handleSubmit} className='flex flex-col w-full max-w-sm gap-2 justify-center items-center p-3 border-2 border-secondary-foreground rounded-sm m-2'>
-      <h2>Manage Home Page Featured Products</h2>
+      <h2 className='font-semibold text-lg'>Manage Home Page Featured Products</h2>
       
       <ul className='w-full'>
         <div>Products To Feature</div>

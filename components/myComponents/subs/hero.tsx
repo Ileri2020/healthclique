@@ -22,7 +22,7 @@ const Hero = () => {
                 font-display text-4xl leading-tight font-bold tracking-tight text-foreground
                 sm:text-2xl md:text-3xl lg:leading-[1.1]`}
             >
-              <div className='md:hidden hidden dark:flex'>
+              <div className='hidden dark:flex md:dark:hidden md:hidden animate-pulse'>
                <Image
                   alt="Shopping experience"
                   className="object-cover w-full h-full "
@@ -33,7 +33,7 @@ const Hero = () => {
                   src={whitelandingimgmobile}
                 />
               </div>
-              <div className='md:hidden dark:hidden'>
+              <div className='md:hidden dark:hidden animate-pulse'>
                <Image
                   alt="Shopping experience"
                   className="object-cover w-full h-full "

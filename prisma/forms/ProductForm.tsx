@@ -151,7 +151,7 @@ export default function ProductForm() {
     <div>
       
       <form onSubmit={handleSubmit} className='flex flex-col w-full max-w-sm gap-2 justify-center items-center p-3 border-2 border-secondary-foreground rounded-sm m-2'>
-        <h2>Product Form</h2>
+        <h2 className='font-semibold text-lg'>Product Form</h2>
 
         <div>Product Name </div>
         <Input

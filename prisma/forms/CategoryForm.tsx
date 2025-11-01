@@ -55,7 +55,7 @@ export default function CategoriesForm() {
   return (
     <div>
       <form onSubmit={handleSubmit} className='flex flex-col w-full max-w-sm gap-2 justify-center items-center p-3 border-2 border-secondary-foreground rounded-sm m-2'>
-        <h2>Manage Product Categories</h2>
+        <h2 className='font-semibold text-lg'>Manage Product Categories</h2>
         <Input
           type="text"
           placeholder="Category Name"
