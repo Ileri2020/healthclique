@@ -6,8 +6,8 @@ import Github from "next-auth/providers/github";
 import Google from "next-auth/providers/google";
 // import connectDB from "./lib/db";
 // import { User } from "./models/User";
-// import bcrypt, { compare } from "bcryptjs";
-import bcrypt, { compare } from 'bcrypt';
+import { compareSync, hashSync } from "bcryptjs";
+// import bcrypt, { compare } from 'bcrypt';
 import { PrismaClient } from '@prisma/client';
 const prisma = new PrismaClient();
 
@@ -56,7 +56,7 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
           throw new Error("Invalid email or password");
         }
 
-        const isMatched = await compare(password, user.password);
+        const isMatched = await compareSync(password, user.password);
 
         if (!isMatched) {
           throw new Error("Password did not matched");
@@ -116,7 +116,7 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
                 name,
                 avatarUrl : image,
                 // authProviderId: id,
-                password: await bcrypt.hash(id, parseInt(process.env.SALT_ROUNDS)),
+                password: await hashSync(id, parseInt(process.env.SALT_ROUNDS)),
               },
             });
             
