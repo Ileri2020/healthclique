@@ -38,15 +38,20 @@ export default function CartForm() {
   };
 
   const handleSubmit = async (e) => {
-    e.preventDefault();
-    if (editId) {
-      await axios.put(`/api/dbhandler?model=cart&id=${editId}`, formData);
-    } else {
-      await axios.post('/api/dbhandler?model=cart', formData);
-    }
-    resetForm();
-    fetchCarts();
+  e.preventDefault();
+  const newFormData = {
+    ...formData,
+    quantity: +formData.quantity,
+    total: +formData.total,
   };
+  if (editId) {
+    await axios.put(`/api/dbhandler?model=cart&id=${editId}`, newFormData);
+  } else {
+    await axios.post('/api/dbhandler?model=cart', newFormData);
+  }
+  resetForm();
+  fetchCarts();
+};
 
   const handleEdit = (item) => {
     setFormData(item);
@@ -94,8 +99,8 @@ export default function CartForm() {
             <option value="">No products</option>
           )}
         </select>
-        <Input placeholder="Quantity" value={formData.quantity} onChange={(e) => setFormData({ ...formData, quantity: e.target.value })} type="number" />
-        <Input placeholder="Total" value={formData.total} onChange={(e) => setFormData({ ...formData, total: e.target.value })} type="number" />
+        <Input placeholder="Quantity" value={formData.quantity} onChange={(e) => setFormData({ ...formData, quantity: +e.target.value })}  type="number" />
+        <Input placeholder="Total" value={formData.total} onChange={(e) => setFormData({ ...formData, total: +e.target.value })}  type="number" />
         <Button type="submit">{editId ? 'Update' : 'Create'}</Button>
         {editId && <Button type="button" onClick={resetForm}>Cancel</Button>}
         <ul className='w-full'>
