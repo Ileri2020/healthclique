@@ -95,7 +95,7 @@ export default function PaymentForm() {
         <div>Payment Method</div>
         <Input placeholder="Payment method" value={formData.method} onChange={(e) => setFormData({ ...formData, method: e.target.value })} />
         <div>Amount</div>
-        <Input placeholder="Amount" type="number" value={formData.amount} onChange={(e) => setFormData({ ...formData, amount: e.target.value })} />
+        <Input placeholder="Amount" type="number" value={formData.amount} onChange={(e) => setFormData({ ...formData, amount: +e.target.value  })} />
         <Button type="submit">{editId ? 'Update' : 'Create'}</Button>
         {editId && <Button type="button" onClick={resetForm}>Cancel</Button>}
         <ul className='w-full'>
