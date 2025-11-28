@@ -3,6 +3,7 @@ import { useEffect, useState } from 'react';
 import axios from 'axios';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
+import StockTable from './stockdatatable';
 
 
 
@@ -12,7 +13,7 @@ export default function StockForm() {
   const [products, setProducts] = useState<any>([]);
   const [formData, setFormData] = useState({
     productId: '',
-    QuantityToAdd: 0,
+    addedQuantity: 0,
     product: '',
   });
   const [editId, setEditId] = useState(null);
@@ -23,7 +24,7 @@ export default function StockForm() {
   }, []);
 
   const fetchStocks = async () => {
-    const res = await axios.get('/api/dbhandler?model=stock');
+    const res = await axios.get('/api/stock');
     console.log("stocks :", res.data)
     setStocks(res.data);
   };
@@ -39,43 +40,80 @@ export default function StockForm() {
 
   const handleSubmit = async (e) => {
     e.preventDefault();
-    console.log("about to send to db",formData)
+
+    if (!formData.productId || formData.addedQuantity <= 0) {
+      console.error('Invalid form data:', formData);
+      return;
+    }
+
+  try {
     if (editId) {
-      await axios.put(`/api/dbhandler?model=stock&id=${editId}`, formData);
+      await axios.put('/api/stock', {
+        stockId: editId,
+        addedQuantity: formData.addedQuantity,
+      });
     } else {
-      const { status, data, statusText } = await axios.post(
-        '/api/dbhandler?model=stock',
-        formData
-      );
-      console.log('Status:', status, 'Data:', data, 'Status Text:', statusText);
+      await axios.post('/api/stock', {
+        productId: formData.productId,
+        addedQuantity: formData.addedQuantity,
+      });
     }
     resetForm();
     fetchStocks();
-    fetchProducts()
-  };
+    fetchProducts();
+  } catch (err) {
+    console.error('Failed to submit stock:', err);
+  }
+};
+
 
   const handleEdit = (item) => {
-    setFormData(item);
-    setEditId(item.id);
-  };
+  if (!item?.id || !item?.addedQuantity || !item?.product) {
+    console.error('Invalid stock item for edit:', item);
+    return;
+  }
+  setFormData({
+    productId: item.productId,
+    product: item.product,
+    addedQuantity: item.addedQuantity,
+  });
+  setEditId(item.id);
+};
 
   const handleProductInput = (item) => {
+    if (!item) return;
+
+    // Use the actual key your products have
+    const productId = item.id || item._id;
+    const productName = item.name || item.title;
+
+    if (!productId || !productName) {
+      console.error('Invalid product selected:', item);
+      return;
+    }
+
     setFormData({
       ...formData,
-      product: item.name || '',
-      productId: item.id || '',
+      productId: String(productId),
+      product: productName,
     });
-  };  
+  };
+
 
   const handleDelete = async (id) => {
-    await axios.delete(`/api/dbhandler?model=stock&id=${id}`);
-    fetchStocks();
+    try {
+      await axios.delete(`/api/stock?stockId=${id}`);
+      fetchStocks();
+    } catch (err) {
+      console.error('Failed to delete stock:', err);
+    }
   };
+
 
   const resetForm = () => {
     setFormData({
       productId: '',
-      QuantityToAdd: 0,
+      addedQuantity: 0,
       product: '',
     });
     setEditId(null);
@@ -102,7 +140,9 @@ export default function StockForm() {
               </div>
               <p>Price : {item.price || <em>No price tag</em>}</p>
               <div className='flex flex-row gap-2 p-1 w-full'>
-                <Button onClick={() => handleProductInput(item)} className='flex-1'>Stock</Button>
+                <Button type="button" onClick={() => handleProductInput(item)} className='flex-1'>
+                  Stock
+                </Button>
                 {/* <Button onClick={() => handleDelete(item.id)} variant='ghost' className='flex-1 border-2 border-accent'>Delete</Button> */}
               </div>
             </li>
@@ -129,8 +169,8 @@ export default function StockForm() {
         <Input
           type="number"
           placeholder="Quantity of Product to Add to Stock"
-          value={formData.QuantityToAdd}
-          onChange={(e) => setFormData({ ...formData, QuantityToAdd: Number(e.target.value) })}
+          value={formData.addedQuantity}
+          onChange={(e) => setFormData({ ...formData, addedQuantity: Number(e.target.value) })}
         />
         <Button type="submit">{editId ? 'Update' : 'Create'}</Button>
         {editId && <button onClick={resetForm}>Cancel</button>}
@@ -138,19 +178,20 @@ export default function StockForm() {
         <ul className='w-full'>
           <div>Added Stocks</div>
           {stocks.length > 0 ? (
-            stocks.map((item , index) => (
-              <li key={index} className="flex flex-col justify-center items-center gap-2 my-2 bg-secondary rounded-md w-full p-2">
-                <div className="flex flex-row gap-2">
-                  <span>{(index + 1)}. Stocked Product : </span>
-                  <span>{item.product}</span>
-                </div>
-                <p>Added Quantity : {item.addedQuantity || <em>No price tag</em>}</p>
-                <div className='flex flex-row gap-2 p-1 w-full'>
-                  <Button onClick={() => handleEdit(item)} className='flex-1'>Edit</Button>
-                  <Button onClick={() => handleDelete(item.id)} variant='ghost' className='flex-1 border-2 border-accent'>Delete</Button>
-                </div>
-              </li>
-            ))
+            // stocks.map((item , index) => (
+            //   <li key={index} className="flex flex-col justify-center items-center gap-2 my-2 bg-secondary rounded-md w-full p-2">
+            //     <div className="flex flex-row gap-2">
+            //       <span>{(index + 1)}. Stocked Product : </span>
+            //       <span>{item.product}</span>
+            //     </div>
+            //     <p>Added Quantity : {item.addedQuantity || <em>No price tag</em>}</p>
+            //     <div className='flex flex-row gap-2 p-1 w-full'>
+            //       <Button onClick={() => handleEdit(item)} className='flex-1'>Edit</Button>
+            //       <Button onClick={() => handleDelete(item.id)} variant='ghost' className='flex-1 border-2 border-accent'>Delete</Button>
+            //     </div>
+            //   </li>
+            // ))
+            <StockTable />
           ) : (
             <p>No available stock.</p>
           )}

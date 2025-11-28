@@ -90,7 +90,7 @@ model Product {
 model Stock {
   id       String   @id @default(auto()) @map("_id") @db.ObjectId
   product  Product  @relation(fields: [productId], references: [id])
-  productId String   @unique @db.ObjectId
+  productId String  @db.ObjectId
   addedQuantity Int?
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
