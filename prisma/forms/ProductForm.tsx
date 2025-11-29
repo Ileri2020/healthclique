@@ -1,51 +1,30 @@
-// components/BookForm.tsx
+"use client";
+
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import axios from 'axios';
 import { useEffect, useState } from 'react';
 
-// interface Product {
-//   id: string;
-//   //ministryId: string;
-//   title: string;
-//   author?: string;
-//   @id @default(auto()) @map("_id") @db.ObjectId
-//   name     String
-//   description String?
-//   category     Category     @relation(fields: [categoryId], references: [id])
-//   categoryId    String    @db.ObjectId
-//   price    Float
-//   stock: any;
-//   reviews  Review[]
-//   cartItems: any;
-//   Featured : any;
-//   images: any;
-//   createdAt?: Date;
-//   updatedAt?: Date; 
-// }
-
 export default function ProductForm() {
-  const [products, setProducts] = useState<any>([]);
-  const [formData, setFormData] = useState<any>({ //useState<Omit<any, 'id' | 'createdAt' | 'updatedAt'>>({
+  const [products, setProducts] = useState<any[]>([]);
+  const [categories, setCategories] = useState<any[]>([]);
+  const [formData, setFormData] = useState<any>({
     name: '',
     description: '',
-    category: '',
     categoryId: '',
+    category: '',
     price: 0,
     images: null,
   });
-  const [file, setFile] = useState(null);
-  const [categories, setCategories] = useState([]);//categories to be mapped to the select input
-  const [preview, setPreview] = useState(null);
-  const [uploadStatus , setUploadStatus] = useState("");
-
-  const [productImage, setProductImage] = useState(null);
+  const [file, setFile] = useState<File | null>(null);
+  const [preview, setPreview] = useState<string | null>(null);
   const [editId, setEditId] = useState<string | null>(null);
 
+  // Fetch products and categories on mount
   useEffect(() => {
     fetchProducts();
-    fetchCategories()
-  }, [preview,]);
+    fetchCategories();
+  }, []);
 
   const fetchProducts = async () => {
     try {
@@ -57,14 +36,18 @@ export default function ProductForm() {
   };
 
   const fetchCategories = async () => {
-    const res = await axios.get('/api/dbhandler?model=category');
-    setCategories(res.data);
-    if (res.data.length > 0) {
-      setFormData(prev => ({
-        ...prev,
-        categoryId: res.data[0].id,
-        category: res.data[0].name
-      }));
+    try {
+      const res = await axios.get('/api/dbhandler?model=category');
+      setCategories(res.data);
+      if (res.data.length > 0 && !formData.categoryId) {
+        setFormData(prev => ({
+          ...prev,
+          categoryId: res.data[0].id,
+          category: res.data[0].name
+        }));
+      }
+    } catch (err) {
+      console.error('Failed to fetch categories', err);
     }
   };
 
@@ -72,59 +55,62 @@ export default function ProductForm() {
     setFormData({
       name: '',
       description: '',
-      categoryId: '',
-      category: '',
+      categoryId: categories.length > 0 ? categories[0].id : '',
+      category: categories.length > 0 ? categories[0].name : '',
       price: 0,
       images: null,
     });
+    setFile(null);
+    setPreview(null);
     setEditId(null);
   };
 
-  const handleSubmit = async (e) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    console.log('product',formData)
-    const pformData = new FormData();
-    pformData.append("file", file);
-    pformData.append("description", formData.description)
-    pformData.append("name", formData.name)
-    pformData.append("category", formData.category)
-    pformData.append("categoryId", formData.categoryId)
-    pformData.append("price", formData.price)
-    pformData.append("productImage", "true")
-    
-    try {
-      if (editId) {
-        await axios.put(`/api/product?id=${editId}`, pformData);
-      } else {
-        const response = await axios.post(`/api/product`, pformData);
-        if (response.status === 200) {
-          const data = response.data;
-          // do something with the data
-          console.log(data)
-        } else {
-          alert("wrong input or connection error")
-        }
-      }
-    } catch (error) {
-      // handle error
-      alert('Failed to save product.');
+
+    if (!formData.name.trim() || !formData.categoryId) {
+      alert("Name and category are required.");
+      return;
     }
+
+    const pformData = new FormData();
+    if (file) pformData.append("file", file);
+    pformData.append("name", formData.name.trim());
+    pformData.append("description", formData.description || '');
+    pformData.append("categoryId", formData.categoryId);
+    pformData.append("category", formData.category);
+    pformData.append("price", formData.price.toString());
+
+    try {
+      const response = editId
+        ? await axios.put(`/api/dbhandler?model=product&id=${editId}`, pformData)
+        : await axios.post(`/api/dbhandler?model=product`, pformData);
+
+      console.log(response.data);
+    } catch (err) {
+      console.error(err);
+      alert("Failed to save product.");
+    }
+
     resetForm();
     fetchProducts();
-    // fetchUsers();
   };
 
-  const handleImageChange = (e) => {
-    const selectedFile = e.target.files[0];
-    if (selectedFile.size > 3 * 1024){
-      alert("file size greater than 300kb file may not upload")
+  const handleImageChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const selectedFile = e.target.files?.[0];
+    if (!selectedFile) return;
+
+    if (selectedFile.size > 3 * 1024 * 1024) {
+      alert("File size greater than 3MB may not upload properly.");
+      return;
     }
+
     setFile(selectedFile);
     setPreview(URL.createObjectURL(selectedFile));
-  }
+  };
 
   const handleDelete = async (id: string) => {
-    if (!confirm('Are you sure you want to delete this book?')) return;
+    if (!confirm('Are you sure you want to delete this product?')) return;
     try {
       await axios.delete(`/api/dbhandler?model=product&id=${id}`);
       fetchProducts();
@@ -137,103 +123,80 @@ export default function ProductForm() {
     setEditId(product.id);
     setFormData({
       name: product.name,
-      description: product.description,
+      description: product.description || '',
       categoryId: product.categoryId,
       category: product.category,
       price: product.price,
       images: product.images,
     });
+    if (product.images?.length > 0) setPreview(product.images[0]);
   };
 
-  
-
   return (
-    <div>
-      
-      <form onSubmit={handleSubmit} className='flex flex-col w-full max-w-sm gap-2 justify-center items-center p-3 border-2 border-secondary-foreground rounded-sm m-2'>
-        <h2 className='font-semibold text-lg'>Product Form</h2>
+    <div className="flex flex-col items-center p-4">
+      <form onSubmit={handleSubmit} className="flex flex-col w-full max-w-sm gap-3 p-4 border-2 border-secondary-foreground rounded-md">
+        <h2 className="text-lg font-semibold">Product Form</h2>
 
-        <div>Product Name </div>
+        <label>Product Name</label>
         <Input
           placeholder="Name of product"
           value={formData.name}
           onChange={(e) => setFormData({ ...formData, name: e.target.value })}
         />
 
-
-        <div>Product Description </div>
+        <label>Product Description</label>
         <Input
           placeholder="Description of product"
           value={formData.description}
           onChange={(e) => setFormData({ ...formData, description: e.target.value })}
         />
 
-
-        <div>Product Category </div>
-        <select 
-          value={formData.categoryId} 
+        <label>Product Category</label>
+        <select
+          value={formData.categoryId}
           onChange={(e) => {
             const selectedCategory = categories.find(cat => cat.id === e.target.value);
-            setFormData({ 
-              ...formData, 
-              categoryId: e.target.value, 
+            setFormData({
+              ...formData,
+              categoryId: e.target.value,
               category: selectedCategory ? selectedCategory.name : ''
             });
           }}
         >
-          {categories.length > 0 ? categories.map((category, index) => (
-            <option key={index} value={`${category.id}`}>
-              {category.name}
-            </option>
+          {categories.length > 0 ? categories.map((cat, idx) => (
+            <option key={idx} value={cat.id}>{cat.name}</option>
           )) : <option value="">No categories</option>}
         </select>
 
-
-        <div>Product Price </div>
+        <label>Product Price</label>
         <Input
-          placeholder="Price of product"
-          value={formData.price}
-          onChange={(e) => setFormData({ ...formData, price: e.target.value })}
           type="number"
+          value={formData.price}
+          onChange={(e) => setFormData({ ...formData, price: Number(e.target.value) })}
         />
 
-        <div>Product Image </div>
-        {(preview) && (        //{(preview || formData?.images[0]!=null) && (
-              <div style={{ marginTop: '1rem' }}>
-                <img src={preview} alt="Selected preview" style={{ maxHeight: '300px' }} />
+        <label>Product Image</label>
+        {preview && <img src={preview} alt="Preview" style={{ maxHeight: '200px' }} />}
+        <Input type="file" onChange={handleImageChange} />
+
+        <div className="flex gap-2">
+          <Button type="submit">{editId ? 'Update' : 'Create'}</Button>
+          {editId && <Button type="button" onClick={resetForm}>Cancel</Button>}
+        </div>
+
+        <ul className="w-full">
+          {products.length > 0 ? products.map((prod, idx) => (
+            <li key={idx} className="flex flex-col gap-2 p-2 my-2 bg-secondary rounded-md">
+              <div className="flex justify-between">
+                <span>{idx + 1}. {prod.name}</span>
+                <span>Price: {prod.price || 'N/A'}</span>
               </div>
-            )}
-            <Input
-              type="file"
-              name='image'
-              id='image'
-              placeholder="Product image"
-              // value={formData.avatarUrl || ''}
-              // onChange={(e) => setFormData({ ...formData, avatarUrl: e.target.value })}
-              onChange={handleImageChange}
-            />
-        <Button type="submit">{editId ? 'Update' : 'Create'}</Button>
-        {editId && <Button type="button" onClick={resetForm}>Cancel</Button>}
-
-
-        <ul className='w-full'>
-          {products.length > 0 ? (
-            products.map((item , index) => (
-              <li key={index} className="flex flex-col justify-center items-center gap-2 my-2 bg-secondary rounded-md w-full p-2">
-                <div className="flex flex-row gap-2">
-                  <span>{(index + 1)}. Name : </span>
-                  <span>{item.name}</span>
-                </div>
-                <p>Price : {item.price || <em>No price tag</em>}</p>
-                <div className='flex flex-row gap-2 p-1 w-full'>
-                  <Button onClick={() => handleEdit(item)} className='flex-1'>Edit</Button>
-                  <Button onClick={() => handleDelete(item.id)} variant='ghost' className='flex-1 border-2 border-accent'>Delete</Button>
-                </div>
-              </li>
-            ))
-          ) : (
-            <p>No available product.</p>
-          )}
+              <div className="flex gap-2">
+                <Button className="flex-1" onClick={() => handleEdit(prod)}>Edit</Button>
+                <Button className="flex-1 border-2 border-accent" variant="ghost" onClick={() => handleDelete(prod.id)}>Delete</Button>
+              </div>
+            </li>
+          )) : <p>No products available.</p>}
         </ul>
       </form>
     </div>

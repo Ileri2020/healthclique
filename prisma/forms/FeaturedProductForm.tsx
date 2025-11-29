@@ -1,30 +1,42 @@
-// MinistryForm.jsx
 import { useEffect, useState } from 'react';
 import axios from 'axios';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
 
+interface Product {
+  id: string;
+  name: string;
+  price?: number;
+  description?: string;
+}
 
-
+interface FeaturedProduct {
+  id: string;
+  productId: string;
+  product: Product;
+}
 
 export default function FeaturedProductForm() {
-  const [featuredProduct, setFeaturedProduct] = useState([])
-  const [products, setProducts] = useState<any>([]);
+  const [featuredProduct, setFeaturedProduct] = useState<FeaturedProduct[]>([]);
+  const [products, setProducts] = useState<Product[]>([]);
   const [formData, setFormData] = useState({
     productId: '',
-    product: '',
+    productName: '',
   });
-  const [editId, setEditId] = useState(null);
+  const [editId, setEditId] = useState<string | null>(null);
 
   useEffect(() => {
     fetchFeaturedProduct();
-    fetchProducts()
+    fetchProducts();
   }, []);
 
   const fetchFeaturedProduct = async () => {
-    const res = await axios.get('/api/dbhandler?model=featuredProduct');
-    console.log("featured product :", res.data)
-    setFeaturedProduct(res.data);
+    try {
+      const res = await axios.get('/api/dbhandler?model=featuredProduct');
+      setFeaturedProduct(res.data);
+    } catch (err) {
+      console.error('Failed to fetch featured products', err);
+    }
   };
 
   const fetchProducts = async () => {
@@ -36,118 +48,129 @@ export default function FeaturedProductForm() {
     }
   };
 
-  const handleSubmit = async (e) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    console.log("about to send to db",formData)
-    if (editId) {
-      await axios.put(`/api/dbhandler?model=featuredProduct&id=${editId}`, formData);
-    } else {
-      const { status, data, statusText } = await axios.post(
-        '/api/dbhandler?model=featuredProduct',
-        formData
-      );
-      console.log('Status:', status, 'Data:', data, 'Status Text:', statusText);
+    if (!formData.productId) {
+      alert("Please select a product to feature.");
+      return;
     }
-    resetForm();
-    fetchFeaturedProduct();
-    fetchProducts()
+
+    try {
+      if (editId) {
+        await axios.put(`/api/dbhandler?model=featuredProduct&id=${editId}`, {
+          productId: formData.productId,
+        });
+      } else {
+        await axios.post('/api/dbhandler?model=featuredProduct', {
+          productId: formData.productId,
+        });
+      }
+      resetForm();
+      fetchFeaturedProduct();
+    } catch (err) {
+      console.error("Failed to submit form:", err);
+    }
   };
 
-  const handleEdit = (item) => {
-    setFormData(item);
+  const handleEdit = (item: FeaturedProduct) => {
+    setFormData({
+      productId: item.productId,
+      productName: item.product?.name || '',
+    });
     setEditId(item.id);
   };
 
-  const handleProductInput = (item) => {
+  const handleProductSelect = (item: Product) => {
     setFormData({
-      ...formData,
-      product: item.name || '',
-      productId: item.id || '',
+      productId: item.id,
+      productName: item.name,
     });
-  };  
+  };
 
-  const handleDelete = async (id) => {
-    await axios.delete(`/api/dbhandler?model=featuredProduct&id=${id}`);
-    fetchFeaturedProduct();
+  const handleDelete = async (id: string) => {
+    try {
+      await axios.delete(`/api/dbhandler?model=featuredProduct&id=${id}`);
+      fetchFeaturedProduct();
+    } catch (err) {
+      console.error('Failed to delete featured product', err);
+    }
   };
 
   const resetForm = () => {
-    setFormData({
-      productId: '',
-      product: '',
-    });
+    setFormData({ productId: '', productName: '' });
     setEditId(null);
   };
 
-
-
-
-
   return (
-    <div>
-      
-      <form onSubmit={handleSubmit} className='flex flex-col w-full max-w-sm gap-2 justify-center items-center p-3 border-2 border-secondary-foreground rounded-sm m-2'>
-      <h2 className='font-semibold text-lg'>Manage Home Page Featured Products</h2>
-      
-      <ul className='w-full'>
-        <div>Products To Feature</div>
-        {products.length > 0 ? (
-          products.map((item , index) => (
-            <li key={index} className="flex flex-col justify-center items-center gap-2 my-2 bg-secondary rounded-md w-full p-2">
-              <div className="flex flex-row gap-2">
-                <span>{(index + 1)}. Name : </span>
-                <span>{item.name}</span>
-              </div>
-              <p>Price : {item.price || <em>No price tag</em>}</p>
-              <div className='flex flex-row gap-2 p-1 w-full'>
-                <Button onClick={() => handleProductInput(item)} className='flex-1'>Feature</Button>
-                {/* <Button onClick={() => handleDelete(item.id)} variant='ghost' className='flex-1 border-2 border-accent'>Delete</Button> */}
-              </div>
-            </li>
-          ))
-        ) : (
-          <p>No available product.</p>
-        )}
-      </ul>
-      
-      <Input
+    <div className="p-4">
+      <h2 className="text-lg font-semibold mb-2">Manage Home Page Featured Products</h2>
+
+      <form
+        onSubmit={handleSubmit}
+        className="flex flex-col w-full max-w-md gap-2 p-3 border-2 border-secondary-foreground rounded-md"
+      >
+        <h3 className="font-semibold">Select Product to Feature</h3>
+        <ul className="mb-2">
+          {products.length > 0 ? (
+            products.map((item, index) => (
+              <li
+                key={item.id}
+                className="flex flex-col justify-center items-start gap-1 my-2 bg-secondary rounded-md p-2 w-full"
+              >
+                <div className="flex justify-between w-full">
+                  <span>{index + 1}. {item.name}</span>
+                  <span>Price: {item.price ?? <em>No price</em>}</span>
+                </div>
+                <Button onClick={() => handleProductSelect(item)} className="mt-1">
+                  Feature
+                </Button>
+              </li>
+            ))
+          ) : (
+            <p>No available products.</p>
+          )}
+        </ul>
+
+        <Input
           type="text"
           placeholder="Product Name"
-          value={formData.product}
-          onChange={(e) => setFormData({ ...formData, product: e.target.value })}
-          disabled={true}
+          value={formData.productName}
+          disabled
         />
         <Input
           type="text"
           placeholder="Product ID"
           value={formData.productId}
-          onChange={(e) => setFormData({ ...formData, productId: e.target.value })}
-          disabled={true}
+          disabled
         />
         <Button type="submit">{editId ? 'Update' : 'Create'}</Button>
-        {editId && <button onClick={resetForm}>Cancel</button>}
-
-        <ul className='w-full'>
-          <div>Added Product Features</div>
-          {featuredProduct.length > 0 ? (
-            featuredProduct.map((item , index) => (
-              <li key={index} className="flex flex-col justify-center items-center gap-2 my-2 bg-secondary rounded-md w-full p-2">
-                <div className="flex flex-row gap-2">
-                  <span>{(index + 1)}. Featured Product : </span>
-                  <span>{item.product}</span>
-                </div>
-                {/* <p>Added Quantity : {item.addedQuantity || <em>No price tag</em>}</p> */}
-                <div className='flex flex-row gap-2 p-1 w-full'>
-                  <Button onClick={() => handleEdit(item)} className='flex-1'>Edit</Button>
-                  <Button onClick={() => handleDelete(item.id)} variant='ghost' className='flex-1 border-2 border-accent'>Delete</Button>
-                </div>
-              </li>
-            ))
-          ) : (
-            <p>No available product features.</p>
-          )}
-        </ul>
+        {editId && <Button onClick={resetForm} variant="ghost">Cancel</Button>}
       </form>
+
+      <h3 className="mt-4 font-semibold">Added Featured Products</h3>
+      <ul>
+        {featuredProduct.length > 0 ? (
+          featuredProduct.map((item, index) => (
+            <li
+              key={item.id}
+              className="flex flex-col justify-start items-start gap-1 my-2 bg-secondary rounded-md p-2 w-full"
+            >
+              <div className="flex justify-between w-full">
+                <span>{index + 1}. {item.product?.name ?? 'Unnamed Product'}</span>
+                <span>Price: {item.product?.price ?? <em>No price</em>}</span>
+              </div>
+              <div className="flex gap-2 mt-1">
+                <Button onClick={() => handleEdit(item)}>Edit</Button>
+                <Button onClick={() => handleDelete(item.id)} variant="ghost" className="border-2 border-accent">
+                  Delete
+                </Button>
+              </div>
+            </li>
+          ))
+        ) : (
+          <p>No featured products added yet.</p>
+        )}
+      </ul>
     </div>
   );
 }
