@@ -38,7 +38,7 @@ export default function StockForm() {
     }
   };
 
-  const handleSubmit = async (e) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
 
     if (!formData.productId || formData.addedQuantity <= 0) {
@@ -46,25 +46,28 @@ export default function StockForm() {
       return;
     }
 
-  try {
-    if (editId) {
-      await axios.put('/api/stock', {
-        stockId: editId,
-        addedQuantity: formData.addedQuantity,
-      });
-    } else {
-      await axios.post('/api/stock', {
-        productId: formData.productId,
-        addedQuantity: formData.addedQuantity,
-      });
+    try {
+      if (editId) {
+        await axios.put('/api/stock', {
+          stockId: editId,
+          addedQuantity: formData.addedQuantity,
+        });
+      } else {
+        await axios.post('/api/stock', {
+          productId: formData.productId,
+          addedQuantity: formData.addedQuantity,
+        });
+        // Reload the page after successful stock creation
+        window.location.reload();
+      }
+      resetForm();
+      fetchStocks();
+      fetchProducts();
+    } catch (err) {
+      console.error('Failed to submit stock:', err);
     }
-    resetForm();
-    fetchStocks();
-    fetchProducts();
-  } catch (err) {
-    console.error('Failed to submit stock:', err);
-  }
-};
+  };
+
 
 
   const handleEdit = (item) => {

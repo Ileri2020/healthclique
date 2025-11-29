@@ -57,7 +57,6 @@ const Signup = () => {
     password: '',
     name: '',
     avatarUrl: '',
-    role: 'user',
   });
   const [editId, setEditId] = useState(null);
 
@@ -93,7 +92,6 @@ const Signup = () => {
       password: '',
       name: '',
       avatarUrl: '',
-      role: 'user',
     });
     setEditId(null);
   };

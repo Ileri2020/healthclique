@@ -89,43 +89,91 @@ export async function GET(req: NextRequest) {
 // ==================== POST ====================
 export async function POST(req: NextRequest) {
   const { searchParams } = new URL(req.url);
-  const model = searchParams.get('model') || null;
+  const model = searchParams.get("model");
 
   if (!model || !modelMap[model]) {
     return new Response(JSON.stringify({ message: "Invalid model" }), {
       status: 400,
-      headers: { 'Content-Type': 'application/json' },
+      headers: { "Content-Type": "application/json" },
     });
   }
 
   const prismaModel = modelMap[model];
   const body = await parseJson(req);
-  if (!body) return new Response('Invalid JSON', { status: 400 });
+  if (!body) return new Response("Invalid JSON", { status: 400 });
 
   try {
     const data = { ...body };
     console.log("Data to create :", data);
 
-    // Hash password if creating a user
-    if (model === 'user' && data.password) {
-      try {
-        const saltRounds = parseInt(process.env.SALT_ROUNDS || '10', 10);
-        data.password = await bcrypt.hash(data.password, saltRounds);
-      } catch (err) {
-        console.error('Error hashing password:', err);
-        return new Response(JSON.stringify({ message: 'Error hashing password' }), { status: 500, headers: { 'Content-Type': 'application/json' } });
-      }
+    // HANDLE CART CREATION (TOTAL IS NOW AUTO-CALCULATED)
+    if (model === "cart") {
+      const { userId, products, status } = data;
+
+      // 1. Fetch product prices from DB
+      const productIds = products.map((p) => p.productId);
+
+      const dbProducts = await prisma.product.findMany({
+        where: {
+          id: { in: productIds },
+        },
+        select: { id: true, price: true },
+      });
+
+      // 2. Calculate total based on quantity × price
+      let total = 0;
+
+      products.forEach((item) => {
+        const found = dbProducts.find((p) => p.id === item.productId);
+        if (found) {
+          total += found.price * item.quantity;
+        }
+      });
+
+      // 3. Create cart with calculated total
+      const newCart = await prisma.cart.create({
+        data: {
+          userId,
+          total,          // ← backend-generated
+          status: status || "pending",
+          products: {
+            create: products.map((p) => ({
+              productId: p.productId,
+              quantity: p.quantity,
+            })),
+          },
+        },
+        include: {
+          products: true,
+        },
+      });
+
+      return new Response(JSON.stringify(newCart), {
+        status: 200,
+        headers: { "Content-Type": "application/json" },
+      });
     }
 
+
+
+    // DEFAULT CREATE
     const newItem = await prismaModel.create({
       data,
     });
-    return new Response(JSON.stringify(newItem), { status: 200, headers: { 'Content-Type': 'application/json' } });
+
+    return new Response(JSON.stringify(newItem), {
+      status: 200,
+      headers: { "Content-Type": "application/json" },
+    });
   } catch (error) {
-    // console.error('Database POST error:', error);
-    return new Response(JSON.stringify({ error: 'Failed to create item' }), { status: 500, headers: { 'Content-Type': 'application/json' } });
+    console.error("Database POST error:", error);
+    return new Response(JSON.stringify({ error: "Failed to create item" }), {
+      status: 500,
+      headers: { "Content-Type": "application/json" },
+    });
   }
 }
+
 
 // ==================== PUT ====================
 export async function PUT(req: NextRequest) {

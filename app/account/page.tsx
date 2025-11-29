@@ -11,6 +11,7 @@ import Link from "next/link"
 import { useAppContext } from "@/hooks/useAppContext"
 import { CiCamera } from "react-icons/ci"
 import {ProfileImg} from "@/components/myComponents/subs/fileupload"
+import { signOut } from "next-auth/react";
 
 const Account = () => {
   const { selectedVideo, setSelectedVideo, useMock, user, setUser } = useAppContext();
@@ -91,7 +92,22 @@ const Account = () => {
           </div>
         </div>
         <div>
-          <Button onClick={()=> setUser({ name: "visitor", id: "nil", email: "nil", avatarUrl: "https://res.cloudinary.com/dc5khnuiu/image/upload/v1752627019/uxokaq0djttd7gsslwj9.png", role: "user", contact: "xxxx" })}>Logout</Button>
+          <Button
+            onClick={() => {
+              signOut({ callbackUrl: "/" }); // redirects after logout
+              setUser({
+                username: "visitor",
+                id: "nil",
+                email: "nil",
+                avatarUrl: "https://res.cloudinary.com/dc5khnuiu/image/upload/v1752627019/uxokaq0djttd7gsslwj9.png",
+                role: "user",
+                department: "nil",
+                contact: "xxxx",
+              });
+            }}
+          >
+            Logout
+          </Button>
           <EditUser />
         </div>
       </div>

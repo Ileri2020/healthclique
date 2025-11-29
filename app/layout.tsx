@@ -7,6 +7,8 @@ import Navbar from "@/components/utility/navbar";
 import { AppContextProvider } from "@/context/appContext";
 import { Footer } from "@/components/myComponents/subs/footer";
 import { CartProvider } from "@/hooks/use-cart";
+import { SessionProvider } from "next-auth/react"
+import { usersession } from "@/session";
 // import {Roboto} from "next/font/google"
 
 // const roboto = Roboto({
@@ -44,34 +46,46 @@ export const SYSTEM_CONFIG = {
   // repoStars: true,
 };
 
-export default function RootLayout({
+interface Session {
+  user?: {
+    name?: string
+    email?: string
+    image?: string
+  }
+  expires: string
+}
+
+export default async function RootLayout({
   children,
 }: Readonly<{
   children: React.ReactNode;
 }>) {
+  const session : Session | null =  await usersession();
   return (
     <html lang="en">
-      <AppContextProvider>
-        <body
-          className={`font-roboto_mono antialiased`}
-          // ${geistSans.variable} ${geistMono.variable}
-        >
-          <Providers>
-            <CartProvider>
-              <ThemeProvider
-                  attribute="class"
-                  defaultTheme="light"
-                  enableSystem
-                  disableTransitionOnChange
-                >
-                  <Navbar />
-                  {children}
-                  <Footer />
-                </ThemeProvider>
-            </CartProvider>
-          </Providers>
-        </body>
-      </AppContextProvider>
+      <SessionProvider  session={session}>
+        <AppContextProvider>
+          <body
+            className={`font-roboto_mono antialiased`}
+            // ${geistSans.variable} ${geistMono.variable}
+          >
+            <Providers>
+              <CartProvider>
+                <ThemeProvider
+                    attribute="class"
+                    defaultTheme="light"
+                    enableSystem
+                    disableTransitionOnChange
+                  >
+                    <Navbar />
+                    {children}
+                    <Footer />
+                  </ThemeProvider>
+              </CartProvider>
+            </Providers>
+          </body>
+        </AppContextProvider>
+      </SessionProvider>
     </html>
   );
 }

@@ -29,6 +29,9 @@ import { redirect } from 'next/navigation'
 import axios from 'axios'
 // import { getSession } from '@/server/action/getSession'
 import { useAppContext } from '@/hooks/useAppContext'
+import { FcGoogle } from 'react-icons/fc'
+import { googleSignIn } from './googlesignin'
+import Signup from './signup'
 
 
 
@@ -109,6 +112,24 @@ const Login = () => {
             <AlertDialogCancel>Cancel</AlertDialogCancel>
             <AlertDialogAction>Continue</AlertDialogAction>
           </AlertDialogFooter> */}
+          <div className="w-full my-2">
+            <form
+              action={googleSignIn}
+            >
+              <Button
+                className=" relative w-full max-w-[300px] mx-auto flex /space-x-2 items-center justify-center text-black rounded-md h-10 font-medium shadow-input bg-gray-50 dark:bg-zinc-900 dark:shadow-[0px_0px_1px_1px_var(--neutral-800)]"
+                type="submit"
+              >
+                <FcGoogle className="h-4 w-4 text-neutral-800 dark:text-neutral-300" />
+                <span className="text-neutral-700 dark:text-neutral-300 text-sm">
+                  Google
+                </span>
+              </Button>
+            </form>
+          </div>
+          <div className="w-full my-2">
+            <Signup />
+          </div>
         </DrawerContent>
       </Drawer>
     </div>

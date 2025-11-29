@@ -8,11 +8,13 @@ import { Sheet, SheetClose, SheetContent, SheetHeader, SheetTitle, SheetTrigger 
 import { useCart } from "@/hooks/use-cart";
 import { useMediaQuery } from "@/hooks/use-media-query";
 import { cn } from "@/lib/utils";
+import axios from "axios";
 import { AnimatePresence, motion } from "framer-motion";
 import { Minus, Plus, ShoppingCart, X } from "lucide-react";
 // import Image from "next/image";
 import Link from "next/link";
 import * as React from "react";
+import { useAppContext } from '@/hooks/useAppContext';
 
 
 
@@ -38,6 +40,7 @@ export function CartClient({ className, cart }: CartProps) {
   const isDesktop = useMediaQuery("(min-width: 768px)");
 
   const { items, addItem, removeItem, clearCart, subtotal, updateQuantity, itemCount } = useCart();
+  const {user } = useAppContext();
 
   React.useEffect(() => {
     setIsMounted(true);
@@ -81,7 +84,39 @@ export function CartClient({ className, cart }: CartProps) {
 
 
 
+  const handleCheckout = async () => {
+    if (items.length === 0) return;
 
+    try {
+      // Prepare payload
+      const payload = {
+        userId: user.id, // replace with actual logged-in user ID
+        products: items.map((item) => ({
+          productId: item.id,
+          quantity: item.quantity,
+        })),
+        total: subtotal,
+        status: "pending", // or "paid" depending on your logic
+      };
+
+      console.log("Checkout payload:", payload);
+
+      // POST to your API route
+      const res = await axios.post("/api/dbhandler?model=cart", payload);
+
+      if (res.status === 200) {
+        console.log("Checkout successful:", res.data);
+        clearCart(); // empty local cart
+        alert("Checkout successful!");
+        // Optionally redirect to order summary page
+        // window.location.href = `/orders/${res.data.id}`;
+      }
+    } catch (err) {
+      // console.error("Checkout failed:", err);
+      alert("Checkout failed, please try again.");
+      alert("Checkout failed, please try again.");
+    }
+  };
 
 
 
@@ -285,7 +320,7 @@ export function CartClient({ className, cart }: CartProps) {
                 ₦{subtotal.toFixed(2)}
                 </span>
               </div>
-              <Button className="w-full" size="lg">
+              <Button className="w-full" size="lg" onClick={handleCheckout}>
                 Checkout
               </Button>
               <div className="flex items-center justify-between">

@@ -17,6 +17,7 @@ model User {
   name     String?
   email    String   @unique
   password String
+  providerid String?  
   role     String   @default("customer") //professional admin staff
   cart     Cart[]
   //orders   Order[]
@@ -24,7 +25,7 @@ model User {
   addresses ShippingAddress[]
   post Post[]
   notification  Notification[]
-  avatarUrl   String?
+  avatarUrl   String?   @default("https://res.cloudinary.com/dc5khnuiu/image/upload/v1752627019/uxokaq0djttd7gsslwj9.png")
   contact  String?  @default("xxxx-xxx-xxxx")
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt

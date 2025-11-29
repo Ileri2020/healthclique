@@ -1,5 +1,5 @@
 "use client";
-import { UserProps } from "@/types/user";
+// import { UserProps } from "@/types/user";
 import { VideoType } from "@/types/videoType";
 import React, { createContext, useState } from "react";
 
@@ -25,8 +25,8 @@ interface AppContextProps {
   setSelectedVideo: (selVideo: VideoType) => void;
   // user: UserProps;
   // setUser: (user: UserProps) => void;
-  user: UserProps;
-  setUser: (user: UserProps) => void;
+  user: any;
+  setUser: (user: any) => void;
   cart: any[]//UserProps;
   setCart: (cart: any[]) => void;
   isModal: boolean;
@@ -44,7 +44,7 @@ export const AppContextProvider: React.FC<any> = ({ children }) => {
   const [isList, setIsList] = useState(true);
   const [videos, setVideos] = useState<VideoType[]>([]);
   const [selectedVideo, setSelectedVideo] = useState<VideoType | null>(null);
-  const [user, setUser] = useState<UserProps>({ name: "visitor", id: "nil", email: "nil", avatarUrl: "https://res.cloudinary.com/dc5khnuiu/image/upload/v1752627019/uxokaq0djttd7gsslwj9.png", role: "user", contact: "xxxx" });
+  const [user, setUser] = useState<any>({ name: "visitor", id: "nil", email: "nil", avatarUrl: "https://res.cloudinary.com/dc5khnuiu/image/upload/v1752627019/uxokaq0djttd7gsslwj9.png", role: "user", contact: "xxxx" });
   const [cart, setCart] = useState<any[]>([]);
   const [isModal, setIsModal] = useState(false);
   const [useMock, setUseMock] = useState(true);
