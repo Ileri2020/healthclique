@@ -104,6 +104,8 @@ export async function GET(req: NextRequest) {
   }
 }
 
+
+
 // ==================== POST ====================
 export async function POST(req: NextRequest) {
   const { searchParams } = new URL(req.url);
@@ -114,31 +116,44 @@ export async function POST(req: NextRequest) {
   }
 
   const prismaModel = modelMap[model];
-  const formData = await req.formData();
-  const body: any = {};
 
-  // 1️⃣ Handle file uploads
-  const files = formData.getAll("file") as File[];
-  if (files?.length > 0) {
-    const urls: string[] = [];
-    for (const file of files) {
-      const uploadRes = await handleUpload(file);
-      urls.push(uploadRes.url);
+  const contentType = req.headers.get("content-type") || "";
+  let body: any = {};
+
+  // ==================== Handle FormData ====================
+  if (contentType.includes("multipart/form-data") || contentType.includes("application/x-www-form-urlencoded")) {
+    const formData = await req.formData();
+
+    // 1️⃣ Handle file uploads
+    const files = formData.getAll("file") as File[];
+    if (files?.length > 0) {
+      const urls: string[] = [];
+      for (const file of files) {
+        const uploadRes = await handleUpload(file);
+        urls.push(uploadRes.url);
+      }
+
+      if (model === "product") body.images = urls;
+      if (model === "user") body.avatarUrl = urls[0]; // single avatar
+      if (model === "category") body.image = urls[0]; // single category image
     }
 
-    if (model === "product") body.images = urls;
-    if (model === "user") body.avatarUrl = urls[0]; // single avatar
-    if (model === "category") body.image = urls[0]; // single category image
+    // 2️⃣ Merge other FormData values
+    formData.forEach((value, key) => {
+      if (key === "file") return; // skip files
+      body[key] = value;
+    });
+  } 
+  // ==================== Handle JSON ====================
+  else if (contentType.includes("application/json")) {
+    body = await req.json();
+  } 
+  else {
+    return NextResponse.json({ error: "Unsupported Content-Type" }, { status: 415 });
   }
 
-  // 2️⃣ Merge other FormData values
-  formData.forEach((value, key) => {
-    if (key === "file") return; // skip files
-    body[key] = value;
-  });
-
   try {
-    // 3️⃣ Model-specific logic
+    // ==================== Model-specific logic ====================
 
     // --- CART: calculate total ---
     if (model === "cart") {
@@ -190,6 +205,7 @@ export async function POST(req: NextRequest) {
 
 
 
+
 // ==================== PUT ====================
 export async function PUT(req: NextRequest) {
   const { searchParams } = new URL(req.url);
@@ -197,42 +213,71 @@ export async function PUT(req: NextRequest) {
   if (!model || !modelMap[model]) {
     return NextResponse.json({ error: "Invalid model" }, { status: 400 });
   }
+
   const prismaModel = modelMap[model];
-  const formData = await req.formData();
+  const contentType = req.headers.get("content-type") || "";
   const body: any = {};
-  console.log("PUT formData entries:", Array.from(formData.entries()));
-  // ⿡ Handle file uploads
-  const file = formData.get("file") as File | null;
-  if (file) {
-    try {
-      const uploadRes = await handleUpload(file);
-      console.log("Upload cloudinary response:", uploadRes);
-      if (model === "category") body.image = uploadRes.url;
-      if (model === "user") body.avatarUrl = uploadRes.url;
-      if (model === "product") body.images = [uploadRes.url]; // single image
-    } catch (err) {
-      console.error("Cloudinary upload failed:");
-      return NextResponse.json({ error: "File upload failed" }, { status: 500 });
+
+  let data: Record<string, any> = {};
+
+  // ==================== FormData ====================
+  if (contentType.includes("multipart/form-data") || contentType.includes("application/x-www-form-urlencoded")) {
+    const formData = await req.formData();
+    console.log("PUT formData entries:", Array.from(formData.entries()));
+    data = Object.fromEntries(formData.entries());
+
+    // ⿡ Handle file uploads
+    const file = formData.get("file") as File | null;
+    if (file) {
+      try {
+        const uploadRes = await handleUpload(file);
+        console.log("Upload cloudinary response:", uploadRes);
+        if (model === "category") body.image = uploadRes.url;
+        if (model === "user") body.avatarUrl = uploadRes.url;
+        if (model === "product") body.images = [uploadRes.url];
+      } catch (err) {
+        console.error("Cloudinary upload failed:", err);
+        return NextResponse.json({ error: "File upload failed" }, { status: 500 });
+      }
+    } else if (formData.get("image")) {
+      body.image = formData.get("image") as string;
     }
-  } else if (formData.get("image")) {
-    // Keep existing image if provided
-    body.image = formData.get("image") as string;
+
+    // ⿢ Merge other fields from FormData
+    formData.forEach((value, key) => {
+      if (key === "file" || key === "image") return;
+      body[key] = value;
+    });
+  } 
+  // ==================== JSON ====================
+  else if (contentType.includes("application/json")) {
+    data = await req.json();
+    Object.assign(body, data); // merge JSON into body
+
+    // If JSON includes file URLs (e.g., avatarUrl, images, image), preserve them
+    if (data.avatarUrl && model === "user") body.avatarUrl = data.avatarUrl;
+    if (data.image && model === "category") body.image = data.image;
+    if (data.images && model === "product") body.images = data.images;
+  } 
+  // ==================== Unsupported ====================
+  else {
+    return NextResponse.json({ error: "Unsupported Content-Type" }, { status: 415 });
   }
-  // ⿢ Merge other fields from FormData
-  formData.forEach((value, key) => {
-    if (key === "file" || key === "image") return; // skip files handled above
-    body[key] = value;
-  });
+
   // ⿣ Ensure ID exists
   const id = parseId(body.id, model);
   if (!id) return NextResponse.json({ error: "Missing or invalid id" }, { status: 400 });
+
   // ⿤ Remove `id` from body before update
   const { id: _ignore, ...updatedData } = body;
+
   // ⿥ Ensure updatedData is not empty
   if (!updatedData || Object.keys(updatedData).length === 0) {
     return NextResponse.json({ error: "Nothing to update" }, { status: 400 });
   }
-  console.log("Updating item with data:", updatedData, 'model:', model, 'id:', id);
+
+  console.log("Updating item with data:", updatedData, "model:", model, "id:", id);
+
   // ⿦ Perform update
   try {
     const updatedItem = await prismaModel.update({
@@ -275,7 +320,88 @@ export async function DELETE(req: NextRequest) {
 
 
 
+// // ==================== POST ====================
+// export async function POST(req: NextRequest) {
+//   const { searchParams } = new URL(req.url);
+//   const model = searchParams.get("model");
 
+//   if (!model || !modelMap[model]) {
+//     return NextResponse.json({ error: "Invalid model" }, { status: 400 });
+//   }
+
+//   const prismaModel = modelMap[model];
+//   const formData = await req.formData();
+//   const body: any = {};
+
+//   // 1️⃣ Handle file uploads
+//   const files = formData.getAll("file") as File[];
+//   if (files?.length > 0) {
+//     const urls: string[] = [];
+//     for (const file of files) {
+//       const uploadRes = await handleUpload(file);
+//       urls.push(uploadRes.url);
+//     }
+
+//     if (model === "product") body.images = urls;
+//     if (model === "user") body.avatarUrl = urls[0]; // single avatar
+//     if (model === "category") body.image = urls[0]; // single category image
+//   }
+
+//   // 2️⃣ Merge other FormData values
+//   formData.forEach((value, key) => {
+//     if (key === "file") return; // skip files
+//     body[key] = value;
+//   });
+
+//   try {
+//     // 3️⃣ Model-specific logic
+
+//     // --- CART: calculate total ---
+//     if (model === "cart") {
+//       const { userId, products, status } = body;
+
+//       const productIds = products.map((p: any) => p.productId);
+//       const dbProducts = await prisma.product.findMany({
+//         where: { id: { in: productIds } },
+//         select: { id: true, price: true },
+//       });
+
+//       let total = 0;
+//       products.forEach((item: any) => {
+//         const found = dbProducts.find((p) => p.id === item.productId);
+//         if (found) total += found.price * item.quantity;
+//       });
+
+//       const newCart = await prisma.cart.create({
+//         data: {
+//           userId,
+//           total,
+//           status: status || "pending",
+//           products: { create: products.map((p: any) => ({ productId: p.productId, quantity: p.quantity })) },
+//         },
+//         include: { products: true },
+//       });
+
+//       return NextResponse.json(newCart);
+//     }
+
+//     // --- USER: hash password ---
+//     if (model === "user" && body.password) {
+//       const salt = await bcrypt.genSalt();
+//       body.password = await bcrypt.hash(body.password, salt);
+//     }
+
+//     // --- Ensure numeric fields ---
+//     if (body.price) body.price = parseFloat(body.price);
+
+//     // 4️⃣ Create new item
+//     const newItem = await prismaModel.create({ data: body });
+//     return NextResponse.json(newItem);
+//   } catch (error) {
+//     console.error("Database POST error:", error);
+//     return NextResponse.json({ error: "Failed to create item" }, { status: 500 });
+//   }
+// }
 
 
 

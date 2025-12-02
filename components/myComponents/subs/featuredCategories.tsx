@@ -32,7 +32,7 @@ const FeaturedCategories = async () => {
           </h2>
           <div className="mt-2 h-1 w-12 rounded-full bg-primary" />
           <p className="mt-4 max-w-2xl text-center text-muted-foreground">
-            Find the perfect device for your needs from our curated collections
+            Find the perfect product for your needs from our curated collections
           </p>
         </div>
 
@@ -50,12 +50,12 @@ const FeaturedCategories = async () => {
                 <img
                   src={category.image}
                   alt={category.name}
-                  className="object-cover transition duration-300 group-hover:scale-105"
+                  className="object-cover transition duration-300 group-hover:scale-105 w-full h-full"
                 />
               </div>
 
               <div className="relative z-20 -mt-6 p-4">
-                <div className="mb-1 text-lg font-medium">{category.name}</div>
+                <div className="mb-1 text-lg font-semibold">{category.name}</div>
                 <p className="text-sm text-muted-foreground">
                   {category.productCount} products
                 </p>
