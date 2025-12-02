@@ -125,7 +125,7 @@ export function ProductCard({
               <img
                 alt={product.name}
                 className={cn(
-                  "object-cover transition-transform duration-300 ease-in-out",
+                  "object-cover w-full transition-transform duration-300 ease-in-out",
                   isHovered && "scale-105"
                 )}
                 sizes="(max-width: 768px) 100vw, (max-width: 1200px) 50vw, 33vw"

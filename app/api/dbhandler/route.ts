@@ -117,52 +117,33 @@ export async function POST(req: NextRequest) {
   const formData = await req.formData();
   const body: any = {};
 
-  // Convert FormData to object (excluding files)
-  formData.forEach((value, key) => {
-    if (key !== "file") body[key] = value;
-  });
-
-  // Handle file upload for products
-  if (model === "product") {
-    const files = formData.getAll("file") as File[];
+  // 1️⃣ Handle file uploads
+  const files = formData.getAll("file") as File[];
+  if (files?.length > 0) {
     const urls: string[] = [];
-
-    if (files?.length) {
-      for (const file of files) {
-        const res = await handleUpload(file);
-        urls.push(res.url);
-      }
-    }
-
-    // Ensure images is always an array
-    body.images = urls;
-
-    // Ensure required fields are present
-    body.name = body.name?.toString().trim() || "Unnamed Product";
-    body.categoryId = body.categoryId?.toString() || "";
-    body.description = body.description?.toString() || "";
-    body.price = body.price ? parseFloat(body.price as string) : 0;
-
-    // Ensure relations default to empty object if Prisma expects object
-    console.log("Product body to create:", body);
-  } else {
-    // Handle single file for other models (user, category)
-    const file = formData.get("file") as File | null;
-    if (file) {
+    for (const file of files) {
       const uploadRes = await handleUpload(file);
-      if (model === "user") body.avatarUrl = uploadRes.url;
-      if (model === "category") body.image = uploadRes.url;
+      urls.push(uploadRes.url);
     }
 
-    // Ensure any optional relation fields are objects
-    if (model === "user" && !body.profile) body.profile = {};
-    if (model === "category" && !body.products) body.products = [];
+    if (model === "product") body.images = urls;
+    if (model === "user") body.avatarUrl = urls[0]; // single avatar
+    if (model === "category") body.image = urls[0]; // single category image
   }
 
+  // 2️⃣ Merge other FormData values
+  formData.forEach((value, key) => {
+    if (key === "file") return; // skip files
+    body[key] = value;
+  });
+
   try {
-    // Special handling for cart creation
+    // 3️⃣ Model-specific logic
+
+    // --- CART: calculate total ---
     if (model === "cart") {
       const { userId, products, status } = body;
+
       const productIds = products.map((p: any) => p.productId);
       const dbProducts = await prisma.product.findMany({
         where: { id: { in: productIds } },
@@ -188,16 +169,16 @@ export async function POST(req: NextRequest) {
       return NextResponse.json(newCart);
     }
 
-    // Hash password for users
+    // --- USER: hash password ---
     if (model === "user" && body.password) {
       const salt = await bcrypt.genSalt();
       body.password = await bcrypt.hash(body.password, salt);
     }
 
-    // Ensure price is number
+    // --- Ensure numeric fields ---
     if (body.price) body.price = parseFloat(body.price);
 
-    // Create new item in DB
+    // 4️⃣ Create new item
     const newItem = await prismaModel.create({ data: body });
     return NextResponse.json(newItem);
   } catch (error) {
@@ -208,59 +189,66 @@ export async function POST(req: NextRequest) {
 
 
 
+
 // ==================== PUT ====================
 export async function PUT(req: NextRequest) {
   const { searchParams } = new URL(req.url);
   const model = searchParams.get("model");
-
-  if (!model || !modelMap[model]) return NextResponse.json({ error: "Invalid model" }, { status: 400 });
-
+  if (!model || !modelMap[model]) {
+    return NextResponse.json({ error: "Invalid model" }, { status: 400 });
+  }
   const prismaModel = modelMap[model];
   const formData = await req.formData();
   const body: any = {};
-
-  // Handle file upload (support multiple files for products)
-  if (model === "product") {
-    const files = formData.getAll("file") as File[];
-    if (files && files.length > 0) {
-      const urls: string[] = [];
-      for (const file of files) {
-        const res = await handleUpload(file);
-        urls.push(res.url);
-      }
-      body.images = urls;
-    }
-  } else {
-    const file = formData.get("file") as File | null;
-    if (file) {
+  console.log("PUT formData entries:", Array.from(formData.entries()));
+  // ⿡ Handle file uploads
+  const file = formData.get("file") as File | null;
+  if (file) {
+    try {
       const uploadRes = await handleUpload(file);
-      if (model === "user") body.avatarUrl = uploadRes.url;
+      console.log("Upload cloudinary response:", uploadRes);
       if (model === "category") body.image = uploadRes.url;
+      if (model === "user") body.avatarUrl = uploadRes.url;
+      if (model === "product") body.images = [uploadRes.url]; // single image
+    } catch (err) {
+      console.error("Cloudinary upload failed:");
+      return NextResponse.json({ error: "File upload failed" }, { status: 500 });
     }
+  } else if (formData.get("image")) {
+    // Keep existing image if provided
+    body.image = formData.get("image") as string;
   }
-
-  // Merge other fields
+  // ⿢ Merge other fields from FormData
   formData.forEach((value, key) => {
-    if (key !== "file") body[key] = value;
+    if (key === "file" || key === "image") return; // skip files handled above
+    body[key] = value;
   });
-
+  // ⿣ Ensure ID exists
   const id = parseId(body.id, model);
-  if (!id) return NextResponse.json({ error: "Missing id" }, { status: 400 });
-
-  if (model === "user" && body.password) {
-    const salt = await bcrypt.genSalt();
-    body.password = await bcrypt.hash(body.password, salt);
+  if (!id) return NextResponse.json({ error: "Missing or invalid id" }, { status: 400 });
+  // ⿤ Remove `id` from body before update
+  const { id: _ignore, ...updatedData } = body;
+  // ⿥ Ensure updatedData is not empty
+  if (!updatedData || Object.keys(updatedData).length === 0) {
+    return NextResponse.json({ error: "Nothing to update" }, { status: 400 });
   }
-
+  console.log("Updating item with data:", updatedData, 'model:', model, 'id:', id);
+  // ⿦ Perform update
   try {
-    const { id: _ignore, ...updatedData } = body;
-    const updatedItem = await prismaModel.update({ where: { id }, data: updatedData });
+    const updatedItem = await prismaModel.update({
+      where: { id: String(id) },
+      data: updatedData,
+    });
     return NextResponse.json(updatedItem);
   } catch (error) {
     console.error("Database PUT error:", error);
     return NextResponse.json({ error: "Failed to update item" }, { status: 500 });
   }
 }
+
+
+
+
 
 // ==================== DELETE ====================
 export async function DELETE(req: NextRequest) {
