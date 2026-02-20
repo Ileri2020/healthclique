@@ -6,6 +6,8 @@ import Hero from "@/components/myComponents/subs/hero"
 import FeaturedCategories from "@/components/myComponents/subs/featuredCategories"
 import FeaturedProducts from "@/components/myComponents/subs/featuredProducts"
 import Features from "@/components/myComponents/subs/features"
+import ConcernGrid from "@/components/myComponents/subs/concern-grid"
+import PartnerBrands from "@/components/myComponents/subs/partner-brands"
 
 
 const Home = () => {
@@ -20,6 +22,8 @@ const Home = () => {
     >
       {/* <Filters /> */}
       <Hero />
+      <PartnerBrands />
+      <ConcernGrid />
       <FeaturedCategories />
       <FeaturedProducts />
       <Features />

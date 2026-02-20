@@ -87,6 +87,16 @@ export async function GET(req: NextRequest) {
         return NextResponse.json(items);
       }
 
+      if (model === "category") {
+          const items = await prisma.category.findMany({
+              include: { 
+                  products: { take: 3, select: { images: true } },
+                  _count: { select: { products: true } }
+              }
+          });
+          return NextResponse.json(items);
+      }
+
       return NextResponse.json(await prismaModel.findMany());
     } else {
       if (model === "review") {

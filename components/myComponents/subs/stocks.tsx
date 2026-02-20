@@ -1,174 +1,183 @@
 "use client"
-import stocks from "@/data/stocks"
 import { Button } from '@/components/ui/button';
-import { useDispatch, useSelector } from "react-redux";
-import { cartActions } from "@/store/cart-slice";
-import {RootState} from "@/store";
 import { useState, useEffect } from "react";
-import { useRouter } from "next/router";
-import Link from "next/link";
-import { useAppContext } from "@/hooks/useAppContext";
+import { useSearchParams } from "next/navigation";
 import axios from "axios";
 import { ProductCard } from "./productCard";
 import { useCart } from "@/hooks/use-cart";
 import { Skeleton } from "@/components/ui/skeleton";
+import { useIsAdmin } from "@/hooks/useIsAdmin";
+import { Plus, ChevronLeft, ChevronRight } from "lucide-react";
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogTrigger,
+} from "@/components/ui/dialog";
+import ProductForm from "@/prisma/forms/ProductForm";
+
+const ITEMS_PER_PAGE = 30;
 
 const Stocks = () => {
-  const { user, setUser, cart, setCart } = useAppContext();
-  const { items, addItem, removeItem, subtotal } = useCart();
-  const [products, setProducts] = useState<any>([]);
-  //const cartItems = useSelector((state : RootState)=>state.cart.itemsList)
-  const dispatch = useDispatch();
-  const [error, setError] = useState(null);
+  const searchParams = useSearchParams();
+  const categoryFilter = searchParams.get("category");
+  
+  const { addItem } = useCart();
+  const [products, setProducts] = useState<any[]>([]);
+  const isAdmin = useIsAdmin();
+  const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
-  // const cart = (name : string, id : string, price : number, img : string) => {
-  //   dispatch(
-  //     cartActions.addToCart({
-  //       name,
-  //       id,
-  //       price,
-  //       img,
-  //     })
-  //   )
-  //  // console.log(cartItems)
-  // }
-  //const navigate = useRouter()
+  const [currentPage, setCurrentPage] = useState(1);
 
   const fetchProducts = async () => {
+    setLoading(true);
     try {
       const res = await axios.get('/api/dbhandler?model=product');
-      setProducts(res.data.slice().sort(()=>Math.random()-0.5));
+      let data = res.data;
+      
+      if (categoryFilter) {
+        data = data.filter((p: any) => 
+          p.category?.name.toLowerCase() === categoryFilter.toLowerCase() ||
+          p.categoryName?.toLowerCase() === categoryFilter.toLowerCase()
+        );
+      }
+      
+      setProducts(data);
+      setCurrentPage(1); // Reset to first page on filter change
     } catch (err) {
       setError("Failed to fetch products, please check your network connection");
-      setLoading(true);
+    } finally {
+      setLoading(false);
     }
   };
 
   useEffect(() => {
-      fetchProducts()
-      setLoading(false);
-  }, []);
+    fetchProducts();
+  }, [categoryFilter]);
 
-// if (loading) {
-//   return <p>Loading...</p>;
-// }
+  const handleAddToWishlist = (productId: string) => {
+    alert(`Adding product ${productId} to wishlist`);
+  };
 
+  // Pagination Logic
+  const totalPages = Math.ceil(products.length / ITEMS_PER_PAGE);
+  const indexOfLastItem = currentPage * ITEMS_PER_PAGE;
+  const indexOfFirstItem = indexOfLastItem - ITEMS_PER_PAGE;
+  const currentItems = products.slice(indexOfFirstItem, indexOfLastItem);
 
+  const paginate = (pageNumber: number) => {
+    setCurrentPage(pageNumber);
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+  };
 
-// const handleAddToCart = (product) => {
-//   //alert(`Adding product ${productId} to cart`);
-//   setCart([...cart, {...product, quantity : 1}]);
-//   console.log('cart', cart)
-//   // Add actual cart logic here
-// };
-
-const handleAddToWishlist = (productId) => {
-  alert(`Adding product ${productId} to wishlist`);
-  // Add actual wishlist logic here
-};
-
-
-  // if(!products){
   if (loading) {
-    return(
-      <div className='h-full max-w-[500px] md:max-w-[1000px] flex gap-5 flex-wrap relative p-2 self-center mx-auto justify-between overflow-clip'>
-        <div className="absolute w-full h-full flex /justify-center items-center z-10 bg-black/30 p-2">
-          {error && <p className="w-full text-center">Error: {error}</p>}
-        </div>
-      {
-        [1,2,3,4,5,6,7,8].map((stock, index)=>{
-          return(
-              <Skeleton 
-                key={index}
-                className="w-[100vw] md:w-[200px] h-[150px] /md:h-[300px] mb-5 flex flex-row md:flex-col overflow-clip"
-              />
-          )
-        })
-      }
-    </div>
-    )
+    return (
+      <div className='w-full max-w-7xl flex gap-5 flex-wrap p-4 justify-center mx-auto'>
+        {[1, 2, 3, 4, 5, 6, 7, 8].map((_, index) => (
+          <Skeleton key={index} className="w-full md:w-[240px] h-[350px] rounded-2xl" />
+        ))}
+      </div>
+    );
   }
 
-
   return (
-    <div className='h-full max-w-[500px] md:max-w-[1000px] flex gap-5 flex-wrap mx-5 p-2 self-center justify-between overflow-clip'>
-      {
-        products.map((stock, index)=>{
-          return(
-              <ProductCard 
-                key={index}  
-                className="w-[100vw] md:w-[200px] /h-[150px] /md:h-[300px] mb-5 flex flex-row md:flex-col overflow-clip"
-                product={{ ...stock, inStock: true, originalPrice: 1000, rating: 5 }}
-                onAddToCart={addItem}
-                onAddToWishlist={handleAddToWishlist}
-              />
-          )
-        })
-      }
+    <div className="w-full flex flex-col items-center py-8">
+      {isAdmin && (
+        <div className="mb-8">
+          <Dialog onOpenChange={(open) => !open && fetchProducts()}>
+            <DialogTrigger asChild>
+              <Button className="gap-2 bg-primary hover:bg-primary/90">
+                <Plus className="h-4 w-4" />
+                Add New Product
+              </Button>
+            </DialogTrigger>
+            <DialogContent className="max-w-md max-h-[90vh] overflow-y-auto">
+              <DialogHeader>
+                <DialogTitle>Add New Product</DialogTitle>
+              </DialogHeader>
+              <ProductForm hideList={true} />
+            </DialogContent>
+          </Dialog>
+        </div>
+      )}
+
+      {currentItems.length > 0 ? (
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5 gap-6 px-4 max-w-7xl w-full">
+          {currentItems.map((product) => (
+            <ProductCard 
+              key={product.id}
+              className="w-full group"
+              product={{ 
+                ...product, 
+                inStock: true, 
+                originalPrice: Number(product.price) * 1.2, 
+                rating: 5,
+                categoryName: product.category?.name || "Pharmacy"
+              }}
+              onAddToCart={() => addItem(product, 1)}
+              onAddToWishlist={() => handleAddToWishlist(product.id)}
+            />
+          ))}
+        </div>
+      ) : (
+        <div className="py-20 text-center">
+          <h3 className="text-xl font-medium text-muted-foreground">No products found in this category.</h3>
+        </div>
+      )}
+
+      {/* Pagination Controls */}
+      {totalPages > 1 && (
+        <div className="mt-12 flex items-center justify-center gap-2 flex-wrap">
+          <Button
+            variant="outline"
+            size="icon"
+            onClick={() => paginate(currentPage - 1)}
+            disabled={currentPage === 1}
+            className="rounded-lg"
+          >
+            <ChevronLeft className="h-4 w-4" />
+          </Button>
+
+          {Array.from({ length: totalPages }, (_, i) => i + 1).map((number) => {
+            // Show first, last, and pages around current
+            if (
+              number === 1 ||
+              number === totalPages ||
+              (number >= currentPage - 2 && number <= currentPage + 2)
+            ) {
+              return (
+                <Button
+                  key={number}
+                  variant={currentPage === number ? "default" : "outline"}
+                  onClick={() => paginate(number)}
+                  className={`w-10 h-10 rounded-lg ${currentPage === number ? 'bg-primary' : ''}`}
+                >
+                  {number}
+                </Button>
+              );
+            } else if (
+              number === currentPage - 3 ||
+              number === currentPage + 3
+            ) {
+              return <span key={number} className="px-1 text-muted-foreground">...</span>;
+            }
+            return null;
+          })}
+
+          <Button
+            variant="outline"
+            size="icon"
+            onClick={() => paginate(currentPage + 1)}
+            disabled={currentPage === totalPages}
+            className="rounded-lg"
+          >
+            <ChevronRight className="h-4 w-4" />
+          </Button>
+        </div>
+      )}
     </div>
-  )
-}
+  );
+};
 
-export default Stocks
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-// <div key={index} className="w-[100vw] md:w-[200px] /h-[150px] /md:h-[300px] mb-5 flex flex-row md:flex-col overflow-clip">
-            //   <Link href={`/store/${stock.id}`} className="h-full md:h-[60%] w-[30%] md:w-full mx-2 md:mx-0 flex justify-center items-center">
-            //     <img src={stock.images[0]} alt="" className="h-full rounded-sm"/>
-            //   </Link>
-              
-            //   <div className="flex flex-1 flex-col text-start md:text-center mx-2 md:mx-0 justify-between md:justify-normal md:items-center">
-            //     <Link href={`/store/${stock.id}`} className="w-full md:text-center flex flex-col md:justify-center md:items-center">
-            //       <div className="font-semibold">{stock.name}</div>
-            //       <div className="font-semibold text-foreground/80">₦ {stock.price}</div>
-            //       {/* <div className="text-foreground/80 text-sm">{stock.qty} pcs</div> */}
-            //     </Link>
-            //     <div className="flex flex-row gap-1 w-full px-5">
-            //       <Link href={`/store/${stock.id}`}><Button className="rounded-lg flex-1 w-full font-semibold text-background hover:bg-accent/10 hover:border-2 hover:border-accent hover:text-accent">view</Button></Link>
-            //       <Button onClick={() => cart(stock.name, stock._id, stock.price, stock.img)} variant={"outline"} className="rounded-lg flex-1 w-full font-semibold text-accent-secondary border-accent-secondary hover:bg-accent-secondary/60 hover:text-background border-2">cart</Button>
-            //     </div>
-            //   </div>
-            // </div>
+export default Stocks;

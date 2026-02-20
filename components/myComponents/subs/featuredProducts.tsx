@@ -1,91 +1,204 @@
 "use client";
 
 import { Button } from "@/components/ui/button";
-import { ArrowRight } from "lucide-react";
+import { ArrowRight, Plus, ShoppingCart, MessageCircle, Info } from "lucide-react";
 import Link from "next/link";
 import React, { useEffect, useState } from "react";
 import { ProductCard } from "./productCard";
-import { featuredProductsHomepage } from '@/data/mock'
-
-
-export interface FeaturedProductType {
-  id: string;
-  name: string;
-  category: string;
-  price: number;
-  originalPrice?: number;
-  inStock?: boolean;
-  rating?: number;
-  images: string[];
-}
+import { useIsAdmin } from "@/hooks/useIsAdmin";
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogTrigger,
+} from "@/components/ui/dialog";
+import FeaturedProductForm from "@/prisma/forms/FeaturedProductForm";
+import { toast } from "sonner";
+import { useCart } from "@/hooks/use-cart";
+import {
+  Carousel,
+  CarouselContent,
+  CarouselItem,
+  CarouselNext,
+  CarouselPrevious,
+} from "@/components/ui/carousel";
 
 const FeaturedProducts = () => {
-  const [products, setProducts] = useState<FeaturedProductType[]>([]);
+  const [products, setProducts] = useState<any[]>([]);
+  const [pharmacyProducts, setPharmacyProducts] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
+  const isAdmin = useIsAdmin();
+  const { addItem } = useCart();
+
+  async function fetchData() {
+    try {
+      // 1. Fetch Admin Featured Products
+      const featRes = await fetch("/api/dbhandler?model=featuredProduct");
+      const featData = await featRes.json();
+      setProducts(featData.map((item: any) => ({
+        ...item.product,
+        categoryName: item.product.category?.name
+      })));
+
+      // If no featured products, fetch latest 10 products as fallback
+      if (featData.length === 0) {
+        const fallbackRes = await fetch("/api/dbhandler?model=product");
+        const fallbackData = await fallbackRes.json();
+        setProducts(fallbackData.slice(-10).map((p: any) => ({
+            ...p,
+            categoryName: p.category?.name || "New Arrival"
+        })));
+      }
+
+      // 2. Fetch Imported Pharmacy Products (limit to 12 for the section)
+      const prodRes = await fetch("/api/dbhandler?model=product");
+      const prodData = await prodRes.json();
+      const pharmacy = prodData.filter((p: any) => p.category?.name === "Pharmacy").slice(0, 15);
+      setPharmacyProducts(pharmacy);
+
+    } catch (err) {
+      console.error("Failed to fetch featured products", err);
+    } finally {
+      setLoading(false);
+    }
+  }
 
   useEffect(() => {
-    async function fetchFeaturedProducts() {
-      try {
-        const res = await fetch("/api/dbhandler?model=featuredProduct");
-        const data = await res.json();
-
-        // Map the database data to match mock datatype
-        const mappedProducts: FeaturedProductType[] = data.map((item: any) => ({
-          id: item.product.id,
-          name: item.product.name,
-          category: item.product.category.name,
-          price: item.product.price,
-          originalPrice: item.product.price * 1.2, // Optional: if you want to show a higher original price
-          inStock: item.product.stock?.length > 0,
-          rating: item.product.reviews?.length
-            ? item.product.reviews.reduce((acc: number, r: any) => acc + r.rating, 0) /
-              item.product.reviews.length
-            : undefined,
-          images: item.product.images || [item.product.image || ""],
-        }));
-
-        setProducts(mappedProducts);
-      } catch (err) {
-        console.error("Failed to fetch featured products", err);
-      } finally {
-        setLoading(false);
-      }
-    }
-
-    fetchFeaturedProducts();
+    fetchData();
   }, []);
 
+  const handleAddToCart = (product: any) => {
+    addItem(product, 1);
+    toast.success(`${product.name} added to cart`);
+  };
+
+  const ProductSection = ({ title, subtitle, items }: { title: string, subtitle: string, items: any[] }) => (
+    <div className="mb-16">
+      <div className="flex flex-col md:flex-row md:items-end justify-between mb-8 gap-4 px-4">
+        <div className="text-left">
+          <h3 className="text-2xl font-bold tracking-tight text-foreground">{title}</h3>
+          <p className="text-muted-foreground">{subtitle}</p>
+        </div>
+        <Link href="/store" className="text-primary font-semibold flex items-center gap-1 hover:underline">
+          View All <ArrowRight className="w-4 h-4" />
+        </Link>
+      </div>
+      
+      <Carousel opts={{ align: "start", loop: true }} className="w-full relative px-4">
+        <CarouselContent className="-ml-4">
+          {items.map((product) => (
+            <CarouselItem key={product.id} className="pl-4 basis-full sm:basis-1/2 md:basis-1/3 lg:basis-1/5">
+                <div className="group relative bg-card border rounded-2xl overflow-hidden hover:shadow-xl transition-all duration-300 h-full flex flex-col">
+                  {/* Badge */}
+                  <div className="absolute top-2 left-2 z-10 bg-green-500 text-white text-[10px] font-bold px-2 py-0.5 rounded-full uppercase">
+                    Available
+                  </div>
+                  
+                  {/* Image */}
+                  <div className="relative aspect-square bg-muted/30 overflow-hidden">
+                    <img 
+                      src={product.images?.[0] || "/logo.png"} 
+                      alt={product.name} 
+                      className="object-contain w-full h-full p-4 transition-transform duration-500 group-hover:scale-110"
+                    />
+                  </div>
+
+                  {/* Content */}
+                  <div className="p-4 flex flex-col flex-1">
+                    <div className="text-xs text-primary font-medium mb-1 uppercase tracking-wider">
+                      {product.categoryName || "Pharmacy"}
+                    </div>
+                    <h4 className="font-bold text-sm line-clamp-2 mb-2 group-hover:text-primary transition-colors min-h-[40px]">
+                      {product.name}
+                    </h4>
+                    
+                    <div className="mt-auto">
+                      <div className="flex items-baseline gap-2 mb-4">
+                        <span className="text-lg font-black text-foreground">#{product.price.toLocaleString()}</span>
+                        {product.price > 1000 && (
+                           <span className="text-xs text-muted-foreground line-through">#{(product.price * 1.1).toFixed(0)}</span>
+                        )}
+                      </div>
+
+                      <div className="grid grid-cols-2 gap-2">
+                        <Button 
+                          onClick={() => handleAddToCart(product)}
+                          size="sm" 
+                          className="w-full bg-primary hover:bg-primary/90 text-[10px] font-bold h-9"
+                        >
+                          <ShoppingCart className="w-3 h-3 mr-1" /> BUY
+                        </Button>
+                        <Button 
+                          variant="outline" 
+                          size="sm" 
+                          className="w-full border-2 text-[10px] font-bold h-9"
+                        >
+                          <MessageCircle className="w-3 h-3 mr-1 text-green-500" /> WHATSAPP
+                        </Button>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+            </CarouselItem>
+          ))}
+        </CarouselContent>
+        <div className="hidden md:block">
+          <CarouselPrevious className="-left-4 bg-background/80 backdrop-blur-sm" />
+          <CarouselNext className="-right-4 bg-background/80 backdrop-blur-sm" />
+        </div>
+      </Carousel>
+    </div>
+  );
+
   return (
-    <section className="bg-muted/50 py-12 md:py-16">
-      <div className="container mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
-        <div className="mb-8 flex flex-col items-center text-center">
-          <h2 className="font-display text-3xl leading-tight font-bold tracking-tight md:text-4xl">
-            Featured Products
-          </h2>
-          <div className="mt-2 h-1 w-12 rounded-full bg-primary" />
-          <p className="mt-4 max-w-2xl text-center text-muted-foreground">
-            Check out our latest and most popular tech items
-          </p>
-        </div>
-
+    <section className="bg-muted/30 py-12 md:py-20">
+      <div className="container mx-auto max-w-7xl">
+        
         {loading ? (
-          <p className="text-center text-muted-foreground">Loading...</p>
+             <div className="flex justify-center items-center py-20">
+                <div className="animate-spin rounded-full h-12 w-12 border-t-2 border-b-2 border-primary"></div>
+             </div>
         ) : (
-          <div className="grid grid-cols-1 gap-6 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
-            {products.map((product) => (
-              <ProductCard key={product.id} product={product} />
-            ))}
-          </div>
-        )}
+          <>
+            {/* 1. Admin Featured Section (Legacy Styled) */}
+            {products.length > 0 && (
+               <ProductSection 
+                title="Deals & New Arrivals" 
+                subtitle="Explore our top picks and recently added premium medical supplies"
+                items={products}
+               />
+            )}
 
-        <div className="mt-10 flex justify-center">
-          <Link href="/products">
-            <Button className="group h-12 px-8" size="lg" variant="outline">
-              View All Products
-              <ArrowRight className="ml-2 h-4 w-4 transition-transform duration-300 group-hover:translate-x-1" />
-            </Button>
-          </Link>
-        </div>
+            {/* 2. Pharmacy Section (Imported Data) */}
+            {pharmacyProducts.length > 0 && (
+               <ProductSection 
+                title="Common Medications" 
+                subtitle="Recently added essential pharmaceuticals and healthcare products"
+                items={pharmacyProducts}
+               />
+            )}
+
+            {isAdmin && (
+              <div className="flex justify-center mb-10">
+                <Dialog onOpenChange={(open) => !open && fetchData()}>
+                  <DialogTrigger asChild>
+                    <Button className="gap-2 bg-accent hover:bg-accent/90">
+                      <Plus className="h-4 w-4" />
+                      Manage Home Sections
+                    </Button>
+                  </DialogTrigger>
+                  <DialogContent className="max-w-md">
+                    <DialogHeader>
+                      <DialogTitle>Section Manager</DialogTitle>
+                    </DialogHeader>
+                    <FeaturedProductForm hideList={true} />
+                  </DialogContent>
+                </Dialog>
+              </div>
+            )}
+          </>
+        )}
       </div>
     </section>
   );

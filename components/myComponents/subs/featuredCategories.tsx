@@ -1,69 +1,205 @@
-import Link from 'next/link'
-import { categories } from '@/data/mock'
+"use client";
+
+import Link from "next/link";
+import { useEffect, useState, useRef } from "react";
+import { useIsAdmin } from "@/hooks/useIsAdmin";
+import { Button } from "@/components/ui/button";
+import { Plus, Edit3, Trash2 } from "lucide-react";
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogTrigger,
+} from "@/components/ui/dialog";
+import CategoryForm from "@/prisma/forms/CategoryForm";
+import axios from "axios";
+import { toast } from "sonner";
+import {
+  Carousel,
+  CarouselContent,
+  CarouselItem,
+} from "@/components/ui/carousel";
+import Autoplay from "embla-carousel-autoplay";
 
 // Fetch categories from backend
 async function getCategories() {
-  const res = await fetch(`/api/dbhandler?model=category`, {
-    next: { revalidate: 60 } // ISR
-  });
-
+  const res = await fetch(`/api/dbhandler?model=category`);
   if (!res.ok) return [];
-
   const categories = await res.json();
-
-  // Transform backend categories to match mock format
-  return categories.map((cat: any) => ({
-    image: cat.image || "/placeholder.png",
-    name: cat.name,
-    productCount: cat.products?.length || 0,
-  }));
+  return categories.map((cat: any) => {
+    // Collect up to 3 images from related products
+    const productImages = cat.products?.flatMap((p: any) => p.images).slice(0, 3) || [];
+    const images = productImages.length > 0 ? productImages : [cat.image || "/logo.png"];
+    
+    return {
+      id: cat.id,
+      images: images,
+      name: cat.name,
+      description: cat.description || "",
+      productCount: cat._count?.products || 0,
+    };
+  });
 }
 
-const FeaturedCategories = async () => {
-  const categories = await getCategories();
+const CategoryCard = ({ category, isAdmin, onRefresh }: { category: any, isAdmin: boolean, onRefresh: () => void }) => {
+  const [currentImageIndex, setCurrentImageIndex] = useState(0);
+
+  useEffect(() => {
+    if (category.images.length > 1) {
+      const interval = setInterval(() => {
+        setCurrentImageIndex((prev) => (prev + 1) % category.images.length);
+      }, 2000);
+      return () => clearInterval(interval);
+    }
+  }, [category.images]);
+
+  const handleDelete = async (e: React.MouseEvent, id: string, name: string) => {
+    e.preventDefault();
+    if (confirm(`Are you sure you want to delete category "${name}"?`)) {
+      try {
+        await axios.delete(`/api/dbhandler?model=category&id=${id}`);
+        toast.success("Category deleted");
+        onRefresh();
+      } catch (err) {
+        toast.error("Failed to delete category");
+      }
+    }
+  };
 
   return (
-    <section className="py-12 md:py-16">
-      <div className="container mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
-
-        <div className="mb-8 flex flex-col items-center text-center">
-          <h2 className="font-display text-3xl leading-tight font-bold tracking-tight md:text-4xl">
-            Shop by Category
-          </h2>
-          <div className="mt-2 h-1 w-12 rounded-full bg-primary" />
-          <p className="mt-4 max-w-2xl text-center text-muted-foreground">
-            Find the perfect product for your needs from our curated collections
-          </p>
+    <div className="group relative flex flex-col overflow-hidden rounded-2xl border bg-card shadow-sm transition-all duration-300 hover:shadow-lg h-full">
+      {isAdmin && (
+        <div className="absolute top-2 right-2 flex gap-2 z-30">
+          <Dialog onOpenChange={(open) => !open && onRefresh()}>
+            <DialogTrigger asChild>
+              <Button size="icon" variant="secondary" className="h-7 w-7 rounded-full bg-background/80 backdrop-blur-sm shadow-sm" onClick={(e) => e.stopPropagation()}>
+                <Edit3 className="h-3 w-3" />
+              </Button>
+            </DialogTrigger>
+            <DialogContent className="max-w-md">
+              <DialogHeader>
+                <DialogTitle>Edit Category: {category.name}</DialogTitle>
+              </DialogHeader>
+              <CategoryForm initialCategory={category} hideList={true} />
+            </DialogContent>
+          </Dialog>
+          <Button
+            size="icon"
+            variant="destructive"
+            className="h-7 w-7 rounded-full bg-destructive/80 backdrop-blur-sm shadow-sm"
+            onClick={(e) => handleDelete(e, category.id, category.name)}
+          >
+            <Trash2 className="h-3 w-3" />
+          </Button>
         </div>
-
-        <div className="grid grid-cols-2 gap-4 md:grid-cols-4 md:gap-6">
-          {categories.map((category: any) => (
-            <Link
-              key={category.name}
-              href={`/products?category=${category.name.toLowerCase()}`}
-              aria-label={`Browse ${category.name} products`}
-              className="group relative flex flex-col space-y-4 overflow-hidden
-                         rounded-2xl border bg-card shadow transition-all duration-300 hover:shadow-lg"
-            >
-              <div className="relative aspect-[4/3] overflow-hidden">
-                <div className="absolute inset-0 z-10 bg-gradient-to-t from-background/80 to-transparent" />
-                <img
-                  src={category.image}
-                  alt={category.name}
-                  className="object-cover transition duration-300 group-hover:scale-105 w-full h-full"
-                />
-              </div>
-
-              <div className="relative z-20 -mt-6 p-4">
-                <div className="mb-1 text-lg font-semibold">{category.name}</div>
-                <p className="text-sm text-muted-foreground">
-                  {category.productCount} products
-                </p>
-              </div>
-            </Link>
+      )}
+      <Link
+        href={`/store?category=${category.name.toLowerCase()}`}
+        className="flex flex-col h-full"
+      >
+        <div className="relative aspect-square overflow-hidden bg-muted/20">
+          {category.images.map((img: string, idx: number) => (
+            <img
+              key={idx}
+              src={img}
+              alt={category.name}
+              className={`absolute inset-0 object-contain p-4 transition-opacity duration-1000 w-full h-full ${
+                idx === currentImageIndex ? "opacity-100" : "opacity-0"
+              }`}
+            />
           ))}
         </div>
+        <div className="p-4 text-center mt-auto">
+          <div className="text-sm font-bold truncate group-hover:text-primary transition-colors">
+            {category.name}
+          </div>
+          <div className="text-[10px] text-muted-foreground font-medium mt-1">
+            {category.productCount} Products
+          </div>
+        </div>
+      </Link>
+    </div>
+  );
+};
 
+const FeaturedCategories = () => {
+  const [categories, setCategories] = useState<any[]>([]);
+  const isAdmin = useIsAdmin();
+  const autoplay1 = useRef(Autoplay({ delay: 3000, stopOnInteraction: false }));
+  const autoplay2 = useRef(Autoplay({ delay: 3000, stopOnInteraction: false }));
+
+  const fetchCategories = async () => {
+    const cats = await getCategories();
+    setCategories(cats);
+  };
+
+  useEffect(() => {
+    fetchCategories();
+  }, []);
+
+  // Split categories into two rows
+  const midPoint = Math.ceil(categories.length / 2);
+  const topRow = categories.slice(0, midPoint);
+  const bottomRow = categories.slice(midPoint);
+
+  return (
+    <section className="py-12 md:py-16 bg-muted/30 overflow-hidden">
+      <div className="container mx-auto max-w-7xl px-4">
+        <div className="mb-10 flex flex-col md:flex-row md:items-end justify-between gap-4">
+            <div className="text-left">
+                <h2 className="text-3xl font-bold tracking-tight text-foreground">Shop All Categories</h2>
+                <p className="text-muted-foreground mt-2">Discover our extensive range of health and wellness collections</p>
+            </div>
+            {isAdmin && (
+                <Dialog onOpenChange={(open) => !open && fetchCategories()}>
+                  <DialogTrigger asChild>
+                    <Button className="gap-2 bg-primary hover:bg-primary/90">
+                      <Plus className="h-4 w-4" />
+                      Add Category
+                    </Button>
+                  </DialogTrigger>
+                  <DialogContent className="max-w-md">
+                    <DialogHeader>
+                      <DialogTitle>Add New Category</DialogTitle>
+                    </DialogHeader>
+                    <CategoryForm />
+                  </DialogContent>
+                </Dialog>
+            )}
+        </div>
+
+        <div className="space-y-6">
+          {/* Top Row Carousel */}
+          <Carousel
+            opts={{ align: "start", loop: true }}
+            plugins={[autoplay1.current]}
+            className="w-full"
+          >
+            <CarouselContent className="-ml-4">
+              {topRow.map((category) => (
+                <CarouselItem key={category.id} className="pl-4 basis-1/2 sm:basis-1/3 md:basis-1/4 lg:basis-1/6">
+                  <CategoryCard category={category} isAdmin={isAdmin} onRefresh={fetchCategories} />
+                </CarouselItem>
+              ))}
+            </CarouselContent>
+          </Carousel>
+
+          {/* Bottom Row Carousel */}
+          <Carousel
+            opts={{ align: "start", loop: true }}
+            plugins={[autoplay2.current]}
+            className="w-full"
+          >
+            <CarouselContent className="-ml-4">
+              {bottomRow.map((category) => (
+                <CarouselItem key={category.id} className="pl-4 basis-1/2 sm:basis-1/3 md:basis-1/4 lg:basis-1/6">
+                  <CategoryCard category={category} isAdmin={isAdmin} onRefresh={fetchCategories} />
+                </CarouselItem>
+              ))}
+            </CarouselContent>
+          </Carousel>
+        </div>
       </div>
     </section>
   );

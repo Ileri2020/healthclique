@@ -4,27 +4,38 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardFooter } from "@/components/ui/card";
 import { cn } from "@/lib/utils";
-import { Heart, ShoppingCart, Star } from "lucide-react";
+import { Heart, ShoppingCart, Star, Edit3, Trash2 } from "lucide-react";
 import Link from "next/link";
 import * as React from "react";
-
-
+import { useIsAdmin } from "@/hooks/useIsAdmin";
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogTrigger,
+} from "@/components/ui/dialog";
+import ProductForm from "@/prisma/forms/ProductForm";
+import axios from "axios";
+import { toast } from "sonner";
 
 type ProductCardProps = Omit<
   React.HTMLAttributes<HTMLDivElement>,
   "onError"
 > & {
-  onAddToCart?: (product: any) => void;//(productId: string) => void;
+  onAddToCart?: (product: any) => void;
   onAddToWishlist?: (productId: string) => void;
   product: {
     category: string;
     id: string;
-    images: any//string;
+    images: any;
     inStock?: boolean;
     name: string;
     originalPrice?: number;
     price: number;
     rating?: number;
+    categoryId: string;
+    description?: string;
   };
   variant?: "compact" | "default";
 };
@@ -40,14 +51,13 @@ export function ProductCard({
   const [isHovered, setIsHovered] = React.useState(false);
   const [isAddingToCart, setIsAddingToCart] = React.useState(false);
   const [isInWishlist, setIsInWishlist] = React.useState(false);
+  const isAdmin = useIsAdmin();
 
   const handleAddToCart = (e: React.MouseEvent) => {
     e.preventDefault();
     if (onAddToCart) {
       setIsAddingToCart(true);
-      // Simulate API call
       setTimeout(() => {
-        //onAddToCart(product.id);
         onAddToCart(product);
         setIsAddingToCart(false);
       }, 600);
@@ -59,6 +69,20 @@ export function ProductCard({
     if (onAddToWishlist) {
       setIsInWishlist(!isInWishlist);
       onAddToWishlist(product.id);
+    }
+  };
+
+  const handleDelete = async (e: React.MouseEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    if (confirm(`Are you sure you want to delete ${product.name}?`)) {
+      try {
+        await axios.delete(`/api/dbhandler?model=product&id=${product.id}`);
+        toast.success("Product deleted");
+        window.location.reload();
+      } catch (err) {
+        toast.error("Failed to delete product");
+      }
     }
   };
 
@@ -97,23 +121,45 @@ export function ProductCard({
     );
   };
 
-
-
-
-
-
-
-
-
   return (
-    <div className={cn("group", className)} {...props}>
+    <div className={cn("group relative", className)} {...props}>
+      {isAdmin && (
+        <div className="absolute top-2 right-2 z-30 flex gap-2">
+          <Dialog>
+            <DialogTrigger asChild>
+              <Button
+                size="icon"
+                variant="secondary"
+                className="h-8 w-8 rounded-full bg-background/80 backdrop-blur-sm shadow-sm opacity-0 group-hover:opacity-100 transition-opacity"
+                onClick={(e) => e.stopPropagation()}
+              >
+                <Edit3 className="h-4 w-4" />
+              </Button>
+            </DialogTrigger>
+            <DialogContent className="max-w-md max-h-[90vh] overflow-y-auto">
+              <DialogHeader>
+                <DialogTitle>Edit Product: {product.name}</DialogTitle>
+              </DialogHeader>
+              <ProductForm initialProduct={product} hideList={true} />
+            </DialogContent>
+          </Dialog>
+          <Button
+            size="icon"
+            variant="destructive"
+            className="h-8 w-8 rounded-full bg-destructive/80 backdrop-blur-sm shadow-sm opacity-0 group-hover:opacity-100 transition-opacity"
+            onClick={handleDelete}
+          >
+            <Trash2 className="h-4 w-4" />
+          </Button>
+        </div>
+      )}
       <Link href={`/products/${product.id}`}>
         <Card
           className={cn(
             `
               relative h-full overflow-hidden rounded-lg py-0 transition-all
-              duration-200 ease-in-out
-              hover:shadow-md
+              duration-300 ease-in-out
+              hover:shadow-lg
             `,
             isHovered && "ring-1 ring-primary/20"
           )}
@@ -125,43 +171,32 @@ export function ProductCard({
               <img
                 alt={product.name}
                 className={cn(
-                  "object-cover w-full transition-transform duration-300 ease-in-out",
-                  isHovered && "scale-105"
+                  "object-cover w-full transition-transform duration-500 ease-in-out scale-110",
+                  isHovered && "scale-100"
                 )}
                 sizes="(max-width: 768px) 100vw, (max-width: 1200px) 50vw, 33vw"
                 src={product.images[0]}
               />
             )}
 
-            {/* Category badge */}
             <Badge
-              className={`
-                absolute top-2 left-2 bg-background/80 backdrop-blur-sm
-              `}
+              className="absolute top-2 left-2 bg-background/80 backdrop-blur-sm"
               variant="outline"
             >
               {product.category}
             </Badge>
 
-            {/* Discount badge */}
             {discount > 0 && (
               <Badge
-                className={`
-                absolute top-2 right-2 bg-destructive
-                text-destructive-foreground
-              `}
+                className="absolute top-2 right-2 bg-destructive text-destructive-foreground"
               >
                 {discount}% OFF
               </Badge>
             )}
 
-            {/* Wishlist button */}
             <Button
               className={cn(
-                `
-                  absolute right-2 bottom-2 z-10 rounded-full bg-background/80
-                  backdrop-blur-sm transition-opacity duration-300
-                `,
+                "absolute right-2 bottom-2 z-10 rounded-full bg-background/80 backdrop-blur-sm transition-opacity duration-300",
                 !isHovered && !isInWishlist && "opacity-0"
               )}
               onClick={handleAddToWishlist}
@@ -182,13 +217,7 @@ export function ProductCard({
           </div>
 
           <CardContent className="p-4 pt-4">
-            {/* Product name with line clamp */}
-            <h3
-              className={`
-                line-clamp-2 text-base font-medium transition-colors
-                group-hover:text-primary
-              `}
-            >
+            <h3 className="line-clamp-2 text-base font-medium transition-colors group-hover:text-primary">
               {product.name}
             </h3>
 
@@ -196,12 +225,12 @@ export function ProductCard({
               <>
                 <div className="mt-1.5">{renderStars()}</div>
                 <div className="mt-2 flex items-center gap-1.5">
-                  <span className="font-medium text-foreground">
-                  ₦{product.price.toFixed(2)}
+                  <span className="font-medium text-foreground text-lg">
+                    ₦{product.price.toLocaleString()}
                   </span>
                   {product.originalPrice ? (
                     <span className="text-sm text-muted-foreground line-through">
-                      ₦{product.originalPrice.toFixed(2)}
+                      ₦{product.originalPrice.toLocaleString()}
                     </span>
                   ) : null}
                 </div>
@@ -220,12 +249,7 @@ export function ProductCard({
                 onClick={handleAddToCart}
               >
                 {isAddingToCart ? (
-                  <div
-                    className={`
-                      h-4 w-4 animate-spin rounded-full border-2
-                      border-background border-t-transparent
-                    `}
-                  />
+                  <div className="h-4 w-4 animate-spin rounded-full border-2 border-background border-t-transparent" />
                 ) : (
                   <ShoppingCart className="h-4 w-4" />
                 )}
@@ -239,11 +263,11 @@ export function ProductCard({
               <div className="flex w-full items-center justify-between">
                 <div className="flex items-center gap-1.5">
                   <span className="font-medium text-foreground">
-                    ${product.price.toFixed(2)}
+                    ₦{product.price.toLocaleString()}
                   </span>
                   {product.originalPrice ? (
                     <span className="text-sm text-muted-foreground line-through">
-                      ${product.originalPrice.toFixed(2)}
+                      ₦{product.originalPrice.toLocaleString()}
                     </span>
                   ) : null}
                 </div>
@@ -255,12 +279,7 @@ export function ProductCard({
                   variant="ghost"
                 >
                   {isAddingToCart ? (
-                    <div
-                      className={`
-                        h-4 w-4 animate-spin rounded-full border-2
-                        border-primary border-t-transparent
-                      `}
-                    />
+                    <div className="h-4 w-4 animate-spin rounded-full border-2 border-primary border-t-transparent" />
                   ) : (
                     <ShoppingCart className="h-4 w-4" />
                   )}
@@ -271,12 +290,7 @@ export function ProductCard({
           )}
 
           {!product.inStock && (
-            <div
-              className={`
-                absolute inset-0 flex items-center justify-center
-                bg-background/80 backdrop-blur-sm
-              `}
-            >
+            <div className="absolute inset-0 flex items-center justify-center bg-background/80 backdrop-blur-sm z-20">
               <Badge className="px-3 py-1 text-sm" variant="destructive">
                 Out of Stock
               </Badge>
