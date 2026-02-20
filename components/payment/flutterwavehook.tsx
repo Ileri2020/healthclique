@@ -1,4 +1,4 @@
-// ts-nocheck
+// @ts-nocheck
 'use client';
 
 import { useFlutterwave, closePaymentModal } from 'flutterwave-react-v3';
@@ -8,7 +8,7 @@ type FlutterwaveButtonHookProps = {
   amount: number;
   currency: string;
   email: string;
-  phonenumber: string;
+  phone_number: string;
   name: string;
   disabled?: boolean;
   onSuccess: (response: any) => void;
@@ -19,7 +19,7 @@ export default function FlutterWaveButtonHook({
   amount,
   currency,
   email,
-  phonenumber,
+  phone_number,
   name,
   disabled = false,
   onSuccess,
@@ -33,7 +33,7 @@ export default function FlutterWaveButtonHook({
     payment_options: 'card,mobilemoney,ussd',
     customer: {
       email,
-      phonenumber,
+      phone_number,
       name,
     },
     customizations: {

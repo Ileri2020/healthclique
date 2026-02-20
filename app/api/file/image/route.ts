@@ -19,7 +19,7 @@ export async function POST(req , res) {
   const buffer = await file.arrayBuffer()
   const b64 = Buffer.from(buffer).toString("base64");
   // console.log("buffer b64", b64)
-  let dataURI = "data:" + file.type + ";base64," + b64;
+  const dataURI = "data:" + file.type + ";base64," + b64;
   const cldRes = await handleUpload(dataURI);
 
   // const postRes = await axios.post(`${process.env.NEXT_PUBLIC_SITE_URL}/api/dbhandler?model=posts`,

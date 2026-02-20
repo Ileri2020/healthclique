@@ -36,7 +36,7 @@ const Post = (props: post = {
 
 
 
-  const fetchLikeCount = async () => {
+  const fetchLikeCount = React.useCallback(async () => {
     try {
       const response = await axios.get(`/api/dbhandler?model=likes&id=${props.id}`);
       if (response.status === 200) {
@@ -53,14 +53,14 @@ const Post = (props: post = {
     } catch (error) {
       console.error(error);
     }
-  };
+  }, [props.id, user.id]);
   
 
 
   useEffect(() => {
     fetchLikeCount();
     console.log('post id', props.id)
-  }, [liked, reload]);
+  }, [fetchLikeCount, props.id]);
 
 
   const handleLike = async () => {

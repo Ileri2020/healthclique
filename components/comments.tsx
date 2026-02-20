@@ -18,6 +18,7 @@ const Comments = ( props : {videoId : string}) => {
   const [compComments, setCompComments] = useState([]); //<CommentType[]>
   const [comment, setComment] = useState<string>("");
   const [loading, setLoading] = useState(true);
+  const [isOpen, setIsOpen] = useState(false);
 
 
 
@@ -62,7 +63,7 @@ const Comments = ( props : {videoId : string}) => {
   }, [props.videoId]);
   
 
-  if (!props.videoId) return;
+  if (!props.videoId) return null;
 
   const validate = (): boolean => comment.length > 0;
 
@@ -84,7 +85,7 @@ const Comments = ( props : {videoId : string}) => {
     setIsModal(false);
   };
   //for collapsible
-  const [isOpen, setIsOpen] = useState(false)
+  //isOpen state moved above the early return
 
   return (
     <Collapsible

@@ -7,15 +7,15 @@ type FlutterwavePaymentProps = {
   amount: number;
   currency: string;
   email: string;
-  phonenumber: string;
+  phone_number: string;
   name: string;
 };
 
-export default async function FlutterwavePaymentButton({
+export default function FlutterwavePaymentButton({
   amount,
   currency,
   email,
-  phonenumber,
+  phone_number,
   name,
 }: FlutterwavePaymentProps) {
   const config = {
@@ -26,7 +26,7 @@ export default async function FlutterwavePaymentButton({
     payment_options: 'card,mobilemoney,ussd',
     customer: {
       email,
-      phonenumber,
+      phone_number,
       name,
     },
     customizations: {

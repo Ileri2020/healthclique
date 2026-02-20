@@ -24,7 +24,8 @@ const login = async (formData: FormData) => {
     });
   } catch (error) {
     const someError = error as CredentialsSignin;
-    return someError.cause;
+    console.error("Login failed:", someError.cause);
+    return;
   }
   redirect("/");
 };

@@ -8,6 +8,7 @@ import FeaturedProducts from "@/components/myComponents/subs/featuredProducts"
 import Features from "@/components/myComponents/subs/features"
 import ConcernGrid from "@/components/myComponents/subs/concern-grid"
 import PartnerBrands from "@/components/myComponents/subs/partner-brands"
+import FeaturedIngredients from "@/components/myComponents/subs/featuredIngredients"
 
 
 const Home = () => {
@@ -25,6 +26,7 @@ const Home = () => {
       <PartnerBrands />
       <ConcernGrid />
       <FeaturedCategories />
+      <FeaturedIngredients />
       <FeaturedProducts />
       <Features />
       {/* converted to a do you know section */}

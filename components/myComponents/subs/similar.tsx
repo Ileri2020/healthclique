@@ -70,14 +70,14 @@ export default function Similar(props: {similar : stockCategory[]}) {
               <div className="text-lg font-semibold">{item.name}</div>
               <div className="font-semibold text-secondary-foreground mb-5">{item.salutation}</div>
             </div> */}
-              <Link href={`/store/${stock._id}`}>
+              <Link href={`/products/${stock._id}`}>
                 <div className="h-[100px] w-full mx-2 md:mx-0 flex justify-center items-center">
                     <img src={stock.img} alt="" className="h-full rounded-sm"/>
                 </div>
               </Link>
               
               <div className="flex flex-1 flex-col text-center justify-center items-center w-full /bg-red-500">
-                  <Link href={`/store/${stock._id}`}>
+                  <Link href={`/products/${stock._id}`}>
                     <div className="w-full text-center flex flex-col justify-center items-center">
                       <div className="font-semibold text-sm">{stock.name}</div>
                       <div className="font-semibold text-foreground/80 text-sm">₦ {stock.price}</div>

@@ -9,6 +9,7 @@ import { Footer } from "@/components/myComponents/subs/footer";
 import { CartProvider } from "@/hooks/use-cart";
 import { SessionProvider } from "next-auth/react"
 import { usersession } from "@/session";
+import { Session } from "next-auth";
 // import {Roboto} from "next/font/google"
 
 // const roboto = Roboto({
@@ -46,14 +47,7 @@ export const SYSTEM_CONFIG = {
   // repoStars: true,
 };
 
-interface Session {
-  user?: {
-    name?: string
-    email?: string
-    image?: string
-  }
-  expires: string
-}
+// Local Session interface removed to use next-auth's global extension
 
 export default async function RootLayout({
   children,

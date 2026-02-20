@@ -27,6 +27,8 @@ import {
 const FeaturedProducts = () => {
   const [products, setProducts] = useState<any[]>([]);
   const [pharmacyProducts, setPharmacyProducts] = useState<any[]>([]);
+  const [brandProducts, setBrandProducts] = useState<any[]>([]);
+  const [oralCare, setOralCare] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const isAdmin = useIsAdmin();
   const { addItem } = useCart();
@@ -51,11 +53,28 @@ const FeaturedProducts = () => {
         })));
       }
 
-      // 2. Fetch Imported Pharmacy Products (limit to 12 for the section)
-      const prodRes = await fetch("/api/dbhandler?model=product");
+      // 2. Fetch All Products for Subsets
+      const prodRes = await fetch("/api/dbhandler?model=product&include=category");
       const prodData = await prodRes.json();
-      const pharmacy = prodData.filter((p: any) => p.category?.name === "Pharmacy").slice(0, 15);
-      setPharmacyProducts(pharmacy);
+      
+      // Common Medications
+      setPharmacyProducts(prodData.slice(0, 15));
+      
+      // Top Brands (e.g., Emzor, Vitabiotics)
+      const brands = prodData.filter((p: any) => 
+        ["emzor", "vitabiotics", "glaxo", "nivea"].some(b => 
+          p.brand?.toLowerCase().includes(b) || p.name.toLowerCase().includes(b)
+        )
+      ).slice(0, 15);
+      setBrandProducts(brands);
+
+      // Category Subset: Dental/Oral Care
+      const oral = prodData.filter((p: any) => 
+         p.category?.name?.toLowerCase().includes("dental") || 
+         p.category?.name?.toLowerCase().includes("oral") ||
+         p.name.toLowerCase().includes("toothpaste")
+      ).slice(0, 15);
+      setOralCare(oral);
 
     } catch (err) {
       console.error("Failed to fetch featured products", err);
@@ -176,6 +195,24 @@ const FeaturedProducts = () => {
                 title="Common Medications" 
                 subtitle="Recently added essential pharmaceuticals and healthcare products"
                 items={pharmacyProducts}
+               />
+            )}
+
+            {/* 3. Top Brands Section */}
+            {brandProducts.length > 0 && (
+               <ProductSection 
+                title="Top Brands" 
+                subtitle="Quality products from trusted global pharmaceutical leaders"
+                items={brandProducts}
+               />
+            )}
+
+            {/* 4. Oral Care Section */}
+            {oralCare.length > 0 && (
+               <ProductSection 
+                title="Dental & Oral Care" 
+                subtitle="Maintain bright smiles with our expert dental selection"
+                items={oralCare}
                />
             )}
 

@@ -33,14 +33,17 @@ const Stocks = () => {
   const fetchProducts = async () => {
     setLoading(true);
     try {
-      const res = await axios.get('/api/dbhandler?model=product');
+      const res = await axios.get('/api/dbhandler?model=product&include=category');
       let data = res.data;
       
       if (categoryFilter) {
-        data = data.filter((p: any) => 
-          p.category?.name.toLowerCase() === categoryFilter.toLowerCase() ||
-          p.categoryName?.toLowerCase() === categoryFilter.toLowerCase()
-        );
+        data = data.filter((p: any) => {
+          const filterLower = categoryFilter.toLowerCase();
+          const catName = p.category?.name?.toLowerCase();
+          const pCatName = p.categoryName?.toLowerCase();
+          
+          return catName === filterLower || pCatName === filterLower;
+        });
       }
       
       setProducts(data);

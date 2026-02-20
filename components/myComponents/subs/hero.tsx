@@ -91,7 +91,7 @@ const Hero = () => {
                     {searchResults.map((product: any) => (
                       <Link 
                         key={product.id} 
-                        href={`/store?product=${product.id}`}
+                        href={`/products/${product.id}`}
                         className="flex items-center gap-4 p-3 hover:bg-accent/50 transition-colors group"
                       >
                         <div className="w-10 h-10 rounded bg-muted flex items-center justify-center overflow-hidden">

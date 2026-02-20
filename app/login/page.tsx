@@ -1,4 +1,3 @@
-// @ts-nocheck
 import { login } from "@/action/user";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";

@@ -97,6 +97,13 @@ export async function GET(req: NextRequest) {
           return NextResponse.json(items);
       }
 
+      if (model === "product" && searchParams.get("include")) {
+        const includeParams = searchParams.get("include")?.split(",");
+        const include: Record<string, boolean> = {};
+        includeParams?.forEach(inc => { include[inc] = true; });
+        return NextResponse.json(await prisma.product.findMany({ include }));
+      }
+
       return NextResponse.json(await prismaModel.findMany());
     } else {
       if (model === "review") {
