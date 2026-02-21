@@ -39,7 +39,7 @@ type ProductCardProps = Omit<
     categoryId: string;
     description?: string;
   };
-  variant?: "compact" | "default" | "horizontal";
+  variant?: "compact" | "default";
 };
 
 export function ProductCard({
@@ -155,7 +155,7 @@ export function ProductCard({
           </Button>
         </div>
       )}
-      <Link href={`/products/${product.id}`} className={variant === "horizontal" ? "w-1/3 min-w-[120px]" : ""}>
+      <Link href={`/products/${product.id}`}>
         <Card
           className={cn(
             `
@@ -163,16 +163,12 @@ export function ProductCard({
               duration-300 ease-in-out
               hover:shadow-lg
             `,
-            isHovered && "ring-1 ring-primary/20",
-            variant === "horizontal" && "flex flex-row"
+            isHovered && "ring-1 ring-primary/20"
           )}
           onMouseEnter={() => setIsHovered(true)}
           onMouseLeave={() => setIsHovered(false)}
         >
-          <div className={cn(
-            "relative overflow-hidden",
-            variant === "horizontal" ? "w-1/3 min-w-[120px]" : "aspect-square rounded-t-lg"
-          )}>
+          <div className="relative aspect-square overflow-hidden rounded-t-lg">
             {product.images && (
               <img
                 alt={product.name}
@@ -220,57 +216,14 @@ export function ProductCard({
               />
               <span className="sr-only">Add to wishlist</span>
             </Button>
-            
-            {/* Quick Info Dialog */}
-            <Dialog>
-              <DialogTrigger asChild>
-                <Button
-                  className={cn(
-                    "absolute left-2 bottom-2 z-10 rounded-full bg-background/80 backdrop-blur-sm transition-opacity duration-300",
-                    !isHovered && "opacity-0"
-                  )}
-                  onClick={(e) => { e.preventDefault(); e.stopPropagation(); }}
-                  size="icon"
-                  type="button"
-                  variant="outline"
-                >
-                  <Info className="h-4 w-4 text-primary" />
-                  <span className="sr-only">Quick Info</span>
-                </Button>
-              </DialogTrigger>
-              <DialogContent className="sm:max-w-[425px]">
-                <DialogHeader>
-                  <DialogTitle>{product.name}</DialogTitle>
-                </DialogHeader>
-                <div className="grid gap-4 py-4">
-                  <div className="flex justify-center bg-muted/20 p-4 rounded-lg">
-                    {product.images && (
-                      <img src={product.images[0]} alt={product.name} className="h-32 object-contain" />
-                    )}
-                  </div>
-                  <div className="text-sm">
-                    {product.description ? (
-                      <div dangerouslySetInnerHTML={{ __html: product.description.substring(0, 300) + '...' }} />
-                    ) : (
-                      <p className="text-muted-foreground italic">No description available.</p>
-                    )}
-                  </div>
-                  <div className="flex justify-between items-center mt-4">
-                    <span className="font-bold text-lg">₦{product.price.toLocaleString()}</span>
-                    <Button onClick={(e) => { e.stopPropagation(); handleAddToCart(e); }}>Add to Cart</Button>
-                  </div>
-                </div>
-              </DialogContent>
-            </Dialog>
           </div>
 
-          <div className={cn("flex flex-col flex-1", variant === "horizontal" ? "w-2/3" : "")}>
-            <CardContent className="p-4 pt-4 flex-1">
-              <h3 className="line-clamp-2 text-base font-medium transition-colors group-hover:text-primary">
-                {product.name}
-              </h3>
+          <CardContent className="p-4 pt-4">
+            <h3 className="line-clamp-2 text-base font-medium transition-colors group-hover:text-primary">
+              {product.name}
+            </h3>
 
-              {(variant === "default" || variant === "horizontal") && (
+            {variant === "default" && (
               <>
                 <div className="mt-1.5">{renderStars()}</div>
                 <div className="mt-2 flex items-center gap-1.5">
@@ -337,8 +290,6 @@ export function ProductCard({
               </div>
             </CardFooter>
           )}
-
-          </div>
 
           {!product.inStock && (
             <div className="absolute inset-0 flex items-center justify-center bg-background/80 backdrop-blur-sm z-20">
