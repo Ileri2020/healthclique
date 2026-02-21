@@ -23,6 +23,7 @@ import {
   CarouselNext,
   CarouselPrevious,
 } from "@/components/ui/carousel";
+import Autoplay from "embla-carousel-autoplay";
 
 const FeaturedProducts = () => {
   const [products, setProducts] = useState<any[]>([]);
@@ -92,7 +93,9 @@ const FeaturedProducts = () => {
     toast.success(`${product.name} added to cart`);
   };
 
-  const ProductSection = ({ title, subtitle, items }: { title: string, subtitle: string, items: any[] }) => (
+  const ProductSection = ({ title, subtitle, items }: { title: string, subtitle: string, items: any[] }) => {
+    const plugin = React.useRef(Autoplay({ delay: 3500, stopOnInteraction: false }));
+    return (
     <div className="mb-16">
       <div className="flex flex-col md:flex-row md:items-end justify-between mb-8 gap-4 px-4">
         <div className="text-left">
@@ -104,61 +107,27 @@ const FeaturedProducts = () => {
         </Link>
       </div>
       
-      <Carousel opts={{ align: "start", loop: true }} className="w-full relative px-4">
+      <Carousel 
+        opts={{ align: "start", loop: true }} 
+        plugins={[plugin.current]}
+        className="w-full relative px-4"
+        onMouseEnter={plugin.current.stop}
+        onMouseLeave={plugin.current.reset}
+      >
         <CarouselContent className="-ml-4">
           {items.map((product) => (
-            <CarouselItem key={product.id} className="pl-4 basis-full sm:basis-1/2 md:basis-1/3 lg:basis-1/5">
-                <div className="group relative bg-card border rounded-2xl overflow-hidden hover:shadow-xl transition-all duration-300 h-full flex flex-col">
-                  {/* Badge */}
-                  <div className="absolute top-2 left-2 z-10 bg-green-500 text-white text-[10px] font-bold px-2 py-0.5 rounded-full uppercase">
-                    Available
-                  </div>
-                  
-                  {/* Image */}
-                  <div className="relative aspect-square bg-muted/30 overflow-hidden">
-                    <img 
-                      src={product.images?.[0] || "/logo.png"} 
-                      alt={product.name} 
-                      className="object-contain w-full h-full p-4 transition-transform duration-500 group-hover:scale-110"
-                    />
-                  </div>
-
-                  {/* Content */}
-                  <div className="p-4 flex flex-col flex-1">
-                    <div className="text-xs text-primary font-medium mb-1 uppercase tracking-wider">
-                      {product.categoryName || "Pharmacy"}
-                    </div>
-                    <h4 className="font-bold text-sm line-clamp-2 mb-2 group-hover:text-primary transition-colors min-h-[40px]">
-                      {product.name}
-                    </h4>
-                    
-                    <div className="mt-auto">
-                      <div className="flex items-baseline gap-2 mb-4">
-                        <span className="text-lg font-black text-foreground">#{product.price.toLocaleString()}</span>
-                        {product.price > 1000 && (
-                           <span className="text-xs text-muted-foreground line-through">#{(product.price * 1.1).toFixed(0)}</span>
-                        )}
-                      </div>
-
-                      <div className="grid grid-cols-2 gap-2">
-                        <Button 
-                          onClick={() => handleAddToCart(product)}
-                          size="sm" 
-                          className="w-full bg-primary hover:bg-primary/90 text-[10px] font-bold h-9"
-                        >
-                          <ShoppingCart className="w-3 h-3 mr-1" /> BUY
-                        </Button>
-                        <Button 
-                          variant="outline" 
-                          size="sm" 
-                          className="w-full border-2 text-[10px] font-bold h-9"
-                        >
-                          <MessageCircle className="w-3 h-3 mr-1 text-green-500" /> WHATSAPP
-                        </Button>
-                      </div>
-                    </div>
-                  </div>
-                </div>
+            <CarouselItem key={product.id} className="pl-4 basis-full sm:basis-1/2 md:basis-1/3 lg:basis-1/5 pt-2 pb-2">
+              <ProductCard
+                className="w-full"
+                product={{ 
+                  ...product, 
+                  inStock: true, 
+                  originalPrice: Number(product.price) * 1.2, 
+                  rating: 5,
+                  categoryName: product.categoryName || product.category?.name || "Pharmacy"
+                }}
+                onAddToCart={() => handleAddToCart(product)}
+              />
             </CarouselItem>
           ))}
         </CarouselContent>
@@ -168,7 +137,8 @@ const FeaturedProducts = () => {
         </div>
       </Carousel>
     </div>
-  );
+    );
+  };
 
   return (
     <section className="bg-muted/30 py-12 md:py-20">

@@ -33,22 +33,48 @@ async function scrapeCategory(url: string) {
                 });
                 const $ = cheerio.load(data);
                 
-                const items = $('.product-card a .text-black, .product-card h4, .product-card .product-title, .product-card .text-dark-blue p').map((i, el) => $(el).text().trim()).get();
+                const items: string[] = [];
                 
-                if (items.length === 0) {
-                    const fallback = $('.product-card a').map((i, el) => $(el).text().trim().split('\n')[0].trim()).get();
-                    productsInCat.push(...fallback);
-                    console.log(`    Fallback found ${fallback.length} items`);
-                } else {
+                $('.product-card').each((i, el) => {
+                    const card = $(el);
+                    
+                    // 1. Try to find the full name in the button's productdata attribute
+                    const productData = card.find('button.add_to_cart').attr('productdata');
+                    if (productData) {
+                        try {
+                            const parsed = JSON.parse(productData);
+                            if (parsed.name) {
+                                items.push(parsed.name.trim());
+                                return; // Move to next card
+                            }
+                        } catch (e) {}
+                    }
+                    
+                    // 2. Try the image alt attribute (usually contains full name)
+                    const altName = card.find('img').attr('alt');
+                    if (altName && altName.length > 5) {
+                        items.push(altName.trim());
+                        return;
+                    }
+                    
+                    // 3. Fallback selectors for text
+                    const textName = card.find('.text-dark-blue p, .product-title, h4').first().text().trim();
+                    if (textName) {
+                        items.push(textName);
+                    }
+                });
+                
+                if (items.length > 0) {
                     productsInCat.push(...items);
-                    console.log(`    Primary found ${items.length} items`);
+                    console.log(`    Extracted ${items.length} products`);
                 }
 
-                const hasNextLink = $('a.next.br-24').length > 0;
+                const nextBtn = $('a.next, .pagination .next, a:contains("Next")');
+                const hasNextLink = nextBtn.length > 0;
                 if (!hasNextLink) hasNext = false;
                 
                 currentPage++;
-                if (items.length < 5) hasNext = false; 
+                if (items.length < 5 && currentPage > 1) hasNext = false; 
                 success = true;
 
                 // Small delay between pages
@@ -73,6 +99,16 @@ async function main() {
     console.log(`Starting bulk recategorization for ${categoryMap.length} categories...`);
 
     for (const cat of categoryMap) {
+        // Skip if category already has products to save time
+        const existingCount = await prisma.product.count({
+            where: { category: { name: cat.name } }
+        });
+        
+        if (existingCount > 0) {
+            console.log(`Skipping Category: ${cat.name} (already has ${existingCount} products)`);
+            continue;
+        }
+
         console.log(`Processing Category: ${cat.name}`);
         
         // Ensure category exists in our DB

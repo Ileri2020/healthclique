@@ -9,8 +9,8 @@ import Features from "@/components/myComponents/subs/features"
 import ConcernGrid from "@/components/myComponents/subs/concern-grid"
 import PartnerBrands from "@/components/myComponents/subs/partner-brands"
 import FeaturedIngredients from "@/components/myComponents/subs/featuredIngredients"
-
-
+import { MessageCircle } from "lucide-react"
+import Link from "next/link"
 const Home = () => {
   return (
     <motion.section
@@ -34,6 +34,13 @@ const Home = () => {
         <Gallery />
       </div> */}
       {/* <ECommerceSalesPage /> */}
+
+      {/* Fixed Contact Button */}
+      <Link href="/contact" className="fixed bottom-6 left-6 z-50">
+        <div className="flex items-center justify-center w-14 h-14 bg-primary text-primary-foreground rounded-full shadow-lg hover:bg-primary/90 transition-all hover:scale-105 cursor-pointer border-2 border-white dark:border-gray-800">
+          <MessageCircle className="w-6 h-6" />
+        </div>
+      </Link>
     </motion.section>
   )
 }

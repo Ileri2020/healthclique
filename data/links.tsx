@@ -11,39 +11,28 @@ import { IoFastFoodOutline } from "react-icons/io5";
 export default {Links : [
     {
       name: <AiOutlineHome />,
+      title: "Home",
       path: "/",
     },
     {
       name: <AiOutlineShop />,
+      title: "Store",
       path: "/store",
     },
-    // {
-    //   name: <IoMdHelp />,
-    //   path: "/help",
-    // },
-    // {
-    //   name: <IoFastFoodOutline />,
-    //   path: "/lunch",
-    // },
     {
       name: <AiOutlineHistory />,
+      title: "About",
       path: "/about",
     },
     {
       name: <BiPhone />,
+      title: "Contact",
       path: "/contact",
     },
     {
       name: <VscAccount />,
+      title: "Account",
       path: "/account",
     },
-    // {
-    //   name: "blogs",
-    //   path: "/blogs",
-    // },
-    // {
-    //   name: <CiShoppingCart />,
-    //   path: "/cart",
-    // },
   ]
 }

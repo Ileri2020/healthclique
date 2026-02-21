@@ -26,7 +26,8 @@ type ProductCardProps = Omit<
   onAddToCart?: (product: any) => void;
   onAddToWishlist?: (productId: string) => void;
   product: {
-    category: string;
+    category?: any;
+    categoryName?: string;
     id: string;
     images: any;
     inStock?: boolean;
@@ -183,7 +184,7 @@ export function ProductCard({
               className="absolute top-2 left-2 bg-background/80 backdrop-blur-sm"
               variant="outline"
             >
-              {product.category}
+              {product.categoryName || product.category?.name || "Pharmacy"}
             </Badge>
 
             {discount > 0 && (

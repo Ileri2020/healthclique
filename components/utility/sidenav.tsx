@@ -20,8 +20,9 @@ const Sidenav = () => {
             <nav className="flex flex-col justify-center items-center gap-8 text-xl">
                 {Links.Links.map((link, index) => {
                     return (
-                        <Link href={link.path} key={index} className={`${ link.path === pathname && "text-accent border-b-2 border-accent"} capitalize font-medium hover:text-accent transition-all`}>
+                        <Link href={link.path} key={index} className={`${ link.path === pathname && "text-accent"} flex items-center gap-4 capitalize font-medium hover:text-accent transition-all`}>
                         {link.name}
+                        <span className="text-lg">{link.title}</span>
                         </Link>
                      )
                 })}
