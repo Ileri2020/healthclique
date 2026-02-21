@@ -3,7 +3,7 @@ import { Button } from '@/components/ui/button';
 
 // lib/api.js
 import axios from 'axios';
-import { useEffect, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 
 export const fetchData = async (model) => {
   const res = await axios.get(`/api/dbhandler?model=${model}`);
@@ -74,11 +74,7 @@ export default function CrudForm({ model }) {
   const [editId, setEditId] = useState(null);
   const [loading, setLoading] = useState(false);
 
-  useEffect(() => {
-    loadItems();
-  }, []);
-
-  const loadItems = async () => {
+  const loadItems = useCallback(async () => {
     setLoading(true);
     try {
       const data = await fetchData(model);
@@ -88,7 +84,11 @@ export default function CrudForm({ model }) {
     } finally {
       setLoading(false);
     }
-  };
+  }, [model]);
+
+  useEffect(() => {
+    loadItems();
+  }, [loadItems]);
 
   const resetForm = () => {
     setFormData({});

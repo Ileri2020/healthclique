@@ -1,6 +1,6 @@
 "use client"
 import { Button } from '@/components/ui/button';
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback } from "react";
 import { useSearchParams } from "next/navigation";
 import axios from "axios";
 import { ProductCard } from "./productCard";
@@ -30,7 +30,7 @@ const Stocks = () => {
   const [loading, setLoading] = useState(true);
   const [currentPage, setCurrentPage] = useState(1);
 
-  const fetchProducts = async () => {
+  const fetchProducts = useCallback(async () => {
     setLoading(true);
     try {
       const res = await axios.get('/api/dbhandler?model=product&include=category');
@@ -53,11 +53,11 @@ const Stocks = () => {
     } finally {
       setLoading(false);
     }
-  };
+  }, [categoryFilter]);
 
   useEffect(() => {
     fetchProducts();
-  }, [categoryFilter]);
+  }, [fetchProducts]);
 
   const handleAddToWishlist = (productId: string) => {
     alert(`Adding product ${productId} to wishlist`);

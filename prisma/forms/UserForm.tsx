@@ -15,14 +15,14 @@ export default function UserForm() {
   });
   const [editId, setEditId] = useState(null);
 
-  useEffect(() => {
-    fetchUsers();
-  }, []);
-
   const fetchUsers = async () => {
     const res = await axios.get('/api/dbhandler?model=user');
     setUsers(res.data);
   };
+
+  useEffect(() => {
+    fetchUsers();
+  }, []);
 
   const handleSubmit = async (e) => {
     e.preventDefault();

@@ -1,5 +1,5 @@
 
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useCallback } from 'react';
 import axios from 'axios';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
@@ -14,14 +14,14 @@ export default function RefundForm() {
   });
   const [editId, setEditId] = useState(null);
 
-  useEffect(() => {
-    fetchRefunds();
-  }, []);
-
-  const fetchRefunds = async () => {
+  const fetchRefunds = useCallback(async () => {
     const res = await axios.get('/api/dbhandler?model=refund');
     setRefunds(res.data);
-  };
+  }, []);
+
+  useEffect(() => {
+    fetchRefunds();
+  }, [fetchRefunds]);
 
   const handleSubmit = async (e) => {
     e.preventDefault();

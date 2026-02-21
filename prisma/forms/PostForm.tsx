@@ -1,5 +1,4 @@
-
-import { useEffect, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import axios from 'axios';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
@@ -15,20 +14,20 @@ export default function PostForm() {
   const [editId, setEditId] = useState(null);
   const [users, setUsers] = useState([]); // Added to store users for the select input
 
+  const fetchPosts = useCallback(async () => {
+    const res = await axios.get('/api/dbhandler?model=post');
+    setPosts(res.data);
+  }, []);
+
+  const fetchUsers = useCallback(async () => {
+    const res = await axios.get('/api/dbhandler?model=user');
+    setUsers(res.data);
+  }, []);
+
   useEffect(() => {
     fetchPosts();
     fetchUsers();
-  }, []);
-
-  const fetchPosts = async () => {
-    const res = await axios.get('/api/dbhandler?model=post');
-    setPosts(res.data);
-  };
-
-  const fetchUsers = async () => {
-    const res = await axios.get('/api/dbhandler?model=user');
-    setUsers(res.data);
-  };
+  }, [fetchPosts, fetchUsers]);
 
   const handleSubmit = async (e) => {
     e.preventDefault();

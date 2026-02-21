@@ -1,5 +1,4 @@
-
-import { useEffect, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import axios from 'axios';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
@@ -16,26 +15,26 @@ export default function CartForm() {
   });
   const [editId, setEditId] = useState(null);
 
+  const fetchCarts = useCallback(async () => {
+    const res = await axios.get('/api/dbhandler?model=cart');
+    setCarts(res.data);
+  }, []);
+
+  const fetchUsers = useCallback(async () => {
+    const res = await axios.get('/api/dbhandler?model=user');
+    setUsers(res.data);
+  }, []);
+
+  const fetchProducts = useCallback(async () => {
+    const res = await axios.get('/api/dbhandler?model=product');
+    setProducts(res.data);
+  }, []);
+
   useEffect(() => {
     fetchCarts();
     fetchUsers();
     fetchProducts();
-  }, []);
-
-  const fetchCarts = async () => {
-    const res = await axios.get('/api/dbhandler?model=cart');
-    setCarts(res.data);
-  };
-
-  const fetchUsers = async () => {
-    const res = await axios.get('/api/dbhandler?model=user');
-    setUsers(res.data);
-  };
-
-  const fetchProducts = async () => {
-    const res = await axios.get('/api/dbhandler?model=product');
-    setProducts(res.data);
-  };
+  }, [fetchCarts, fetchUsers, fetchProducts]);
 
   const handleSubmit = async (e) => {
   e.preventDefault();

@@ -44,10 +44,13 @@ const EditUser = () => {
   const [editId, setEditId] = useState(true);
 
   useEffect(() => {
-    handleEdit(user)
-  }, []);
+    if (user) {
+      handleEdit(user);
+    }
+  }, [user]);
 
   const fetchUser = async () => {
+    if (!user?.id) return;
     const res = await axios.get(`/api/dbhandler?model=users&id=${user.id}`);
     setUser(res.data);
   };
@@ -57,7 +60,7 @@ const EditUser = () => {
     e.preventDefault();
     console.log("about to update edit data")
     const response = await axios.put(`/api/dbhandler?model=users&id=${editId}`, formData);
-    if(response.status = 200){
+    if(response.status === 200){
       fetchUser();
       resetForm();
     }

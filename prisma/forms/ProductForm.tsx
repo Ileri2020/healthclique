@@ -2,7 +2,7 @@
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import axios from 'axios';
-import { useEffect, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { toast } from 'sonner';
@@ -24,10 +24,26 @@ export default function ProductForm({ initialProduct, hideList = false }: { init
 
   const [editId, setEditId] = useState<string | null>(initialProduct?.id || null);
 
-  useEffect(() => {
-    if (!hideList) fetchProducts();
-    fetchCategories();
+  const fetchProducts = useCallback(async () => {
+    try {
+      const res = await axios.get('/api/dbhandler?model=product');
+      setProducts(res.data);
+    } catch (err) {
+      console.error('Failed to fetch products', err);
+    }
   }, []);
+
+  const fetchCategories = useCallback(async () => {
+    const res = await axios.get('/api/dbhandler?model=category');
+    setCategories(res.data);
+    if (res.data.length > 0 && !formData.categoryId) {
+      setFormData(prev => ({
+        ...prev,
+        categoryId: res.data[0].id,
+        category: res.data[0].name
+      }));
+    }
+  }, [formData.categoryId]);
 
   useEffect(() => {
     if (initialProduct) {
@@ -43,27 +59,10 @@ export default function ProductForm({ initialProduct, hideList = false }: { init
     }
   }, [initialProduct]);
 
-
-  const fetchProducts = async () => {
-    try {
-      const res = await axios.get('/api/dbhandler?model=product');
-      setProducts(res.data);
-    } catch (err) {
-      console.error('Failed to fetch products', err);
-    }
-  };
-
-  const fetchCategories = async () => {
-    const res = await axios.get('/api/dbhandler?model=category');
-    setCategories(res.data);
-    if (res.data.length > 0 && !formData.categoryId) {
-      setFormData(prev => ({
-        ...prev,
-        categoryId: res.data[0].id,
-        category: res.data[0].name
-      }));
-    }
-  };
+  useEffect(() => {
+    if (!hideList) fetchProducts();
+    fetchCategories();
+  }, [hideList, fetchProducts, fetchCategories]);
 
   const resetForm = () => {
     setFormData({

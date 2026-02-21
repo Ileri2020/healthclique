@@ -1,5 +1,4 @@
-
-import { useEffect, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import axios from 'axios';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
@@ -13,14 +12,14 @@ export default function CouponForm() {
   });
   const [editId, setEditId] = useState(null);
 
-  useEffect(() => {
-    fetchCoupons();
-  }, []);
-
-  const fetchCoupons = async () => {
+  const fetchCoupons = useCallback(async () => {
     const res = await axios.get('/api/dbhandler?model=coupon');
     setCoupons(res.data);
-  };
+  }, []);
+
+  useEffect(() => {
+    fetchCoupons();
+  }, [fetchCoupons]);
 
   const handleSubmit = async (e) => {
     e.preventDefault();

@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState, useRef } from "react";
+import { useEffect, useState, useRef, useCallback } from "react";
 import axios from "axios";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
@@ -28,18 +28,18 @@ export default function CategoriesForm({ initialCategory, hideList = false }: Ca
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [fileKey, setFileKey] = useState("file-0"); // Unique key to reset input
 
-  useEffect(() => {
-    fetchCategories();
-  }, []);
-
-  const fetchCategories = async () => {
+  const fetchCategories = useCallback(async () => {
     try {
       const res = await axios.get("/api/dbhandler?model=category");
       setCategories(res.data);
     } catch (err) {
       console.error("Failed to fetch categories:", err);
     }
-  };
+  }, []);
+
+  useEffect(() => {
+    fetchCategories();
+  }, [fetchCategories]);
 
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const selected = e.target.files?.[0] || null;

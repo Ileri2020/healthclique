@@ -16,14 +16,14 @@ export default function LikeForm() {
   });
   const [editId, setEditId] = useState<string | null>(null);
 
-  useEffect(() => {
-    fetchLikes();
-  }, []);
-
   const fetchLikes = async () => {
     const res = await axios.get(`${API_URL}?model=likes`);
     setLikes(res.data);
   };
+
+  useEffect(() => {
+    fetchLikes();
+  }, []);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();

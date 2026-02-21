@@ -1,9 +1,7 @@
-
-// components/PaymentForm.tsx
+import { useCallback, useEffect, useState } from 'react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import axios from 'axios';
-import { useEffect, useState } from 'react';
 
 export default function PaymentForm() {
   const [payments, setPayments] = useState([]);
@@ -15,27 +13,27 @@ export default function PaymentForm() {
   const [editId, setEditId] = useState(null);
   const [carts, setCarts] = useState([]); // carts to be mapped to the select input
 
-  useEffect(() => {
-    fetchPayments();
-    fetchCarts();
-  }, []);
-
-  const fetchPayments = async () => {
+  const fetchPayments = useCallback(async () => {
     try {
       const res = await axios.get('/api/dbhandler?model=payment');
       setPayments(res.data);
     } catch (err) {
       console.error('Failed to fetch payments', err);
     }
-  };
+  }, []);
 
-  const fetchCarts = async () => {
+  const fetchCarts = useCallback(async () => {
     const res = await axios.get('/api/dbhandler?model=cart');
     setCarts(res.data);
     if (res.data.length > 0) {
       setFormData(prev => ({ ...prev, cartId: res.data[0].id }));
     }
-  };
+  }, []);
+
+  useEffect(() => {
+    fetchPayments();
+    fetchCarts();
+  }, [fetchPayments, fetchCarts]);
 
   const resetForm = () => {
     setFormData({

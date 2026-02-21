@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import axios from "axios";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
@@ -36,31 +36,31 @@ export default function FeaturedProductForm({ hideList = false }: FeaturedProduc
 
   const [editId, setEditId] = useState<string | null>(null);
 
-  useEffect(() => {
-    refreshAll();
-  }, []);
-
-  const refreshAll = async () => {
-    await Promise.all([fetchFeaturedProduct(), fetchProducts()]);
-  };
-
-  const fetchFeaturedProduct = async () => {
+  const fetchFeaturedProduct = useCallback(async () => {
     try {
       const res = await axios.get("/api/dbhandler?model=featuredProduct");
       setFeaturedProduct(res.data);
     } catch (err) {
       console.error("Failed to fetch featured products", err);
     }
-  };
+  }, []);
 
-  const fetchProducts = async () => {
+  const fetchProducts = useCallback(async () => {
     try {
       const res = await axios.get("/api/dbhandler?model=product");
       setProducts(res.data);
     } catch (err) {
       console.error("Failed to fetch products", err);
     }
-  };
+  }, []);
+
+  const refreshAll = useCallback(async () => {
+    await Promise.all([fetchFeaturedProduct(), fetchProducts()]);
+  }, [fetchFeaturedProduct, fetchProducts]);
+
+  useEffect(() => {
+    refreshAll();
+  }, [refreshAll]);
 
   const featuredIds = useMemo(
     () => new Set(featuredProduct.map((f) => f.productId)),

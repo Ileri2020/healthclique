@@ -99,7 +99,7 @@ const Admin = () => {
         ),
       },
     ],
-    [selectedForms, searchQuery, filteredForms]
+    [selectedForms, searchQuery, filteredForms, allSelected, toggleAll, partiallySelected, toggleForm]
   );
 
   return (

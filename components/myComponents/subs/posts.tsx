@@ -8,20 +8,19 @@ const Posts = ({ page }) => {
   const [sortOrder, setSortOrder] = useState('desc');
   const [postTypes, setPostTypes] = useState({ video: true, audio: true, image: true, });
 
-  const fetchallpost = () =>{
-    axios.get('/api/dbhandler', { params: { model: 'posts', } })
-      .then(response => {
-        const posts = response.data;
-        let filteredPosts = posts.filter(post => post.for === page && postTypes[post.type]);
-        filteredPosts = filteredPosts.sort((a, b) => sortOrder === 'asc' ? new Date(a.updatedAt).getTime() - new Date(b.updatedAt).getTime() : new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime());
-        setallpost(filteredPosts);
-      })
-      .catch(error => {
-        console.error(error);
-      });
-  }
-
   useEffect(() => {
+    const fetchallpost = () =>{
+      axios.get('/api/dbhandler', { params: { model: 'posts', } })
+        .then(response => {
+          const posts = response.data;
+          let filteredPosts = posts.filter(post => post.for === page && postTypes[post.type]);
+          filteredPosts = filteredPosts.sort((a, b) => sortOrder === 'asc' ? new Date(a.updatedAt).getTime() - new Date(b.updatedAt).getTime() : new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime());
+          setallpost(filteredPosts);
+        })
+        .catch(error => {
+          console.error(error);
+        });
+    }
     fetchallpost();
   }, [sortOrder, postTypes, page]);
 

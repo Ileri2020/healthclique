@@ -18,11 +18,6 @@ export default function ShippingAddressForm() {
   const [editId, setEditId] = useState(null);
   const [users, setUsers] = useState([]); // Added to store users for the select input
 
-  useEffect(() => {
-    fetchShippingAddresses();
-    fetchUsers();
-  }, []);
-
   const fetchShippingAddresses = async () => {
     const res = await axios.get('/api/dbhandler?model=shippingAddress');
     setShippingAddresses(res.data);
@@ -32,6 +27,11 @@ export default function ShippingAddressForm() {
     const res = await axios.get('/api/dbhandler?model=user');
     setUsers(res.data);
   };
+
+  useEffect(() => {
+    fetchShippingAddresses();
+    fetchUsers();
+  }, []);
 
   const handleSubmit = async (e) => {
     e.preventDefault();

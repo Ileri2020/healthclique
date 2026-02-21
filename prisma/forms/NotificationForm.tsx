@@ -1,5 +1,4 @@
-
-import { useEffect, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import axios from 'axios';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
@@ -13,20 +12,20 @@ export default function NotificationForm() {
   });
   const [editId, setEditId] = useState(null);
 
+  const fetchNotifications = useCallback(async () => {
+    const res = await axios.get('/api/dbhandler?model=notification');
+    setNotifications(res.data);
+  }, []);
+
+  const fetchUsers = useCallback(async () => {
+    const res = await axios.get('/api/dbhandler?model=user');
+    setUsers(res.data);
+  }, []);
+
   useEffect(() => {
     fetchNotifications();
     fetchUsers();
-  }, []);
-
-  const fetchNotifications = async () => {
-    const res = await axios.get('/api/dbhandler?model=notification');
-    setNotifications(res.data);
-  };
-
-  const fetchUsers = async () => {
-    const res = await axios.get('/api/dbhandler?model=user');
-    setUsers(res.data);
-  };
+  }, [fetchNotifications, fetchUsers]);
 
   const handleSubmit = async (e) => {
     e.preventDefault();
