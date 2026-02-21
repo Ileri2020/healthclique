@@ -111,6 +111,7 @@ const Stocks = () => {
             <ProductCard 
               key={product.id}
               className="w-full group"
+              variant="horizontal"
               product={{ 
                 ...product, 
                 inStock: true, 
