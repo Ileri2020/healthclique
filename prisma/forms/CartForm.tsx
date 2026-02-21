@@ -1,7 +1,11 @@
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useState, useMemo } from 'react';
 import axios from 'axios';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
+import { Label } from '@/components/ui/label';
+import { Search, ChevronLeft, ChevronRight } from 'lucide-react';
+
+const ITEMS_PER_PAGE = 10;
 
 export default function CartForm() {
   const [carts, setCarts] = useState([]);
@@ -14,6 +18,11 @@ export default function CartForm() {
     total: 0,
   });
   const [editId, setEditId] = useState(null);
+
+  // Pagination and Search State
+  const [productSearch, setProductSearch] = useState("");
+  const [productPage, setProductPage] = useState(1);
+  const [cartPage, setCartPage] = useState(1);
 
   const fetchCarts = useCallback(async () => {
     const res = await axios.get('/api/dbhandler?model=cart');
@@ -37,20 +46,20 @@ export default function CartForm() {
   }, [fetchCarts, fetchUsers, fetchProducts]);
 
   const handleSubmit = async (e) => {
-  e.preventDefault();
-  const newFormData = {
-    ...formData,
-    quantity: +formData.quantity,
-    total: +formData.total,
+    e.preventDefault();
+    const newFormData = {
+      ...formData,
+      quantity: +formData.quantity,
+      total: +formData.total,
+    };
+    if (editId) {
+      await axios.put(`/api/dbhandler?model=cart&id=${editId}`, newFormData);
+    } else {
+      await axios.post('/api/dbhandler?model=cart', newFormData);
+    }
+    resetForm();
+    fetchCarts();
   };
-  if (editId) {
-    await axios.put(`/api/dbhandler?model=cart&id=${editId}`, newFormData);
-  } else {
-    await axios.post('/api/dbhandler?model=cart', newFormData);
-  }
-  resetForm();
-  fetchCarts();
-};
 
   const handleEdit = (item) => {
     setFormData(item);
@@ -58,6 +67,7 @@ export default function CartForm() {
   };
 
   const handleDelete = async (id) => {
+    if(!confirm("Remove this cart item?")) return;
     await axios.delete(`/api/dbhandler?model=cart&id=${id}`);
     fetchCarts();
   };
@@ -72,56 +82,145 @@ export default function CartForm() {
     setEditId(null);
   };
 
+  // ✅ Product Filtering & Pagination
+  const filteredProducts = useMemo(() => {
+    return products.filter((p: any) => 
+      p.name.toLowerCase().includes(productSearch.toLowerCase())
+    );
+  }, [products, productSearch]);
+
+  const totalProductPages = Math.ceil(filteredProducts.length / ITEMS_PER_PAGE);
+  const paginatedProducts = useMemo(() => {
+    const start = (productPage - 1) * ITEMS_PER_PAGE;
+    return filteredProducts.slice(start, start + ITEMS_PER_PAGE);
+  }, [filteredProducts, productPage]);
+
+  // ✅ Cart Filtering & Pagination
+  const totalCartPages = Math.ceil(carts.length / ITEMS_PER_PAGE);
+  const paginatedCarts = useMemo(() => {
+    const start = (cartPage - 1) * ITEMS_PER_PAGE;
+    return carts.slice(start, start + ITEMS_PER_PAGE);
+  }, [carts, cartPage]);
+
+  useEffect(() => {
+    setProductPage(1);
+  }, [productSearch]);
+
   return (
-    <div>
-      <form onSubmit={handleSubmit} className='flex flex-col w-full max-w-sm gap-2 justify-center items-center p-3 border-2 border-secondary-foreground rounded-sm m-2'>
-        <h2 className='font-semibold text-lg'>Manage Carts</h2>
-        <select value={formData.userId} onChange={(e) => setFormData({ ...formData, userId: e.target.value })}>
-          {users.length > 0 ? (
-            users.map((user, index) => (
-              <option key={index} value={user.id}>
-                {user.name}
-              </option>
-            ))
-          ) : (
-            <option value="">No users</option>
+    <div className='p-4'>
+      <form onSubmit={handleSubmit} className='flex flex-col w-full max-w-lg gap-4 p-6 border-2 border-primary/20 rounded-2xl m-2 bg-card shadow-lg'>
+        <h2 className='font-bold text-xl text-primary border-b pb-2'>Cart Administration</h2>
+        
+        <div className="space-y-2">
+          <Label className="text-xs font-bold uppercase text-muted-foreground">Select User</Label>
+          <select 
+            value={formData.userId} 
+            onChange={(e) => setFormData({ ...formData, userId: e.target.value })}
+            className="w-full h-10 px-3 rounded-md border border-input bg-background"
+          >
+            <option value="">-- Choose User --</option>
+            {users.map((user: any) => (
+              <option key={user.id} value={user.id}>{user.name}</option>
+            ))}
+          </select>
+        </div>
+
+        <div className="space-y-2 pt-2 border-t">
+          <Label className="text-xs font-bold uppercase text-muted-foreground">Select Product</Label>
+          
+          <div className="relative mb-2">
+            <Search className="absolute left-2 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+            <Input 
+              placeholder="Filter products..." 
+              value={productSearch}
+              onChange={(e) => setProductSearch(e.target.value)}
+              className="pl-8 h-8 text-xs"
+            />
+          </div>
+
+          <div className="grid grid-cols-1 gap-1 max-h-48 overflow-y-auto border rounded-md p-1 bg-muted/20">
+            {paginatedProducts.map((p: any) => (
+              <div 
+                key={p.id} 
+                onClick={() => setFormData({...formData, productId: p.id})}
+                className={`flex justify-between items-center p-2 rounded cursor-pointer transition-colors ${formData.productId === p.id ? "bg-primary text-primary-foreground" : "hover:bg-secondary"}`}
+              >
+                <span className="text-xs font-medium truncate">{p.name}</span>
+                <span className="text-[10px] opacity-70">₦{p.price}</span>
+              </div>
+            ))}
+            {paginatedProducts.length === 0 && <p className="text-[10px] text-center py-4 italic">No products matched.</p>}
+          </div>
+
+          {totalProductPages > 1 && (
+            <div className="flex items-center justify-between px-1">
+              <Button type="button" variant="ghost" size="sm" className="h-6 w-6 p-0" onClick={() => setProductPage(p => Math.max(1, p-1))} disabled={productPage === 1}>
+                <ChevronLeft className="h-4 w-4" />
+              </Button>
+              <span className="text-[10px] font-bold">{productPage} / {totalProductPages}</span>
+              <Button type="button" variant="ghost" size="sm" className="h-6 w-6 p-0" onClick={() => setProductPage(p => Math.min(totalProductPages, p+1))} disabled={productPage === totalProductPages}>
+                <ChevronRight className="h-4 w-4" />
+              </Button>
+            </div>
           )}
-        </select>
-        <select value={formData.productId} onChange={(e) => setFormData({ ...formData, productId: e.target.value })}>
-          {products.length > 0 ? (
-            products.map((product, index) => (
-              <option key={index} value={product.id}>
-                {product.name}
-              </option>
-            ))
-          ) : (
-            <option value="">No products</option>
-          )}
-        </select>
-        <Input placeholder="Quantity" value={formData.quantity} onChange={(e) => setFormData({ ...formData, quantity: +e.target.value })}  type="number" />
-        <Input placeholder="Total" value={formData.total} onChange={(e) => setFormData({ ...formData, total: +e.target.value })}  type="number" />
-        <Button type="submit">{editId ? 'Update' : 'Create'}</Button>
-        {editId && <Button type="button" onClick={resetForm}>Cancel</Button>}
-        <ul className='w-full'>
-          {carts.length > 0 ? (
-            carts.map((item, index) => (
-              <li key={index} className="flex flex-col justify-center items-center gap-2 my-2 bg-secondary rounded-md w-full p-2">
-                <p>User: {users.find((user) => user.id === item.userId)?.name}</p>
-                <p>Product: {products.find((product) => product.id === item.productId)?.name}</p>
-                <p>Quantity: {item.quantity}</p>
-                <p>Total: {item.total}</p>
-                <div className='flex flex-row gap-2 p-1 w-full'>
-                  <Button onClick={() => handleEdit(item)} className='flex-1'>Edit</Button>
-                  <Button onClick={() => handleDelete(item.id)} variant='ghost' className='flex-1 border-2 border-accent'>Delete</Button>
+        </div>
+
+        <div className="grid grid-cols-2 gap-4 pt-2 border-t">
+          <div className="space-y-1">
+            <Label className="text-xs font-bold uppercase text-muted-foreground">Quantity</Label>
+            <Input placeholder="Qty" value={formData.quantity} onChange={(e) => setFormData({ ...formData, quantity: +e.target.value })}  type="number" />
+          </div>
+          <div className="space-y-1">
+            <Label className="text-xs font-bold uppercase text-muted-foreground">Unit Total (₦)</Label>
+            <Input placeholder="Price" value={formData.total} onChange={(e) => setFormData({ ...formData, total: +e.target.value })}  type="number" />
+          </div>
+        </div>
+
+        <div className="flex gap-2">
+          <Button type="submit" className="flex-1 font-bold">{editId ? 'Update Cart' : 'Add to Cart'}</Button>
+          {editId && <Button type="button" variant="outline" onClick={resetForm} className="flex-1">Cancel</Button>}
+        </div>
+
+        <div className='w-full mt-8 pt-6 border-t'>
+          <h3 className="font-bold mb-4 flex justify-between items-center">
+            Active Carts 
+            <span className="text-[10px] bg-secondary px-2 py-0.5 rounded-full">{carts.length} records</span>
+          </h3>
+          <ul className='grid gap-2'>
+            {paginatedCarts.map((item: any) => (
+              <li key={item.id} className="flex flex-col gap-1 p-3 bg-secondary/10 border rounded-xl hover:bg-secondary/20 transition-all">
+                <div className="flex justify-between items-start">
+                  <div className="min-w-0">
+                    <p className="text-xs font-bold truncate">{users.find((u: any) => u.id === item.userId)?.name || "Unknown User"}</p>
+                    <p className="text-[10px] text-primary font-bold">{products.find((p: any) => p.id === item.productId)?.name || "Product Deleted"}</p>
+                  </div>
+                  <div className="text-right shrink-0">
+                    <p className="text-[10px] font-bold">₦{item.total}</p>
+                    <p className="text-[10px] text-muted-foreground">x{item.quantity}</p>
+                  </div>
+                </div>
+                <div className='flex gap-2 mt-2'>
+                  <Button size="sm" variant="outline" onClick={() => handleEdit(item)} className='flex-1 h-7 text-[10px]'>Edit</Button>
+                  <Button size="sm" variant="outline" onClick={() => handleDelete(item.id)} className='flex-1 h-7 text-[10px] border-destructive text-destructive hover:bg-destructive hover:text-white'>Remove</Button>
                 </div>
               </li>
-            ))
-          ) : (
-            <p>No carts.</p>
+            ))}
+            {carts.length === 0 && <p className="text-center py-10 text-xs italic text-muted-foreground">No cart items found.</p>}
+          </ul>
+
+          {totalCartPages > 1 && (
+            <div className="flex items-center justify-center gap-4 mt-6">
+              <Button type="button" variant="outline" size="sm" className="h-8 gap-2" onClick={() => setCartPage(p => Math.max(1, p-1))} disabled={cartPage === 1}>
+                <ChevronLeft className="h-4 w-4" /> Prev
+              </Button>
+              <span className="text-xs font-bold">{cartPage} / {totalCartPages}</span>
+              <Button type="button" variant="outline" size="sm" className="h-8 gap-2" onClick={() => setCartPage(p => Math.min(totalCartPages, p+1))} disabled={cartPage === totalCartPages}>
+                 Next <ChevronRight className="h-4 w-4" />
+              </Button>
+            </div>
           )}
-        </ul>
+        </div>
       </form>
     </div>
   );
 }
-

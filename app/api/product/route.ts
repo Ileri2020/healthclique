@@ -35,13 +35,19 @@ export async function POST(req , res) {
   const postRes = await dbHandler({
     model: 'product',
     method: 'POST',
-    // profileImage : Formdata.get("productImage")==="true",
     body: {
       description: Formdata.get("description"),
       name: Formdata.get("name"),
       categoryId: Formdata.get("categoryId"),
-      //category: Formdata.get("category"),
-      price: parseFloat(Formdata.get("price")),
+      price: parseFloat(Formdata.get("price") as string),
+      brand: Formdata.get("brand"),
+      scarce: Formdata.get("scarce") === "true",
+      activeIngredients: Formdata.get("activeIngredients")
+        ? (Formdata.get("activeIngredients") as string).split(",").map((s: string) => s.trim()).filter(Boolean)
+        : [],
+      healthConcerns: Formdata.get("healthConcerns")
+        ? (Formdata.get("healthConcerns") as string).split(",").map((s: string) => s.trim()).filter(Boolean)
+        : [],
       url: cldRes.url,
     },
   });

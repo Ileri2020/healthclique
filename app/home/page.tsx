@@ -5,6 +5,7 @@ import ECommerceSalesPage from "@/components/myComponents/salestore"
 import Hero from "@/components/myComponents/subs/hero"
 import FeaturedCategories from "@/components/myComponents/subs/featuredCategories"
 import FeaturedProducts from "@/components/myComponents/subs/featuredProducts"
+import CommonMedications from "@/components/myComponents/subs/commonMedications"
 import Features from "@/components/myComponents/subs/features"
 import ConcernGrid from "@/components/myComponents/subs/concern-grid"
 import PartnerBrands from "@/components/myComponents/subs/partner-brands"
@@ -23,6 +24,7 @@ const Home = () => {
     >
       {/* <Filters /> */}
       <Hero />
+      <CommonMedications />
       <PartnerBrands />
       <ConcernGrid />
       <FeaturedCategories />

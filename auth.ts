@@ -1,28 +1,15 @@
 // @ts-nocheck
 import NextAuth, { CredentialsSignin } from "next-auth";
-// @ts-nocheck
 import Credentials from "next-auth/providers/credentials";
-// import Github from "next-auth/providers/github";
 import Google from "next-auth/providers/google";
-// import connectDB from "./lib/db";
-// import { User } from "./models/User";
 import bcrypt, { compare } from "bcryptjs";
-// import bcrypt, { compare } from 'bcrypt';
 import { PrismaClient } from '@prisma/client';
+
 const prisma = new PrismaClient();
 
-
-
-
-
 export const { handlers, signIn, signOut, auth } = NextAuth({
-  trustHost: true, 
+  trustHost: true,
   providers: [
-    // Github({
-    //   clientId: process.env.GITHUB_CLIENT_ID,
-    //   clientSecret: process.env.GITHUB_CLIENT_SECRET,
-    // }),
-
     Google({
       clientId: process.env.GOOGLE_ID,
       clientSecret: process.env.GOOGLE_SECRET,
@@ -30,7 +17,6 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
 
     Credentials({
       name: "Credentials",
-
       credentials: {
         email: { label: "Email", type: "email" },
         password: { label: "Password", type: "password" },
@@ -44,12 +30,8 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
           throw new CredentialsSignin("Please provide both email & password");
         }
 
-        // await connectDB();
-
-        // const user = await User.findOne({ email }).select("+password +role");
         const user = await prisma.user.findUnique({
           where: { email },
-          // select: { password: true, role: true },
         });
 
         if (!user) {
@@ -57,16 +39,17 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
         }
 
         if (!user.password) {
-          throw new Error("Invalid email or password");
+          throw new Error("This account was created with Google. Please sign in with Google.");
         }
 
         const isMatched = await compare(password, user.password);
 
         if (!isMatched) {
-          throw new Error("Password did not matched");
+          throw new Error("Password did not match");
         }
 
         const userData = {
+          id: user.id,
           name: user.name,
           email: user.email,
           contact: user.contact,
@@ -79,29 +62,19 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
     }),
   ],
 
-  // pages: {
-  //   signIn: "/login",
-  // },
-
   callbacks: {
-    // async session({ session, token, user }) {
-    //   if (token?.sub && token?.role) {
-    //     //add whatever else to session here
-    //     session.user.id = token.sub;
-    //     session.user.role = token.role;
-    //   }
-    //   return session;
-    // },
     async session({ session, token }) {
       if (token?.id) {
-        session.user.id = token.id;     // <-- PASS ID INTO SESSION
+        session.user.id = token.id;
       }
       if (token?.role) {
         session.user.role = token.role;
       }
+      if (token?.avatarUrl) {
+        session.user.avatarUrl = token.avatarUrl;
+      }
       return session;
     },
-
 
     async jwt({ token, user, account }) {
       // When signing in for the first time
@@ -112,29 +85,22 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
           });
 
           if (dbUser) {
-            token.id = dbUser.id;   // <-- PASS DB USER ID
-            token.role = dbUser.role ?? "user"; 
+            token.id = dbUser.id;
+            token.role = dbUser.role ?? "customer";
+            token.avatarUrl = dbUser.avatarUrl;
           }
         }
       }
-    
 
       // When signing in with credentials
       if (account?.provider === "credentials" && user) {
-        token.id = user.id;         // <-- PASS USER ID
+        token.id = user.id;
         token.role = user.role;
+        token.avatarUrl = user.avatarUrl;
       }
 
       return token;
     },
-
-    //    async jwt({ token, user }) {
-    //   if (user) {
-    //     token.role = user.role;
-    //   }
-    //   return token;
-    // },
-
 
     signIn: async ({ user, account }) => {
       if (account?.provider === "google") {
@@ -146,34 +112,35 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
             image?.replace(/=s\d+(-c)?$/, "=s500-c") ?? image;
 
           const defaultAvatar =
-            "https://res.cloudinary.com/dc5khnuiu/image/upload/v1752627019/uxokaq0djttd7gsslwj9.png"; // <-- your Prisma default
+            "https://res.cloudinary.com/dc5khnuiu/image/upload/v1752627019/uxokaq0djttd7gsslwj9.png";
 
           const existingUser = await prisma.user.findUnique({
-            where: { email }
+            where: { email },
           });
 
-          // 1️⃣ USER DOES NOT EXIST → CREATE
+          // 1️⃣ USER DOES NOT EXIST → CREATE (no password required for OAuth)
           if (!existingUser) {
             await prisma.user.create({
               data: {
                 email,
                 name,
-                avatarUrl: googleAvatar,
+                avatarUrl: googleAvatar ?? defaultAvatar,
                 providerid: await bcrypt.hash(
                   id,
-                  parseInt(process.env.SALT_ROUNDS)
+                  parseInt(process.env.SALT_ROUNDS || "10")
                 ),
+                // password is intentionally omitted — it's optional for OAuth users
               },
             });
 
             return true;
           }
 
-          // 2️⃣ USER EXISTS → CHECK IF avatarUrl SHOULD BE UPDATED
+          // 2️⃣ USER EXISTS → UPDATE avatarUrl if needed
           const shouldUpdateAvatar =
-            !existingUser.avatarUrl ||               // empty avatar
-            existingUser.avatarUrl.trim() === "" ||  // blank avatar
-            existingUser.avatarUrl === defaultAvatar; // Prisma default avatar
+            !existingUser.avatarUrl ||
+            existingUser.avatarUrl.trim() === "" ||
+            existingUser.avatarUrl === defaultAvatar;
 
           if (shouldUpdateAvatar && googleAvatar) {
             await prisma.user.update({
@@ -197,20 +164,15 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
       return false;
     },
   },
+
+  session: {
+    strategy: "jwt",
+    maxAge: 10 * 60 * 60, // 10 hours
+  },
+
+  jwt: {
+    maxAge: 10 * 60 * 60, // 10 hours
+  },
+
+  debug: false,
 });
-
-
-
-
-
-
-
-// signin user from 
-// google: {"id":"4bebdf1d-2753-4047-ab31-8a6a9db26d0c",
-//   "name":"Adepoju Ololade",
-//   "email":"adepojuololade2020@gmail.com",
-//   "image":"https://lh3.googleusercontent.com/a/ACg8ocLdrFmljf-SPXpYAl7HcdIPIVgBam0jRZ5YkySzCZW8zI7oIik2=s96-c"
-// }
-//  GET /api/auth/callback/google?code=4%2F0Ab32j90_a7v-5QU2RibG3S8IjethT361aaX-zs2MbKjnfg5ipPemiIGXQFosoJmCzXEtJg&scope=
-// email+profile+https%3A%2F%2Fwww.googleapis.com%2Fauth%2Fuserinfo.profile+https%3A%2F%2Fwww.googleapis.com%2Fauth%2Fuserinfo.email
-// +openid&authuser=0&prompt=consent 302 in 21974ms

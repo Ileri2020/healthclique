@@ -27,7 +27,6 @@ import Autoplay from "embla-carousel-autoplay";
 
 const FeaturedProducts = () => {
   const [products, setProducts] = useState<any[]>([]);
-  const [pharmacyProducts, setPharmacyProducts] = useState<any[]>([]);
   const [brandProducts, setBrandProducts] = useState<any[]>([]);
   const [oralCare, setOralCare] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
@@ -57,9 +56,6 @@ const FeaturedProducts = () => {
       // 2. Fetch All Products for Subsets
       const prodRes = await fetch("/api/dbhandler?model=product&include=category");
       const prodData = await prodRes.json();
-      
-      // Common Medications
-      setPharmacyProducts(prodData.slice(0, 15));
       
       // Top Brands (e.g., Emzor, Vitabiotics)
       const brands = prodData.filter((p: any) => 
@@ -93,8 +89,9 @@ const FeaturedProducts = () => {
     toast.success(`${product.name} added to cart`);
   };
 
+  /** Standalone sub-component so each section gets its own stable autoplay ref */
   const ProductSection = ({ title, subtitle, items }: { title: string, subtitle: string, items: any[] }) => {
-    const plugin = React.useRef(Autoplay({ delay: 3500, stopOnInteraction: false }));
+    const plugin = React.useRef(Autoplay({ delay: 3200, stopOnInteraction: false }));
     return (
     <div className="mb-16">
       <div className="flex flex-col md:flex-row md:items-end justify-between mb-8 gap-4 px-4">
@@ -106,20 +103,20 @@ const FeaturedProducts = () => {
           View All <ArrowRight className="w-4 h-4" />
         </Link>
       </div>
-      
-      <Carousel 
-        opts={{ align: "start", loop: true }} 
+
+      {/* Continuous autoplay — no hover pause */}
+      <Carousel
+        opts={{ align: "start", loop: true }}
         plugins={[plugin.current]}
         className="w-full relative px-4"
-        onMouseEnter={plugin.current.stop}
-        onMouseLeave={plugin.current.reset}
       >
         <CarouselContent className="-ml-4">
           {items.map((product) => (
             <CarouselItem key={product.id} className="pl-4 basis-full sm:basis-1/2 md:basis-1/3 lg:basis-1/5 pt-2 pb-2">
               <ProductCard
                 className="w-full"
-                variant="compact"
+                variant="default"
+                orientation="vertical"
                 product={{ 
                   ...product, 
                   inStock: true, 
@@ -160,14 +157,7 @@ const FeaturedProducts = () => {
                />
             )}
 
-            {/* 2. Pharmacy Section (Imported Data) */}
-            {pharmacyProducts.length > 0 && (
-               <ProductSection 
-                title="Common Medications" 
-                subtitle="Recently added essential pharmaceuticals and healthcare products"
-                items={pharmacyProducts}
-               />
-            )}
+            {/* 2. Pharmacy Section – now in CommonMedications (below hero) */}
 
             {/* 3. Top Brands Section */}
             {brandProducts.length > 0 && (

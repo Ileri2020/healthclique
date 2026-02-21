@@ -22,6 +22,7 @@ const ITEMS_PER_PAGE = 30;
 const Stocks = () => {
   const searchParams = useSearchParams();
   const categoryFilter = searchParams.get("category");
+  const concernFilter = searchParams.get("concern"); // ✅ NEW: health concern filter
   
   const { addItem } = useCart();
   const [products, setProducts] = useState<any[]>([]);
@@ -41,9 +42,18 @@ const Stocks = () => {
           const filterLower = categoryFilter.toLowerCase();
           const catName = p.category?.name?.toLowerCase();
           const pCatName = p.categoryName?.toLowerCase();
-          
           return catName === filterLower || pCatName === filterLower;
         });
+      }
+
+      // Filter by health concern if ?concern= param is present
+      if (concernFilter) {
+        data = data.filter((p: any) =>
+          Array.isArray(p.healthConcerns) &&
+          p.healthConcerns.some((c: string) =>
+            c.toLowerCase() === concernFilter.toLowerCase()
+          )
+        );
       }
       
       setProducts(data);
@@ -53,7 +63,7 @@ const Stocks = () => {
     } finally {
       setLoading(false);
     }
-  }, [categoryFilter]);
+  }, [categoryFilter, concernFilter]);
 
   useEffect(() => {
     fetchProducts();
@@ -86,13 +96,18 @@ const Stocks = () => {
 
   return (
     <div className="w-full flex flex-col items-center py-8">
+
+      {/* 📦 Fixed Floating Add Product Button (Admin Only) */}
       {isAdmin && (
-        <div className="mb-8">
+        <div className="fixed bottom-6 left-6 z-50">
           <Dialog onOpenChange={(open) => !open && fetchProducts()}>
             <DialogTrigger asChild>
-              <Button className="gap-2 bg-primary hover:bg-primary/90">
-                <Plus className="h-4 w-4" />
-                Add New Product
+              <Button
+                size="lg"
+                className="gap-2 bg-primary hover:bg-primary/90 shadow-xl rounded-full px-5 py-3 font-semibold text-sm"
+              >
+                <Plus className="h-5 w-5" />
+                Add Product
               </Button>
             </DialogTrigger>
             <DialogContent className="max-w-md max-h-[90vh] overflow-y-auto">
@@ -106,12 +121,13 @@ const Stocks = () => {
       )}
 
       {currentItems.length > 0 ? (
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5 gap-6 px-4 max-w-7xl w-full">
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6 px-4 max-w-7xl w-full">
           {currentItems.map((product) => (
-            <ProductCard 
+            <ProductCard
               key={product.id}
               className="w-full group"
-              variant="horizontal"
+              orientation="horizontal"   // mobile: show as horizontal card
+              // md+ the card's internal flex already adapts via md:flex-col class
               product={{ 
                 ...product, 
                 inStock: true, 

@@ -15,17 +15,21 @@ import { Cart } from '../myComponents/subs/cart';
 import { SearchInput } from '../myComponents/subs/searchcomponent';
 import { useSession } from "next-auth/react";
 import { useAppContext } from '@/hooks/useAppContext';
+import { useEffect } from 'react';
 
 const Navbar = () : JSX.Element => {
   const {setUser, user } = useAppContext();
   const { data: session, status, update } = useSession();
-  if (status === "authenticated" && user.email === "nil") {
-    // console.log('navbar session', session)
-    setUser({
-      ...session.user,
-      avatarUrl: session.user.image
-    });
-  }
+  
+  useEffect(() => {
+    if (status === "authenticated" && session?.user && user.email === "nil") {
+      setUser({
+        ...session.user,
+        avatarUrl: session.user.image
+      });
+    }
+  }, [status, session, user.email, setUser]);
+
   return (
     <div className="w-[100vw] overflow-clip flex flex-col m-0 p-0 relative">
       <header className="w-[100%] py-4 bg-background sticky top-0 z-10">
