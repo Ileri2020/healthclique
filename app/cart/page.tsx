@@ -39,7 +39,10 @@ const Cart = () => {
     formData.append("file", file);
 
     try {
-      const res = await fetch("/api/product", formData);
+      const res = await fetch("/api/product", {
+        method: "POST",
+        body: formData,
+      });
       // Re-using the product API for upload for now or a generic one if exists
       // Realistically we'd have a prescription-specific upload API
       setPrescriptionImage(URL.createObjectURL(file));

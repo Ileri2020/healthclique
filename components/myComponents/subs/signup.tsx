@@ -34,7 +34,18 @@ const Signup = () => {
   const [editId, setEditId] = useState(null);
 
   const resetForm = () => {
-    setFormData({ email: '', password: '', name: '', avatarUrl: '' });
+    setFormData({
+      email: '',
+      password: '',
+      name: '',
+      avatarUrl: '',
+      role: 'customer',
+      professionalType: '',
+      regNumber: '',
+      facilityName: '',
+      facilityAddress: '',
+      facilityRegNumber: '',
+    });
     setEditId(null);
   };
 
