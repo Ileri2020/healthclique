@@ -19,6 +19,8 @@ import CartForm from "@/prisma/forms/CartForm";
 import CouponForm from "@/prisma/forms/CouponForm";
 import ShippingAddressForm from "@/prisma/forms/ShippingAddressForm";
 import PostForm from "@/prisma/forms/PostForm";
+import { AccountUpgrade } from "@/components/myComponents/subs/AccountUpgrade";
+import { AdminUserManager } from "@/components/myComponents/subs/AdminUserManager";
 
 const forms = [
   { name: "User", component: UserForm },
@@ -113,6 +115,11 @@ const Admin = () => {
     >
       <div className="text-4xl font-semibold w-full text-center mb-6">
         Admin Dashboard
+      </div>
+
+      <div className="max-w-sm mx-auto mb-10 flex flex-col gap-3">
+        <AdminUserManager />
+        <AccountUpgrade />
       </div>
 
       {/* Render selected forms */}

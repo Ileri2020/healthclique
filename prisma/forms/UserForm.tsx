@@ -11,7 +11,8 @@ export default function UserForm() {
     password: '',
     name: '',
     avatarUrl: '',
-    role: 'user',
+    role: 'customer',
+    verificationStatus: 'unverified',
   });
   const [editId, setEditId] = useState(null);
 
@@ -51,7 +52,8 @@ export default function UserForm() {
       password: '',
       name: '',
       avatarUrl: '',
-      role: 'user',
+      role: 'customer',
+      verificationStatus: 'unverified'
     });
     setEditId(null);
   };
@@ -86,12 +88,26 @@ export default function UserForm() {
           onChange={(e) => setFormData({ ...formData, avatarUrl: e.target.value })}
         />
         <select
+          className="w-full p-2 border rounded-md"
           value={formData.role}
           onChange={(e) => setFormData({ ...formData, role: e.target.value })}
         >
-          <option value="user">User</option>
+          <option value="customer">Customer</option>
+          <option value="professional">Professional</option>
+          <option value="wholesaler">Wholesaler</option>
+          <option value="staff">Staff</option>
           <option value="admin">Admin</option>
-          <option value="moderator">Moderator</option>
+        </select>
+
+        <select
+          className="w-full p-2 border rounded-md"
+          value={formData.verificationStatus || 'unverified'}
+          onChange={(e) => setFormData({ ...formData, verificationStatus: e.target.value })}
+        >
+          <option value="unverified">Unverified</option>
+          <option value="pending">Pending</option>
+          <option value="verified">Verified</option>
+          <option value="rejected">Rejected</option>
         </select>
         <Button type="submit">{editId ? 'Update' : 'Create'}</Button>
         {editId && <button onClick={resetForm}>Cancel</button>}

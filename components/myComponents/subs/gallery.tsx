@@ -1,12 +1,12 @@
 "use client"
 // import { Button } from "@/components/ui/button"
 import { CiShoppingCart, } from "react-icons/ci"
-import { useSelector, useDispatch } from "react-redux"
-import { cartActions } from "@/store/cart-slice"
-import { RootState } from "@/store"
 import { useEffect, useRef, useState } from "react"
 import { Button } from "@/components/ui/button"
 import { motion, useInView, useAnimation } from "framer-motion"
+import { useAppContext } from "@/hooks/useAppContext";
+import { getProductPrice } from "@/lib/stock-pricing";
+import { useCart } from "@/hooks/use-cart"
 
 const Gallery = () => {
 
@@ -14,7 +14,7 @@ const Gallery = () => {
   const isInView = useInView(ref, {once: true})
 
   useEffect(() => {
-    console.log(isInView)
+    // console.log(isInView)
   }, [isInView])
 
   type stockCategory = {
@@ -31,19 +31,16 @@ const Gallery = () => {
   const [data, setData] = useState<stockCategory[]>([]);
   const [error, setError] = useState(null);
   const [loading, setLoading] = useState(true);
+  const { user } = useAppContext();
+  const { addItem } = useCart();
   
-  // const cartItems = useSelector((state : RootState)=>state.cart.itemsList)
-  const dispatch = useDispatch();
   const cart = (name : string, id : string, price : number, img : string) => {
-    dispatch(
-      cartActions.addToCart({
-        name,
-        id,
-        price,
-        img,
-      })
-    )
-   // console.log(cartItems)
+    addItem({
+      name,
+      id,
+      price,
+      img,
+    }, 1);
   }
 
   useEffect(() => {
@@ -52,9 +49,6 @@ const Gallery = () => {
       .then(data => data.slice().sort(()=>Math.random()-0.5))
       .then(data => {
         setData(data);
-        // data.forEach((obj : any) => {
-        //   console.log(obj._id, obj.name, obj.price);
-        // });
         setLoading(false);
       })
       .catch(error => {
@@ -68,14 +62,12 @@ if (loading) {
   return <p>Loading...</p>;
 }
 
-// if (error) {
-//   return <p>Error: {error}</p>;
-// }
-
   return (
     <section className="w-full max-w-[1000px] overflow-clip">
       <div ref={ref} className="flex flex-col w-full gap-5">
-        {data.map((stock, index)=>{
+        {data.map((stock, index) => {
+          const dynamicPrice = getProductPrice(stock as any, user?.role);
+          const stockId = stock._id || (stock as any).id;
           return (
             <div className="flex flex-col md:flex-row /bg-accent-secondary/5 w-full items-center md:items-start md:justify-between" key={index}>
               <div className={`${(index % 2) ? "md:order-2" : ""} w-[350px] h-[350px] contain-content flex justify-center items-center`}>
@@ -84,12 +76,13 @@ if (loading) {
               <div className="flex flex-col flex-1 /justify-between items-center text-center p-5 max-w-md md:self-end">
                 <div className="flex flex-1 flex-col justify-center items-center">
                   <div className="text-lg font-semibold text-accent">{stock.name}</div>
+                  <div className="text-xl font-bold text-foreground/80 mb-2">₦ {dynamicPrice.toLocaleString()}</div>
                   <div className="text-2xl font-dance max-h-32 md:max-h-none overflow-auto md:overscroll-none hi">{stock.description}</div>
                 </div>
-                <Button onClick={() => cart(stock.name, stock._id, stock.price, stock.img)} className="relative max-w-[220px] text-3xl //text-accent border-2 font-semibold rounded-md px-20  hover:bg-accent/10 hover:border-2 hover:border-accent hover:text-accent"><CiShoppingCart /></Button>
+                <Button onClick={() => cart(stock.name, stockId, stock.price, stock.img)} className="relative max-w-[220px] text-3xl //text-accent border-2 font-semibold rounded-md px-20  hover:bg-accent/10 hover:border-2 hover:border-accent hover:text-accent"><CiShoppingCart /></Button>
               </div>
             </div>
-          )
+          );
         })}
       </div>
     </section>

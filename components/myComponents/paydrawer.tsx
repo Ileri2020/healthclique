@@ -1,7 +1,5 @@
 import * as React from "react"
 import { Minus, Plus } from "lucide-react"
-import { Bar, BarChart, ResponsiveContainer } from "recharts"
-
 import { Button } from "@/components/ui/button"
 import {
   Drawer,
@@ -13,33 +11,30 @@ import {
   DrawerTitle,
   DrawerTrigger,
 } from "@/components/ui/drawer"
-import { useSelector } from "react-redux"
-import { RootState } from "@/store"
+import { useCart } from "@/hooks/use-cart"
 
+export function PayDrawer(props : {cart: any, disabled?: boolean}) {
+  const { subtotal } = useCart();
+  const [goal, setGoal] = React.useState(subtotal)
 
-
-
-export function PayDrawer(props : {cart: any}) {
-  let total = 0
-
-  props.cart.forEach((item)=>{ total = total + item.totalPrice})
-
-  const [goal, setGoal] = React.useState(total)
+  React.useEffect(() => {
+    setGoal(subtotal);
+  }, [subtotal]);
 
   function onClick(adjustment: number) {
-    setGoal(Math.max(200, Math.min(400, goal + adjustment)))
+    setGoal(Math.max(0, goal + adjustment))
   }
 
   return (
     <Drawer>
       <DrawerTrigger asChild>
-        <Button variant="outline">Order</Button>
+        <Button variant="outline" disabled={props.disabled}>Order</Button>
       </DrawerTrigger>
       <DrawerContent>
         <div className="mx-auto w-full max-w-sm">
           <DrawerHeader>
-            <DrawerTitle>Move Goal</DrawerTitle>
-            <DrawerDescription>Set your daily activity goal.</DrawerDescription>
+            <DrawerTitle>Checkout Summary</DrawerTitle>
+            <DrawerDescription>Review your total before proceeding.</DrawerDescription>
           </DrawerHeader>
           <div className="p-4 pb-0">
             <div className="flex items-center justify-center space-x-2">
@@ -47,26 +42,25 @@ export function PayDrawer(props : {cart: any}) {
                 variant="outline"
                 size="icon"
                 className="h-8 w-8 shrink-0 rounded-full"
-                onClick={() => onClick(-10)}
-                disabled={goal <= 200}
+                onClick={() => onClick(-1000)}
+                disabled={goal <= 0}
               >
                 <Minus className="h-4 w-4" />
                 <span className="sr-only">Decrease</span>
               </Button>
               <div className="flex-1 text-center">
-                <div className="text-7xl font-bold tracking-tighter">
-                  {goal}
+                <div className="text-5xl font-bold tracking-tighter">
+                  ₦ {goal.toLocaleString()}
                 </div>
-                <div className="text-[0.70rem] uppercase text-muted-foreground">
-                  Calories/day
+                <div className="text-[0.70rem] uppercase text-muted-foreground mt-2">
+                  Total Amount
                 </div>
               </div>
               <Button
                 variant="outline"
                 size="icon"
                 className="h-8 w-8 shrink-0 rounded-full"
-                onClick={() => onClick(10)}
-                disabled={goal >= 400}
+                onClick={() => onClick(1000)}
               >
                 <Plus className="h-4 w-4" />
                 <span className="sr-only">Increase</span>
@@ -74,7 +68,7 @@ export function PayDrawer(props : {cart: any}) {
             </div>
           </div>
           <DrawerFooter>
-            <Button>Submit</Button>
+            <Button>Pay Now</Button>
             <DrawerClose asChild>
               <Button variant="outline">Cancel</Button>
             </DrawerClose>

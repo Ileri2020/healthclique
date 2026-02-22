@@ -8,9 +8,10 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardFooter } from "@/components/ui/card";
 import { cn } from "@/lib/utils";
 import { getProductPrice, isProductInStock } from "@/lib/stock-pricing";
-import { Heart, ShoppingCart, Star, Edit3, Trash2, Eye } from "lucide-react";
 import Link from "next/link";
 import * as React from "react";
+import { MessageCircle, ShoppingCart, Heart, Star, Edit3, Trash2, Eye, FileText } from "lucide-react";
+import { useAppContext } from "@/hooks/useAppContext";
 import { useIsAdmin } from "@/hooks/useIsAdmin";
 import {
   Dialog,
@@ -98,10 +99,17 @@ export function ProductCard({
   /**
    * Safe Data Access
    */
-  const currentPrice = getProductPrice(product);
+  const { user } = useAppContext();
+  const currentPrice = getProductPrice(product, user?.role);
   const inStock = typeof product.inStock === 'boolean' ? product.inStock : isProductInStock(product);
   const categoryName = product?.category?.name || product?.categoryName || "Pharmacy";
   const image = product?.images?.[0] || "/placeholder.png";
+  const regClass = product?.regulatoryClassification || "OTC";
+  const isPrescription = regClass === "Prescription Medicine";
+  const isControlled = regClass === "Controlled Medicine";
+
+  const whatsappNumber = "2348000000000"; // Replace with real company number
+  const speakToRepUrl = `https://wa.me/${whatsappNumber}?text=${encodeURIComponent(`Hello, I'm interested in the controlled medicine: ${product.name}. Please guide me on how to proceed.`)}`;
 
   // Rating Logic
   const ratingValue = React.useMemo(() => {
@@ -277,6 +285,20 @@ export function ProductCard({
               {categoryName}
             </Badge>
 
+            {/* Regulatory Badge */}
+            <div className="absolute bottom-2 right-12 z-10 flex flex-col gap-1 items-end">
+              {isPrescription && (
+                <Badge className="bg-destructive/90 text-[10px] px-1.5 py-0" variant="default">
+                  <FileText className="h-3 w-3 mr-1" /> Rx Required
+                </Badge>
+              )}
+              {isControlled && (
+                <Badge className="bg-accent/90 text-[10px] px-1.5 py-0" variant="default">
+                  Controlled
+                </Badge>
+              )}
+            </div>
+
             {/* Discount badge */}
             {hasDiscount && (
               <Badge
@@ -339,17 +361,34 @@ export function ProductCard({
                 <Button
                   className={cn(
                     "w-full gap-2 transition-all",
-                    isAddingToCart && "opacity-70"
+                    isAddingToCart && "opacity-70",
+                    isControlled && "bg-accent hover:bg-accent/90"
                   )}
                   disabled={isAddingToCart}
-                  onClick={handleAddToCart}
+                  onClick={(e) => {
+                    if (isControlled) {
+                      e.preventDefault();
+                      window.open(speakToRepUrl, "_blank");
+                    } else {
+                      handleAddToCart(e);
+                    }
+                  }}
                 >
-                  {isAddingToCart ? (
-                    <div className="h-4 w-4 animate-spin rounded-full border-2 border-background border-t-transparent" />
+                  {isControlled ? (
+                    <>
+                      <MessageCircle className="h-4 w-4" />
+                      Speak to Rep
+                    </>
                   ) : (
-                    <ShoppingCart className="h-4 w-4" />
+                    <>
+                      {isAddingToCart ? (
+                        <div className="h-4 w-4 animate-spin rounded-full border-2 border-background border-t-transparent" />
+                      ) : (
+                        <ShoppingCart className="h-4 w-4" />
+                      )}
+                      Add to Cart
+                    </>
                   )}
-                  Add to Cart
                 </Button>
               </CardFooter>
             )}
@@ -370,11 +409,18 @@ export function ProductCard({
                   <Button
                     className="h-8 w-8 rounded-full"
                     disabled={isAddingToCart}
-                    onClick={handleAddToCart}
+                    onClick={(e) => {
+                      if (isControlled) {
+                        e.preventDefault();
+                        window.open(speakToRepUrl, "_blank");
+                      } else {
+                        handleAddToCart(e);
+                      }
+                    }}
                     size="icon"
                     variant="ghost"
                   >
-                    <ShoppingCart className="h-4 w-4" />
+                    {isControlled ? <MessageCircle className="h-4 w-4 text-accent" /> : <ShoppingCart className="h-4 w-4" />}
                   </Button>
                 </div>
               </CardFooter>

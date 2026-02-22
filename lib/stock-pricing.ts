@@ -8,7 +8,23 @@
  * 1. Use the price from the oldest stock with available quantity
  * 2. If all stocks are sold out, use the price from the most recent stock
  * 3. Falls back to product.price if no stock exists
+ * 4. Applies dynamic markups based on user role:
+ *    - Retail (customer): cost * 1.3
+ *    - Professional: cost * 1.2
+ *    - Wholesale/Admin/Staff: cost * 1.1
  */
+
+export const PRICE_MARKUPS = {
+    customer: 1.3,
+    professional: 1.2,
+    wholesaler: 1.1,
+    admin: 1.1,
+    staff: 1.1,
+    visitor: 1.3,
+    user: 1.3,
+} as const;
+
+export type UserRole = keyof typeof PRICE_MARKUPS | string;
 
 export interface StockItem {
     id: string;
@@ -34,35 +50,41 @@ export function getTotalStockQuantity(stocks: StockItem[]): number {
 }
 
 /**
- * Get the current selling price for a product based on FIFO stock logic
+ * Get the current dynamic selling price for a product based on FIFO stock logic and user role
  * 
  * @param product - Product with stock array
- * @returns Current selling price
+ * @param role - User role for markup calculation
+ * @returns Current dynamic selling price
  */
-export function getProductPrice(product: ProductWithStock): number {
-    // No stock data available, use product.price
-    if (!product.stock || product.stock.length === 0) {
-        return product.price || 0;
+export function getProductPrice(product: ProductWithStock, role: UserRole = 'customer'): number {
+    // Get the base cost first
+    let baseCost = product.price || 0;
+
+    if (product.stock && product.stock.length > 0) {
+        // Sort stocks by creation date (oldest first) for FIFO
+        const sortedStocks = [...product.stock].sort((a, b) => {
+            const dateA = new Date(a.createdAt).getTime();
+            const dateB = new Date(b.createdAt).getTime();
+            return dateA - dateB;
+        });
+
+        // Find the first stock with available quantity (oldest stock)
+        const availableStock = sortedStocks.find(stock => stock.addedQuantity > 0);
+
+        if (availableStock) {
+            // Use cost from oldest available stock if available, otherwise fallback to pricePerProduct
+            // Note: We are now treating these stored "prices" as base costs
+            baseCost = availableStock.costPerProduct || availableStock.pricePerProduct || product.price || 0;
+        } else {
+            // All stocks are sold out, use the most recent stock base cost
+            const mostRecentStock = sortedStocks[sortedStocks.length - 1];
+            baseCost = mostRecentStock?.costPerProduct || mostRecentStock?.pricePerProduct || product.price || 0;
+        }
     }
 
-    // Sort stocks by creation date (oldest first) for FIFO
-    const sortedStocks = [...product.stock].sort((a, b) => {
-        const dateA = new Date(a.createdAt).getTime();
-        const dateB = new Date(b.createdAt).getTime();
-        return dateA - dateB;
-    });
-
-    // Find the first stock with available quantity (oldest stock)
-    const availableStock = sortedStocks.find(stock => stock.addedQuantity > 0);
-
-    if (availableStock) {
-        // Use price from oldest available stock
-        return availableStock.pricePerProduct || product.price || 0;
-    }
-
-    // All stocks are sold out, use the most recent stock price
-    const mostRecentStock = sortedStocks[sortedStocks.length - 1];
-    return mostRecentStock?.pricePerProduct || product.price || 0;
+    // Apply role-based markup
+    const markup = PRICE_MARKUPS[role as keyof typeof PRICE_MARKUPS] || PRICE_MARKUPS.customer;
+    return baseCost * markup;
 }
 
 /**
@@ -99,7 +121,7 @@ export function isProductInStock(product: ProductWithStock): boolean {
 /**
  * Get stock status information
  */
-export function getStockStatus(product: ProductWithStock): {
+export function getStockStatus(product: ProductWithStock, role: UserRole = 'customer'): {
     inStock: boolean;
     quantity: number;
     currentPrice: number;
@@ -110,7 +132,7 @@ export function getStockStatus(product: ProductWithStock): {
     return {
         inStock: quantity > 0,
         quantity,
-        currentPrice: getProductPrice(product),
+        currentPrice: getProductPrice(product, role),
         currentCost: getProductCost(product),
     };
 }

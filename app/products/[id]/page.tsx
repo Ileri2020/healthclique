@@ -3,12 +3,15 @@ import { motion } from "framer-motion"
 import { Button } from "@/components/ui/button"
 import { useParams } from "next/navigation"
 import { useEffect, useState } from "react"
-import { useDispatch } from 'react-redux';
-import { cartActions } from "@/store/cart-slice"
 import Similar from "@/components/myComponents/subs/similar"
+import { GlobalSearch } from "@/components/myComponents/subs"
 import { useCart } from "@/hooks/use-cart"
 import { toast } from "sonner"
 import { HeartPulse, Loader2, MessageCircle, ShoppingCart } from "lucide-react"
+import { useAppContext } from "@/hooks/useAppContext"
+import { getProductPrice } from "@/lib/stock-pricing"
+import { Badge } from "@/components/ui/badge"
+import { FileText, AlertCircle } from "lucide-react"
 
 const Description = () => {
   const [product, setProduct] = useState<any>(null);
@@ -16,7 +19,15 @@ const Description = () => {
   const [loading, setLoading] = useState(true);
   const { id } = useParams();
   const { addItem } = useCart();
-  const dispatch = useDispatch();
+  const { user } = useAppContext();
+
+  const regClass = product?.regulatoryClassification || "OTC";
+  const isPrescription = regClass === "Prescription Medicine";
+  const isControlled = regClass === "Controlled Medicine";
+
+  const whatsappNumber = "2348000000000"; // Replace with real company number
+  const speakToRepUrl = `https://wa.me/${whatsappNumber}?text=${encodeURIComponent(`Hello, I'm interested in the controlled medicine: ${product?.name}. Please guide me on how to proceed.`)}`;
+  const whatsappOrderUrl = `https://wa.me/${whatsappNumber}?text=${encodeURIComponent(`Hello, I'd like to order: ${product?.name}`)}`;
 
   useEffect(() => {
     const fetchProductDetails = async () => {
@@ -77,6 +88,10 @@ const Description = () => {
       transition={{ duration: 0.5 }}
       className="container mx-auto max-w-7xl px-4 py-8 md:py-16"
     >
+      <div className="mb-12 max-w-2xl">
+        <GlobalSearch placeholder="Search more products..." />
+      </div>
+
       <div className="grid grid-cols-1 gap-12 lg:grid-cols-2">
         {/* Product Image */}
         <div className="relative aspect-square overflow-hidden rounded-3xl border bg-white p-8 shadow-sm">
@@ -89,15 +104,32 @@ const Description = () => {
 
         {/* Product Info */}
         <div className="flex flex-col space-y-6">
-          <div className="space-y-2">
-            <div className="text-sm font-bold uppercase tracking-widest text-primary">
-              {product.brand || "General"}
+            <div className="flex flex-wrap items-center gap-2">
+              <div className="text-sm font-bold uppercase tracking-widest text-primary">
+                {product.brand || "General"}
+              </div>
+              <Badge variant={isPrescription || isControlled ? "destructive" : "outline"} className="uppercase font-bold text-[10px]">
+                {regClass}
+              </Badge>
             </div>
             <h1 className="text-3xl font-bold md:text-5xl">{product.name}</h1>
-          </div>
+          
+          {isPrescription && (
+            <div className="flex items-center gap-2 p-3 rounded-xl bg-destructive/10 text-destructive border border-destructive/20 text-sm font-semibold">
+              <FileText className="h-5 w-5" />
+              Prescription required for this medication
+            </div>
+          )}
+
+          {isControlled && (
+            <div className="flex items-center gap-2 p-3 rounded-xl bg-accent/10 text-accent border border-accent/20 text-sm font-semibold">
+              <AlertCircle className="h-5 w-5" />
+              Controlled Medicine: Representative consultation required
+            </div>
+          )}
 
           <div className="text-3xl font-black text-foreground">
-            ₦ {product.price?.toLocaleString()}
+            ₦ {getProductPrice(product, user?.role)?.toLocaleString()}
           </div>
 
           <div className="prose prose-sm max-w-none text-muted-foreground">
@@ -118,14 +150,32 @@ const Description = () => {
           )}
 
           <div className="flex flex-wrap gap-4 pt-4">
-            <Button size="lg" onClick={handleAddToCart} className="flex-1 gap-2 rounded-xl h-14 text-lg">
-              <ShoppingCart className="h-5 w-5" />
-              Add to Cart
-            </Button>
-            <Button size="lg" variant="outline" className="flex-1 gap-2 rounded-xl h-14 text-lg border-2">
-              <MessageCircle className="h-5 w-5 text-green-500" />
-              Order via WhatsApp
-            </Button>
+            {isControlled ? (
+              <Button 
+                size="lg" 
+                onClick={() => window.open(speakToRepUrl, "_blank")} 
+                className="flex-1 gap-2 rounded-xl h-14 text-lg bg-accent hover:bg-accent/90"
+              >
+                <MessageCircle className="h-5 w-5 text-white" />
+                Speak to a Representative
+              </Button>
+            ) : (
+              <>
+                <Button size="lg" onClick={handleAddToCart} className="flex-1 gap-2 rounded-xl h-14 text-lg">
+                  <ShoppingCart className="h-5 w-5" />
+                  Add to Cart
+                </Button>
+                <Button 
+                  size="lg" 
+                  variant="outline" 
+                  onClick={() => window.open(whatsappOrderUrl, "_blank")}
+                  className="flex-1 gap-2 rounded-xl h-14 text-lg border-2"
+                >
+                  <MessageCircle className="h-5 w-5 text-green-500" />
+                  Order via WhatsApp
+                </Button>
+              </>
+            )}
           </div>
 
           <div className="grid grid-cols-1 gap-4 rounded-2xl bg-muted/30 p-4 sm:grid-cols-2">

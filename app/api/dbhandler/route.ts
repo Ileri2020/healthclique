@@ -13,6 +13,16 @@ cloudinary.v2.config({
 
 const prisma = new PrismaClient();
 
+const PRICE_MARKUPS: Record<string, number> = {
+  customer: 1.3,
+  professional: 1.2,
+  wholesaler: 1.1,
+  admin: 1.1,
+  staff: 1.1,
+  visitor: 1.3,
+  user: 1.3,
+};
+
 // Centralized model mapping
 const modelMap: Record<string, any> = {
   cart: prisma.cart,
@@ -29,6 +39,7 @@ const modelMap: Record<string, any> = {
   shippingAddress: prisma.shippingAddress,
   stock: prisma.stock,
   user: prisma.user,
+  message: prisma.message,
 };
 
 // =====================
@@ -183,9 +194,16 @@ export async function POST(req: NextRequest) {
       });
 
       let total = 0;
+      let role = "customer";
+      if (userId && userId !== "nil") {
+        const dbUser = await prisma.user.findUnique({ where: { id: userId } });
+        if (dbUser) role = dbUser.role;
+      }
+      const markup = PRICE_MARKUPS[role] || 1.3;
+
       products.forEach((item: any) => {
         const found = dbProducts.find((p) => p.id === item.productId);
-        if (found) total += found.price * item.quantity;
+        if (found) total += (found.price * markup) * item.quantity;
       });
 
       const newCart = await prisma.cart.create({
@@ -209,6 +227,12 @@ export async function POST(req: NextRequest) {
 
     // --- Ensure numeric fields ---
     if (body.price) body.price = parseFloat(body.price);
+
+    // --- Ensure boolean fields ---
+    if (body.requiresPrescription === "true") body.requiresPrescription = true;
+    if (body.requiresPrescription === "false") body.requiresPrescription = false;
+    if (body.scarce === "true") body.scarce = true;
+    if (body.scarce === "false") body.scarce = false;
 
     // 4️⃣ Create new item
     const newItem = await prismaModel.create({ data: body });

@@ -12,7 +12,7 @@ import logo from "@/public/whitelogo.png"
 import greenlogo from "@/public/greenlogo.png"
 import Image from "next/image";
 import { Cart } from '../myComponents/subs/cart';
-import { SearchInput } from '../myComponents/subs/searchcomponent';
+import { GlobalSearch } from '../myComponents/subs/GlobalSearch';
 import { useSession } from "next-auth/react";
 import { useAppContext } from '@/hooks/useAppContext';
 import { useEffect } from 'react';
@@ -47,7 +47,9 @@ const Navbar = () : JSX.Element => {
             
             <Button variant={"outline"} className="lg:hidden relative flex justify-center items-center rounded-full w-[35px] h-[35px] overflow-clip text-accent text-xl"><AiOutlineSearch /></Button>
 
-            <SearchInput />
+            <div className="hidden lg:block flex-1 max-w-md mx-4">
+              <GlobalSearch placeholder="Search medications..." className="h-10" />
+            </div>
 
 
             <div className="hidden lg:flex items-center gap-8">

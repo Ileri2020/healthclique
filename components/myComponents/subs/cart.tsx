@@ -4,12 +4,14 @@ import { CartClient } from "./cart-client";
 import { useAppContext } from "@/hooks/useAppContext";
 
 export interface CartItem {
-  category: string;
+  category?: string;
   id: string;
-  images: string[];
+  images?: string[];
+  img?: string;
   name: string;
   price: number;
   quantity: number;
+  regulatoryClassification?: string;
 }
 
 interface CartProps {

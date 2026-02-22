@@ -11,17 +11,11 @@ import {
   DrawerTitle,
   DrawerTrigger,
 } from "@/components/ui/drawer"
-import { useSelector } from "react-redux"
-import { RootState } from "@/store"
+import { useCart } from "@/hooks/use-cart"
 
 
 export function Booked() {
-  const cartItems = useSelector((state : RootState)=>state.cart.itemsList)
-
-  let total = 0
-
-  cartItems.forEach((item)=>{ total = total + item.totalPrice})
-
+  const { items, subtotal } = useCart()
 
   return (
     <Drawer>
@@ -34,8 +28,8 @@ export function Booked() {
             <DrawerTitle>Booked Orders</DrawerTitle>
             <DrawerDescription>click an order to view what it contains</DrawerDescription>
           </DrawerHeader>
-          <div>
-            list of saved orders from server
+          <div className="p-4">
+            <p className="text-sm text-center text-muted-foreground italic">List of saved orders from server would appear here.</p>
           </div>
           <DrawerFooter>
             <Button>Submit</Button>

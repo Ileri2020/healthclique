@@ -2,6 +2,8 @@
 
 import { CartItem } from "@/components/myComponents/subs/cart";
 import * as React from "react";
+import { useAppContext } from "./useAppContext";
+import { PRICE_MARKUPS } from "@/lib/stock-pricing";
 
 //import type { CartItem } from "~/ui/components/cart";
 
@@ -52,7 +54,11 @@ const loadCartFromStorage = (): CartItem[] => {
 /* -------------------------------------------------------------------------- */
 
 export function CartProvider({ children }: React.PropsWithChildren) {
+  const { user } = useAppContext();
   const [items, setItems] = React.useState<CartItem[]>(loadCartFromStorage);
+  
+  const role = user?.role || "customer";
+  const markup = PRICE_MARKUPS[role as keyof typeof PRICE_MARKUPS] || 1.3;
 
   /* -------------------- Persist to localStorage (debounced) ------------- */
   const saveTimeout = React.useRef<null | ReturnType<typeof setTimeout>>(null);
@@ -113,8 +119,8 @@ export function CartProvider({ children }: React.PropsWithChildren) {
   );
 
   const subtotal = React.useMemo(
-    () => items.reduce((t, i) => t + i.price * i.quantity, 0),
-    [items],
+    () => items.reduce((t, i) => t + (i.price * markup) * i.quantity, 0),
+    [items, markup],
   );
 
   /* ----------------------------- Context value -------------------------- */

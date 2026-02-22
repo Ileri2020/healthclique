@@ -15,6 +15,7 @@ import { Minus, Plus, ShoppingCart, X } from "lucide-react";
 import Link from "next/link";
 import * as React from "react";
 import { useAppContext } from '@/hooks/useAppContext';
+import { PRICE_MARKUPS } from "@/lib/stock-pricing";
 
 
 
@@ -41,6 +42,9 @@ export function CartClient({ className, cart }: CartProps) {
 
   const { items, addItem, removeItem, clearCart, subtotal, updateQuantity, itemCount } = useCart();
   const {user } = useAppContext();
+  
+  const role = user?.role || "customer";
+  const markup = PRICE_MARKUPS[role as keyof typeof PRICE_MARKUPS] || 1.3;
 
   React.useEffect(() => {
     setIsMounted(true);
@@ -230,7 +234,7 @@ export function CartClient({ className, cart }: CartProps) {
                         alt={item.name}
                         className="object-cover"
                         // fill
-                        src={item.images?.[0] ?? '/placeholder.jpg'}
+                        src={item.img ?? item.images?.[0] ?? '/placeholder.jpg'}
                       />
                     </div>
                     <div className="ml-4 flex flex-1 flex-col justify-between">
@@ -286,7 +290,7 @@ export function CartClient({ className, cart }: CartProps) {
                           </button>
                         </div>
                         <div className="text-sm font-medium">
-                          ${(item.price * item.quantity).toFixed(2)}
+                          ₦{(item.price * markup * item.quantity).toFixed(2)}
                         </div>
                       </div>
                     </div>

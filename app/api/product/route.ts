@@ -48,6 +48,8 @@ export async function POST(req , res) {
       healthConcerns: Formdata.get("healthConcerns")
         ? (Formdata.get("healthConcerns") as string).split(",").map((s: string) => s.trim()).filter(Boolean)
         : [],
+      regulatoryClassification: Formdata.get("regulatoryClassification") || "OTC",
+      requiresPrescription: Formdata.get("requiresPrescription") === "true",
       url: cldRes.url,
     },
   });

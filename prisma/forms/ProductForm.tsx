@@ -36,6 +36,8 @@ export default function ProductForm({ initialProduct, hideList = false }: { init
     activeIngredients: initialProduct?.activeIngredients?.join(", ") || '',
     brand: initialProduct?.brand || '',
     scarce: initialProduct?.scarce || false,
+    regulatoryClassification: initialProduct?.regulatoryClassification || 'OTC',
+    requiresPrescription: initialProduct?.requiresPrescription || false,
   });
   const [file, setFile] = useState(null);
   const [categories, setCategories] = useState([]);
@@ -84,6 +86,8 @@ export default function ProductForm({ initialProduct, hideList = false }: { init
         activeIngredients: initialProduct.activeIngredients?.join(", ") || '',
         brand: initialProduct.brand || '',
         scarce: initialProduct.scarce || false,
+        regulatoryClassification: initialProduct.regulatoryClassification || 'OTC',
+        requiresPrescription: initialProduct.requiresPrescription || false,
       });
       setEditId(initialProduct.id);
     }
@@ -107,6 +111,8 @@ export default function ProductForm({ initialProduct, hideList = false }: { init
       activeIngredients: '',
       brand: '',
       scarce: false,
+      regulatoryClassification: 'OTC',
+      requiresPrescription: false,
     });
     setEditId(null);
     setFile(null);
@@ -138,6 +144,8 @@ export default function ProductForm({ initialProduct, hideList = false }: { init
     pformData.append("brand", formData.brand);
     pformData.append("scarce", String(formData.scarce));
     pformData.append("activeIngredients", formData.activeIngredients);
+    pformData.append("regulatoryClassification", formData.regulatoryClassification);
+    pformData.append("requiresPrescription", String(formData.requiresPrescription));
     
     if (formData.costPrice) {
       pformData.append("costPrice", String(formData.costPrice));
@@ -159,6 +167,8 @@ export default function ProductForm({ initialProduct, hideList = false }: { init
             brand: formData.brand,
             scarce: formData.scarce,
             activeIngredients: formData.activeIngredients.split(",").map(i => i.trim()).filter(Boolean),
+            regulatoryClassification: formData.regulatoryClassification,
+            requiresPrescription: formData.requiresPrescription,
           }
         );
       } else {
@@ -212,6 +222,8 @@ export default function ProductForm({ initialProduct, hideList = false }: { init
       activeIngredients: product.activeIngredients?.join(", ") || '',
       brand: product.brand || '',
       scarce: product.scarce || false,
+      regulatoryClassification: product.regulatoryClassification || 'OTC',
+      requiresPrescription: product.requiresPrescription || false,
     });
     // Scroll to form
     window.scrollTo({ top: 0, behavior: 'smooth' });
@@ -372,15 +384,49 @@ export default function ProductForm({ initialProduct, hideList = false }: { init
         </div>
 
         <div className="w-full space-y-1">
-          <Label htmlFor="product-price">Product Price (₦)</Label>
+          <Label htmlFor="product-price">Cost Price (₦)</Label>
           <Input
             id="product-price"
-            placeholder="Price of product"
+            placeholder="Cost Price (Base Price)"
             value={formData.price}
             onChange={(e) => setFormData({ ...formData, price: e.target.value })}
             type="number"
             className="border-primary/20 focus:border-primary"
           />
+          <p className="text-[10px] text-muted-foreground">
+            This price will be marked up dynamically based on user roles:
+            Retail(1.3x), Professional(1.2x), Wholesale(1.1x)
+          </p>
+        </div>
+
+        <div className="w-full space-y-1 text-center flex flex-col items-center">
+          <Label htmlFor="reg-class" className='mb-2 font-semibold'>Regulatory Classification</Label>
+          <Select 
+            value={formData.regulatoryClassification} 
+            onValueChange={(value) => {
+              setFormData({ 
+                ...formData, 
+                regulatoryClassification: value,
+                requiresPrescription: value === "Prescription Medicine"
+              });
+            }}
+          >
+            <SelectTrigger id="reg-class" className="w-full border-primary/20">
+              <SelectValue placeholder="Select classification" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="OTC">OTC (Over the Counter)</SelectItem>
+              <SelectItem value="Pharmacy Only Medicine">Pharmacy Only Medicine</SelectItem>
+              <SelectItem value="Prescription Medicine">Prescription Medicine</SelectItem>
+              <SelectItem value="Controlled Medicine">Controlled Medicine</SelectItem>
+            </SelectContent>
+          </Select>
+          {formData.regulatoryClassification === "Prescription Medicine" && (
+            <p className="text-[10px] text-destructive font-bold mt-1 uppercase">Requires Prescription Image</p>
+          )}
+          {formData.regulatoryClassification === "Controlled Medicine" && (
+            <p className="text-[10px] text-accent font-bold mt-1 uppercase text-center leading-tight">Controlled: Only accessible via official representative</p>
+          )}
         </div>
 
         <div className="w-full flex items-center gap-2 border p-2 rounded-md bg-secondary/10">
@@ -472,7 +518,7 @@ export default function ProductForm({ initialProduct, hideList = false }: { init
                         </span>
                         <div className="flex flex-col">
                           <div className="flex items-center gap-2">
-                            <p className="text-xs font-bold text-primary">₦{item.price}</p>
+                            <p className="text-xs font-bold text-primary">Cost: ₦{item.price}</p>
                             {item.brand && <span className="text-[10px] text-muted-foreground">| {item.brand}</span>}
                           </div>
                           {item.category?.name && (

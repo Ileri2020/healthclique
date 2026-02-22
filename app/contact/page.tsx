@@ -4,6 +4,7 @@ import { motion } from "framer-motion"
 import contact from "@/data/cont"
 import Social from "@/components/utility/social"
 import ContactForm from "@/components/utility/contactForm"
+import { ChatInterface } from "@/components/myComponents/subs/ChatInterface"
 
 const Contact = () => {
   return (
@@ -43,6 +44,15 @@ const Contact = () => {
               />
             </div>
           </div>
+        </div>
+
+        {/* Chat with Pharmacist Section */}
+        <div className="mt-20">
+          <div className="mb-8 text-center">
+            <h2 className="text-3xl font-bold text-primary">Chat with our Pharmacist</h2>
+            <p className="text-muted-foreground mt-2">Get instant answers to your medical questions</p>
+          </div>
+          <ChatInterface />
         </div>
       </div>
     </motion.section>

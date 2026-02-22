@@ -12,23 +12,32 @@ datasource db {
 }
 
 model User {
-  id           String            @id @default(auto()) @map("_id") @db.ObjectId
-  name         String?
-  email        String            @unique
-  password     String? // Optional — OAuth users (Google, etc.) have no password
-  providerid   String?
-  role         String            @default("customer") //professional admin staff
-  cart         Cart[]
+  id                 String            @id @default(auto()) @map("_id") @db.ObjectId
+  name               String?
+  email              String            @unique
+  password           String? // Optional — OAuth users (Google, etc.) have no password
+  providerid         String?
+  role               String            @default("customer") // customer, professional, wholesaler, admin, staff
+  professionalType   String? // pharmacist, doctor, nurse
+  regNumber          String? // professional registration number
+  licenseImage       String? // practice licence image URL
+  facilityName       String? // For wholesalers/reps
+  facilityAddress    String? // For wholesalers/reps
+  facilityRegNumber  String? // For wholesalers/reps
+  verificationStatus String            @default("unverified") // unverified, pending, verified, rejected
+  cart               Cart[]
   //orders   Order[]
-  reviews      Review[]
-  addresses    ShippingAddress[]
-  post         Post[]
-  notification Notification[]
-  avatarUrl    String?           @default("https://res.cloudinary.com/dc5khnuiu/image/upload/v1752627019/uxokaq0djttd7gsslwj9.png")
-  contact      String?           @default("xxxx-xxx-xxxx")
-  createdAt    DateTime          @default(now())
-  updatedAt    DateTime          @updatedAt
-  wishlist     Wishlist[]
+  reviews            Review[]
+  addresses          ShippingAddress[]
+  post               Post[]
+  notification       Notification[]
+  avatarUrl          String?           @default("https://res.cloudinary.com/dc5khnuiu/image/upload/v1752627019/uxokaq0djttd7gsslwj9.png")
+  contact            String?           @default("xxxx-xxx-xxxx")
+  createdAt          DateTime          @default(now())
+  updatedAt          DateTime          @updatedAt
+  wishlist           Wishlist[]
+  sentMessages       Message[]         @relation("SentMessages")
+  receivedMessages   Message[]         @relation("ReceivedMessages")
 }
 
 model Post {
@@ -65,28 +74,30 @@ model Category {
 }
 
 model Product {
-  id                String           @id @default(auto()) @map("_id") @db.ObjectId
-  name              String
-  description       String?
-  category          Category         @relation(fields: [categoryId], references: [id])
-  categoryId        String           @db.ObjectId
-  activeIngredients String[]
-  scarce            Boolean?
-  for               String[] //patients like oncology/cancer, hiv, etc
-  brand             String?
-  price             Float
+  id                       String           @id @default(auto()) @map("_id") @db.ObjectId
+  name                     String
+  description              String?
+  category                 Category         @relation(fields: [categoryId], references: [id])
+  categoryId               String           @db.ObjectId
+  activeIngredients        String[]
+  scarce                   Boolean?
+  for                      String[] //patients like oncology/cancer, hiv, etc
+  brand                    String?
+  price                    Float
   /// Health concerns this product addresses e.g. ["Pain Relief", "Gut Health"]
-  healthConcerns    String[]         @default([])
-  stock             Stock[] //@relation(fields: [stockId], references: [id])
+  healthConcerns           String[]         @default([])
+  stock                    Stock[] //@relation(fields: [stockId], references: [id])
   //stockId  String?   @db.ObjectId
-  reviews           Review[]
-  cartItems         CartItem[]
-  Featured          FeaturedProduct?
-  images            String[]
+  reviews                  Review[]
+  cartItems                CartItem[]
+  Featured                 FeaturedProduct?
+  images                   String[]
   //orderItems OrderItem[]
-  createdAt         DateTime         @default(now())
-  updatedAt         DateTime         @updatedAt
-  wishlist          Wishlist[]
+  regulatoryClassification String?          @default("OTC") // "Prescription Medicine", "OTC", "Pharmacy Only Medicine", "Controlled Medicine"
+  requiresPrescription     Boolean          @default(false)
+  createdAt                DateTime         @default(now())
+  updatedAt                DateTime         @updatedAt
+  wishlist                 Wishlist[]
 }
 
 //for inputing available product, after sales, deduct the quantity
@@ -103,16 +114,17 @@ model Stock {
 }
 
 model Cart {
-  id        String     @id @default(auto()) @map("_id") @db.ObjectId
-  user      User       @relation(fields: [userId], references: [id])
-  userId    String     @db.ObjectId
-  products  CartItem[]
-  total     Float
-  payment   Payment?
-  status    String     @default("pending")
-  refund    Refund?
-  createdAt DateTime   @default(now())
-  updatedAt DateTime   @updatedAt
+  id              String     @id @default(auto()) @map("_id") @db.ObjectId
+  user            User       @relation(fields: [userId], references: [id])
+  userId          String     @db.ObjectId
+  products        CartItem[]
+  total           Float
+  payment         Payment?
+  status          String     @default("pending")
+  refund          Refund?
+  prescriptionUrl String?
+  createdAt       DateTime   @default(now())
+  updatedAt       DateTime   @updatedAt
 }
 
 model CartItem {
@@ -204,6 +216,17 @@ model Wishlist {
   updatedAt DateTime @updatedAt
 
   @@unique([userId, productId])
+}
+
+model Message {
+  id         String   @id @default(auto()) @map("_id") @db.ObjectId
+  content    String
+  senderId   String   @db.ObjectId
+  receiverId String   @db.ObjectId
+  sender     User     @relation("SentMessages", fields: [senderId], references: [id])
+  receiver   User     @relation("ReceivedMessages", fields: [receiverId], references: [id])
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
 }
 
 // model Comment {

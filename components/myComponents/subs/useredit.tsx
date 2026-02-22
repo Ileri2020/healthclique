@@ -37,6 +37,12 @@ const EditUser = () => {
     contact: "",
     role: "customer",
     avatarUrl: "",
+    professionalType: "",
+    regNumber: "",
+    licenseImage: "",
+    facilityName: "",
+    facilityAddress: "",
+    facilityRegNumber: "",
   });
 
   const [addressData, setAddressData] = useState<ShippingAddress>({
@@ -61,6 +67,12 @@ const EditUser = () => {
         contact: user.contact || "",
         role: user.role || "customer",
         avatarUrl: user.avatarUrl || user.image || "",
+        professionalType: user.professionalType || "",
+        regNumber: user.regNumber || "",
+        licenseImage: user.licenseImage || "",
+        facilityName: user.facilityName || "",
+        facilityAddress: user.facilityAddress || "",
+        facilityRegNumber: user.facilityRegNumber || "",
       });
 
       if (user.addresses?.[0]) {
@@ -190,6 +202,78 @@ const EditUser = () => {
               />
             </div>
           </div>
+
+          {/* ── Professional / Wholesaler Info ── */}
+          {(formData.role === "professional" || formData.role === "wholesaler") && (
+            <div className="rounded-lg border bg-primary/5 p-4 space-y-4">
+              <h3 className="text-sm font-semibold text-primary uppercase tracking-wide">
+                Business & Professional Verification
+              </h3>
+
+              {formData.role === "professional" && (
+                <>
+                  <div className="space-y-1">
+                    <Label>Professional Type</Label>
+                    <select 
+                      className="w-full p-2 rounded-md border bg-background"
+                      value={formData.professionalType}
+                      onChange={(e) => setFormData({ ...formData, professionalType: e.target.value })}
+                    >
+                      <option value="">Select Type</option>
+                      <option value="pharmacist">Pharmacist</option>
+                      <option value="doctor">Doctor</option>
+                      <option value="nurse">Nurse</option>
+                    </select>
+                  </div>
+                  <div className="space-y-1">
+                    <Label>Registration Number</Label>
+                    <Input
+                      placeholder="e.g. PH/123456"
+                      value={formData.regNumber}
+                      onChange={(e) => setFormData({ ...formData, regNumber: e.target.value })}
+                    />
+                  </div>
+                  <div className="space-y-1">
+                    <Label>Practice License Image URL</Label>
+                    <Input
+                      placeholder="https://..."
+                      value={formData.licenseImage}
+                      onChange={(e) => setFormData({ ...formData, licenseImage: e.target.value })}
+                    />
+                  </div>
+                </>
+              )}
+
+              {formData.role === "wholesaler" && (
+                <>
+                  <div className="space-y-1">
+                    <Label>Facility Name</Label>
+                    <Input
+                      placeholder="Hospital or Pharmacy Name"
+                      value={formData.facilityName}
+                      onChange={(e) => setFormData({ ...formData, facilityName: e.target.value })}
+                    />
+                  </div>
+                  <div className="space-y-1">
+                    <Label>Facility Address</Label>
+                    <Input
+                      placeholder="Physical address"
+                      value={formData.facilityAddress}
+                      onChange={(e) => setFormData({ ...formData, facilityAddress: e.target.value })}
+                    />
+                  </div>
+                  <div className="space-y-1">
+                    <Label>Facility Registration Number</Label>
+                    <Input
+                      placeholder="CAC or PCN Reg No"
+                      value={formData.facilityRegNumber}
+                      onChange={(e) => setFormData({ ...formData, facilityRegNumber: e.target.value })}
+                    />
+                  </div>
+                </>
+              )}
+            </div>
+          )}
 
           {/* ── Shipping Address ── */}
           <div className="rounded-lg border bg-secondary/30 p-4 space-y-4">

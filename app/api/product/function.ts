@@ -68,6 +68,8 @@ async function dbHandler({
               scarce: body.scarce,
               activeIngredients: Array.isArray(body.activeIngredients) ? body.activeIngredients : [],
               healthConcerns: Array.isArray(body.healthConcerns) ? body.healthConcerns : [],
+              regulatoryClassification: body.regulatoryClassification || "OTC",
+              requiresPrescription: body.requiresPrescription === true || body.requiresPrescription === "true",
               images: [body.url],
             },
           }

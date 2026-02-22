@@ -14,4 +14,5 @@ export const Stocks = dynamic(()=>import("./stocks"), { ssr: false, })
 // export const Footer = dynamic(()=>import("./footer"), { ssr: false, }) 
 export const CartItems = dynamic(()=>import("./cartitem"), { ssr: false, }) 
 export const FeaturedIngredients = dynamic(()=>import("./featuredIngredients"), { ssr: false, })
+export const GlobalSearch = dynamic(()=>import("./GlobalSearch").then(mod => mod.GlobalSearch), { ssr: false, })
  

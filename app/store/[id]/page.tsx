@@ -3,12 +3,12 @@ import { motion } from "framer-motion"
 import { Button } from "@/components/ui/button"
 import { useParams } from "next/navigation"
 import { useEffect, useState } from "react"
-import { useDispatch } from 'react-redux';
-import { cartActions } from "@/store/cart-slice"
 import Similar from "@/components/myComponents/subs/similar"
 import { useCart } from "@/hooks/use-cart"
 import { toast } from "sonner"
 import { HeartPulse, Loader2, MessageCircle, ShoppingCart } from "lucide-react"
+import { useAppContext } from "@/hooks/useAppContext"
+import { getProductPrice } from "@/lib/stock-pricing"
 
 const Description = () => {
   const [product, setProduct] = useState<any>(null);
@@ -16,7 +16,7 @@ const Description = () => {
   const [loading, setLoading] = useState(true);
   const { id } = useParams();
   const { addItem } = useCart();
-  const dispatch = useDispatch();
+  const { user } = useAppContext()
 
   useEffect(() => {
     const fetchProductDetails = async () => {
@@ -97,7 +97,7 @@ const Description = () => {
           </div>
 
           <div className="text-3xl font-black text-foreground">
-            ₦ {product.price?.toLocaleString()}
+            ₦ {getProductPrice(product, user?.role)?.toLocaleString()}
           </div>
 
           <div className="prose prose-sm max-w-none text-muted-foreground">
