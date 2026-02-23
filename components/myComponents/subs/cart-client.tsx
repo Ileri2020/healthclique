@@ -327,6 +327,11 @@ export function CartClient({ className, cart }: CartProps) {
               <Button className="w-full" size="lg" onClick={handleCheckout}>
                 Checkout
               </Button>
+              <Link href="/cart" onClick={() => setIsOpen(false)}>
+                <Button className="w-full mt-2" variant="secondary" size="lg">
+                  View Full Cart
+                </Button>
+              </Link>
               <div className="flex items-center justify-between">
                 {isDesktop ? (
                   <SheetClose asChild>

@@ -20,6 +20,7 @@ const Description = () => {
   const [product, setProduct] = useState<any>(null);
   const [similarProducts, setSimilarProducts] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
+  const [showFullDesc, setShowFullDesc] = useState(false);
   const { id } = useParams();
   const { addItem } = useCart();
   const { user } = useAppContext();
@@ -142,7 +143,22 @@ const Description = () => {
           </div>
 
           <div className="prose prose-sm max-w-none text-muted-foreground">
-            <p className="whitespace-pre-line">{product.description || "No description available."}</p>
+            <p className="whitespace-pre-line">
+              {(() => {
+                if (!product.description) return "No description available.";
+                const words = product.description.split(" ");
+                if (words.length <= 70 || showFullDesc) return product.description;
+                return `${words.slice(0, 70).join(" ")}...`;
+              })()}
+            </p>
+            {product.description && product.description.split(" ").length > 70 && (
+              <button 
+                onClick={() => setShowFullDesc(!showFullDesc)} 
+                className="text-primary font-semibold mt-2 hover:underline text-sm"
+              >
+                {showFullDesc ? "Show less" : "Read more"}
+              </button>
+            )}
           </div>
 
           {product.activeIngredients?.length > 0 && (
