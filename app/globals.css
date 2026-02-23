@@ -23,7 +23,7 @@ body {
     --muted: 210 40% 96%;
     --muted-foreground: 215 16% 47%;
     /* Lemon accent inspired by logo */
-    --accent: 52 97% 55%;
+    --accent: 8365 100% 37%;
     /* Supporting sky blue accent for contrast */
     --accent-secondary: 199 89% 48%;
     --accent-foreground: 222 47% 12%;
@@ -55,7 +55,7 @@ body {
     --muted: 217 33% 16%;
     --muted-foreground: 215 20% 70%;
     /* Lemon accent slightly softened for dark */
-    --accent: 52 96% 62%;
+    --accent: 8365 100% 59%;
     --accent-secondary: 199 89% 66%;
     --accent-foreground: 222 47% 10%;
     --destructive: 0 65% 40%;
