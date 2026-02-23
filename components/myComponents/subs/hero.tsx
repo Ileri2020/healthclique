@@ -14,10 +14,22 @@ import {
   PopoverTrigger,
 } from "@/components/ui/popover";
 import landingimg from '@/public/pharmacist.png'
+import { RiseAndFadeText } from "./textctrl";
 import { GlobalSearch } from "./index";
 
 const Hero = () => {
-
+  const thingsToDo = [
+    "Order authentic medications online",
+    "Consult with expert pharmacists",
+    "Track your medical supplies delivery",
+    "Access wholesale healthcare products",
+    "Read the latest clinical insights",
+    "Manage your prescriptions easily",
+    "NAFDAC Approved Pharmacy Products",
+    "24/7 Professional Health Support",
+    "Direct Supply for Wholesalers",
+    "Verified Medical Research & News"
+  ];
 
   return (
     <div className="relative bg-background">
@@ -36,9 +48,14 @@ const Hero = () => {
                 NAFDAC Approved Pharmacy
               </div>
               
-              <h1 className="text-2xl md:text-3xl font-bold tracking-tight text-foreground leading-[1.1]">
+              <RiseAndFadeText 
+                texts={thingsToDo}
+                className="text-xl md:text-2xl font-bold text-accent italic h-8 overflow-hidden" 
+              />
+
+              <h1 className="text-2xl md:text-4xl font-bold tracking-tight text-foreground leading-[1.1]">
                 With a click, get your <br />
-                <span className="text-accent text-4xl md:text-5xl underline decoration-accent/30">Premium Medical Supplies</span>
+                <span className="text-accent text-5xl md:text-6xl font-black underline decoration-accent/30">Premium Medical Supplies</span>
               </h1>
               
               <p className="text-lg text-muted-foreground max-w-xl">

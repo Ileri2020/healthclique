@@ -1,6 +1,7 @@
 "use client";
 
 import React, { useState, useEffect, useRef } from "react";
+import Link from "next/link";
 import axios from "axios";
 import { format } from "date-fns";
 import { Send, User as UserIcon, Check, CheckCheck, Loader2, ArrowLeft, MessageSquare } from "lucide-react";
@@ -155,6 +156,27 @@ export const ChatInterface = () => {
   };
 
   const selectedPartner = partners.find(p => p.id === selectedPartnerId) || (adminUser && selectedPartnerId === adminUser.id ? { name: adminUser.name, avatarUrl: adminUser.avatarUrl } : null);
+
+  if (user.email === "nil") {
+    return (
+      <div className="flex flex-col items-center justify-center h-[500px] w-full max-w-5xl mx-auto border-2 border-dashed rounded-3xl bg-muted/20 gap-6 p-10 text-center">
+        <div className="w-24 h-24 rounded-full bg-primary/10 flex items-center justify-center">
+          <MessageSquare size={48} className="text-primary opacity-40" />
+        </div>
+        <div className="space-y-3">
+          <h2 className="text-2xl font-black tracking-tight">Login Required</h2>
+          <p className="text-muted-foreground max-w-xs mx-auto">
+            You need to be logged in to chat with our licensed pharmacists and clinical staff.
+          </p>
+        </div>
+        <Link href="/account">
+          <Button size="lg" className="h-14 px-8 rounded-xl text-lg font-bold shadow-xl shadow-primary/20">
+            Sign In to Chat
+          </Button>
+        </Link>
+      </div>
+    );
+  }
 
   return (
     <div className="flex h-[600px] w-full max-w-5xl mx-auto border rounded-3xl overflow-hidden bg-background shadow-2xl">

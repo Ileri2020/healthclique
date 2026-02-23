@@ -5,12 +5,12 @@ import { ScrollArea } from "@/components/ui/scroll-area";
 import { Button } from "@/components/ui/button";
 import { PayDrawer } from "@/components/myComponents/paydrawer";
 import { BookDrawer } from "../../components/myComponents/bookdrawer";
-import { CreditFacilityDrawer } from "@/components/myComponents/credit-facility-drawer";
 import { Booked } from "@/components/myComponents/booked";
 import { useAppContext } from "@/hooks/useAppContext";
 import { PRICE_MARKUPS } from "@/lib/stock-pricing";
 import { useCart } from "@/hooks/use-cart";
 import { FileText, Upload, AlertTriangle } from "lucide-react";
+import Link from "next/link";
 import { useState } from "react"
 import { toast } from "sonner"
 
@@ -18,15 +18,7 @@ const Cart = () => {
   const { items, subtotal } = useCart();
   const { user } = useAppContext();
 
-  const role = (user?.role || "customer") as string;
-  const markup = PRICE_MARKUPS[role as keyof typeof PRICE_MARKUPS] || 1.3;
-
-  const isWholesaleRole =
-    role.toLowerCase() === "wholesaler" ||
-    role.toLowerCase() === "professional" ||
-    role.toLowerCase() === "institution";
-  const meetsHighOrder = subtotal >= 1_000_000;
-  const showCreditFacility = isWholesaleRole || meetsHighOrder;
+  const role = user?.role || "customer";
 
   const [prescriptionImage, setPrescriptionImage] = useState<string | null>(null);
   const [isUploading, setIsUploading] = useState(false);
@@ -163,8 +155,17 @@ const Cart = () => {
                       cart={items}
                       disabled={hasPrescriptionItems && !prescriptionImage}
                     />
-                    {showCreditFacility && (
-                      <CreditFacilityDrawer />
+                    {((user.role === "wholesaler" || user.role === "professional" || subtotal >= 1000000) && subtotal >= 200000) && (
+                      <Link href="/terms?applyCredit=true">
+                        <Button variant="outline" className="border-primary text-primary hover:bg-primary/10">
+                          Credit Facility
+                        </Button>
+                      </Link>
+                    )}
+                    {((user.role === "wholesaler" || user.role === "professional") && subtotal < 200000) && (
+                      <Button variant="ghost" disabled className="text-[10px] text-muted-foreground italic">
+                        Min. 200k for Credit
+                      </Button>
                     )}
                   </div>
                 </div>

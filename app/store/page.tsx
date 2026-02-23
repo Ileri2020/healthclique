@@ -14,11 +14,11 @@ const Store = () => {
         opacity : 1,
         transition : { delay: 0.5, duration: 0.6, ease: "easeIn"}
       }}
-      className="w-[100vw] overflow-clip p-4"
+      className="w-[100vw] overflow-clip p-2 md:p-4"
     >
-      <div className="container mx-auto max-w-7xl">
-        <div className="flex flex-col md:flex-row justify-between items-center bg-accent/10 p-6 rounded-2xl mb-10 gap-4">
-          <div className="flex items-center gap-4">
+      <div className="w-full md:container md:mx-auto max-w-7xl">
+        <div className="flex flex-col md:flex-row justify-between items-center bg-accent/10 p-3 md:p-6 rounded-2xl mb-3 gap-2">
+          <div className="flex items-center gap-2 md:gap-4">
             <div className="w-12 h-12 rounded-full bg-accent/20 flex items-center justify-center">
               <MessageCircle className="text-accent" />
             </div>
