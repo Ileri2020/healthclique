@@ -32,7 +32,7 @@ const Store = () => {
           </Link>
         </div>
 
-        <div className="mb-10 max-w-2xl mx-auto">
+        <div className="mb-2 w-full p-1 max-w-2xl mx-auto">
           <GlobalSearch placeholder="Search more products in our store..." />
         </div>
         

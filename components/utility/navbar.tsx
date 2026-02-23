@@ -3,6 +3,7 @@ import Link from "next/link";
 import Nav from "./nav";
 import { Button, buttonVariants } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { Dialog, DialogContent, DialogTrigger, DialogTitle } from "@/components/ui/dialog";
 import Sidenav from "./sidenav";
 import { ModeToggle } from "@/components/ui/mode-toggle";
 import { Suspense } from "react";
@@ -57,12 +58,20 @@ const Navbar = (): JSX.Element => {
           </Link>
 
           <div className="flex items-center gap-2 lg:hidden">
-            <Button
-              variant={"outline"}
-              className="relative flex justify-center items-center rounded-full w-[35px] h-[35px] overflow-clip text-accent text-xl"
-            >
-              <AiOutlineSearch />
-            </Button>
+            <Dialog>
+              <DialogTrigger asChild>
+                <Button
+                  variant={"outline"}
+                  className="relative flex justify-center items-center rounded-full w-[35px] h-[35px] overflow-clip text-accent text-xl"
+                >
+                  <AiOutlineSearch />
+                </Button>
+              </DialogTrigger>
+              <DialogContent className="p-0 border-none bg-transparent shadow-none w-11/12 overflow-visible translate-y-[-30vh]">
+                <DialogTitle className="sr-only">Search</DialogTitle>
+                <GlobalSearch placeholder="Search medications..." className="w-full" />
+              </DialogContent>
+            </Dialog>
             <Cart />
           </div>
 

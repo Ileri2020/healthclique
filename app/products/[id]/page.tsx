@@ -3,7 +3,7 @@ import { motion } from "framer-motion"
 import { Button } from "@/components/ui/button"
 import { useParams } from "next/navigation"
 import { useEffect, useState } from "react"
-import Similar from "@/components/myComponents/subs/similar"
+import { ProductCard } from "@/components/myComponents/subs/productCard"
 import { GlobalSearch } from "@/components/myComponents/subs"
 import { useCart } from "@/hooks/use-cart"
 import { toast } from "sonner"
@@ -11,7 +11,9 @@ import { HeartPulse, Loader2, MessageCircle, ShoppingCart } from "lucide-react"
 import { useAppContext } from "@/hooks/useAppContext"
 import { getProductPrice } from "@/lib/stock-pricing"
 import { Badge } from "@/components/ui/badge"
-import { FileText, AlertCircle } from "lucide-react"
+import { FileText, AlertCircle, Star } from "lucide-react"
+import { ProductReviews } from "@/components/myComponents/subs/productReviews"
+import { PriceFeedback } from "@/components/myComponents/subs/priceFeedback"
 
 const Description = () => {
   const [product, setProduct] = useState<any>(null);
@@ -160,25 +162,16 @@ const Description = () => {
                 Speak to a Representative
               </Button>
             ) : (
-              <>
-                <Button size="lg" onClick={handleAddToCart} className="flex-1 gap-2 rounded-xl h-14 text-lg">
+                <Button size="lg" onClick={handleAddToCart} className="w-full gap-2 rounded-xl h-14 text-lg">
                   <ShoppingCart className="h-5 w-5" />
                   Add to Cart
                 </Button>
-                <Button 
-                  size="lg" 
-                  variant="outline" 
-                  onClick={() => window.open(whatsappOrderUrl, "_blank")}
-                  className="flex-1 gap-2 rounded-xl h-14 text-lg border-2"
-                >
-                  <MessageCircle className="h-5 w-5 text-green-500" />
-                  Order via WhatsApp
-                </Button>
-              </>
             )}
           </div>
+          
+          <PriceFeedback productId={product.id} productName={product.name} />
 
-          <div className="grid grid-cols-1 gap-4 rounded-2xl bg-muted/30 p-4 sm:grid-cols-2">
+          <div className="grid grid-cols-1 gap-4 mt-4 rounded-2xl bg-muted/30 p-4 sm:grid-cols-2">
             <div className="flex items-center gap-3">
               <HeartPulse className="h-5 w-5 text-primary" />
               <span className="text-sm font-medium">Authenticity Guaranteed</span>
@@ -191,12 +184,35 @@ const Description = () => {
         </div>
       </div>
 
+      {/* Review Section */}
+      <div className="mt-12 bg-muted/10 p-4 md:p-8 rounded-3xl border shadow-sm">
+         <ProductReviews productId={product.id} />
+      </div>
+
       {/* Similar Products */}
       <div className="mt-20">
         <div className="mb-8 border-b pb-4">
           <h2 className="text-2xl font-bold">Similar Products</h2>
         </div>
-        <Similar similar={similarProducts} />
+        <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+          {similarProducts.map((simProd) => (
+             <ProductCard
+               key={simProd.id}
+               className="w-full"
+               variant="default"
+               orientation="vertical"
+               product={{
+                 ...simProd,
+                 inStock: true,
+                 categoryName: simProd.category?.name || "General"
+               }}
+               onAddToCart={() => {
+                 addItem(simProd, 1);
+                 toast.success(`${simProd.name} added to cart`);
+               }}
+             />
+          ))}
+        </div>
       </div>
     </motion.section>
   );

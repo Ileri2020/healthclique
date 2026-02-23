@@ -11,6 +11,7 @@ import { getProductPrice, isProductInStock } from "@/lib/stock-pricing";
 import Link from "next/link";
 import * as React from "react";
 import { MessageCircle, ShoppingCart, Heart, Star, Edit3, Trash2, Eye, FileText } from "lucide-react";
+import { PriceFeedback } from "@/components/myComponents/subs/priceFeedback";
 import { useAppContext } from "@/hooks/useAppContext";
 import { useIsAdmin } from "@/hooks/useIsAdmin";
 import {
@@ -113,12 +114,14 @@ export function ProductCard({
 
   // Rating Logic
   const ratingValue = React.useMemo(() => {
-    if (typeof product.rating === 'number') return product.rating;
+    if (typeof product.rating === 'number' && product.rating > 0) return product.rating;
     if (Array.isArray(product.reviews) && product.reviews.length > 0) {
       const total = product.reviews.reduce((acc: number, r: any) => acc + (r.rating || 0), 0);
       return total / product.reviews.length;
     }
-    return 0;
+    // If no reviews data is available (e.g. minimal fetch), 
+    // we don't assume 0 unless there's an explicit rating field
+    return product.averageRating || 0; 
   }, [product]);
 
   const hasDiscount = showDiscount && (product.discount ?? 0) > 0;
@@ -209,6 +212,11 @@ export function ProductCard({
                      </div>
                  )}
               </div>
+
+              {/* Price Feedback Button */}
+              <div className="mt-8 border-t pt-4">
+                <PriceFeedback productId={product.id} productName={product.name} />
+              </div>
             </SheetContent>
           </Sheet>
       </div>
@@ -270,11 +278,11 @@ export function ProductCard({
           >
             <img
               alt={product?.name || "Product"}
-              className={cn(
-                "object-cover w-full transition-transform duration-300 ease-in-out",
-                isHovered ? "scale-100" : "scale-110"
-              )}
               src={image}
+              className={cn(
+                "object-cover w-full h-full transition-transform duration-300 ease-in-out",
+                isHovered ? "scale-105" : "scale-100"
+              )}
             />
 
             {/* Category badge moved to bottom-left */}

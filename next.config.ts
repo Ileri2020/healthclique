@@ -1,25 +1,18 @@
 import type { NextConfig } from "next";
 
 const nextConfig: NextConfig = {
-  /* config options here */
-  // webpack5: false,
-
-  // serverExternalPackages: ["mongoose"],
-
-  // experimental: {
-  //   // appDir: true,
-  //   esmExternals: "loose", // <-- add this
-  //   serverComponentsExternalPackages: ["mongoose"] // <-- and this
-  // },
-
-  // and the following to enable top-level await support for Webpack
-  // webpack: (config) => {
-  //   config.experiments = {
-  //     ...config.experiments,
-  //     topLevelAwait: true
-  //   };
-  //   return config;
-  // },
+  images: {
+    remotePatterns: [
+      {
+        protocol: "https",
+        hostname: "res.cloudinary.com",
+      },
+      {
+         protocol: "https",
+         hostname: "images.unsplash.com",
+      }
+    ],
+  },
 };
 
 export default nextConfig;

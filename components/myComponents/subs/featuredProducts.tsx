@@ -35,8 +35,8 @@ const FeaturedProducts = () => {
 
   async function fetchData() {
     try {
-      // 1. Fetch Admin Featured Products
-      const featRes = await fetch("/api/dbhandler?model=featuredProduct");
+      // 1. Fetch Admin Featured Products (Minimal payload)
+      const featRes = await fetch("/api/dbhandler?model=featuredProduct&minimal=true&limit=15");
       const featData = await featRes.json();
       setProducts(featData.map((item: any) => ({
         ...item.product,
@@ -45,28 +45,33 @@ const FeaturedProducts = () => {
 
       // If no featured products, fetch latest 10 products as fallback
       if (featData.length === 0) {
-        const fallbackRes = await fetch("/api/dbhandler?model=product");
+        const fallbackRes = await fetch("/api/dbhandler?model=product&minimal=true&limit=10");
         const fallbackData = await fallbackRes.json();
-        setProducts(fallbackData.slice(-10).map((p: any) => ({
+        setProducts(fallbackData.map((p: any) => ({
             ...p,
             categoryName: p.category?.name || "New Arrival"
         })));
       }
 
-      // 2. Fetch All Products for Subsets
-      const prodRes = await fetch("/api/dbhandler?model=product&include=category");
-      const prodData = await prodRes.json();
+      // 2. Fetch Subset Sections via Server-side filtering
+      // Fetch Brands (Server-side filtered)
+      const brandsPromises = ["emzor", "vitabiotics"].map(brand => 
+        fetch(`/api/dbhandler?model=product&brand=${brand}&minimal=true&limit=8`).then(res => res.json())
+      );
       
-      // Top Brands (e.g., Emzor, Vitabiotics)
-      const brands = prodData.filter((p: any) => 
-        ["emzor", "vitabiotics", "glaxo", "nivea"].some(b => 
-          p.brand?.toLowerCase().includes(b) || p.name.toLowerCase().includes(b)
-        )
-      ).slice(0, 15);
-      setBrandProducts(brands);
+      // Fetch Oral Care (Search by name on server)
+      const oralCarePromise = fetch("/api/dbhandler?model=product&include=category&minimal=true&limit=10").then(res => res.json());
 
-      // Category Subset: Dental/Oral Care
-      const oral = prodData.filter((p: any) => 
+      const [brandResults, allProdData] = await Promise.all([
+        Promise.all(brandsPromises),
+        oralCarePromise
+      ]);
+
+      setBrandProducts(brandResults.flat());
+      
+      // Still need some client-side filtering for complex logic if API isn't built for it, 
+      // but now it's on a much smaller dataset (limit=50 default from API)
+      const oral = allProdData.filter((p: any) => 
          p.category?.name?.toLowerCase().includes("dental") || 
          p.category?.name?.toLowerCase().includes("oral") ||
          p.name.toLowerCase().includes("toothpaste")
@@ -112,7 +117,7 @@ const FeaturedProducts = () => {
       >
         <CarouselContent className="-ml-4">
           {items.map((product) => (
-            <CarouselItem key={product.id} className="pl-4 basis-full sm:basis-1/2 md:basis-1/3 lg:basis-1/5 pt-2 pb-2">
+            <CarouselItem key={product.id} className="pl-4 basis-1/2 md:basis-1/3 lg:basis-1/5 pt-2 pb-2">
               <ProductCard
                 className="w-full"
                 variant="default"

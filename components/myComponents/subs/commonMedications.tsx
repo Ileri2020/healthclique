@@ -43,8 +43,8 @@ const CommonMedications = () => {
   const fetchData = useCallback(async () => {
     try {
       const [prodRes, featRes] = await Promise.all([
-        fetch("/api/dbhandler?model=product&include=category"),
-        fetch("/api/dbhandler?model=featuredProduct"),
+        fetch("/api/dbhandler?model=product&include=category&minimal=true&limit=15"),
+        fetch("/api/dbhandler?model=featuredProduct&minimal=true&limit=15"),
       ]);
       const prodData = await prodRes.json();
       const featData = await featRes.json();
@@ -156,7 +156,7 @@ const CommonMedications = () => {
         <Carousel
           opts={{ align: "start", loop: true }}
           plugins={[plugin.current]}
-          className="w-full relative px-4"
+          className="w-full relative px-2 md:px-4"
         >
           <CarouselContent className="-ml-4">
             {pharmacyProducts.map((product) => {
@@ -164,7 +164,7 @@ const CommonMedications = () => {
               return (
                 <CarouselItem
                   key={product.id}
-                  className="pl-4 basis-full sm:basis-1/2 md:basis-1/3 lg:basis-1/4 xl:basis-1/5 pt-2 pb-2"
+                  className="pl-4 basis-1/2 md:basis-1/3 lg:basis-1/4 xl:basis-1/5 pt-2 pb-2"
                 >
                   <div className="relative group/card">
                     <ProductCard

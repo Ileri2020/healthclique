@@ -73,11 +73,14 @@ export const ChatInterface = () => {
       const partnerMap = new Map<string, ChatPartner>();
       
       allMessages.forEach((msg: any) => {
-        const otherUser = msg.senderId === user.id ? msg.receiver : msg.sender;
-        if (!otherUser || otherUser.id === user.id) return;
+        const senderIsAdmin = msg.sender?.role === "admin" || msg.sender?.role === "staff" || msg.sender?.role === "professional";
+        const receiverIsAdmin = msg.receiver?.role === "admin" || msg.receiver?.role === "staff" || msg.receiver?.role === "professional";
         
-        // We only want to list non-admin users for admins to chat with
-        // if (otherUser.role === 'admin') return;
+        let otherUser = null;
+        if (!senderIsAdmin) otherUser = msg.sender;
+        else if (!receiverIsAdmin) otherUser = msg.receiver;
+        
+        if (!otherUser) return;
 
         if (!partnerMap.has(otherUser.id) || new Date(msg.createdAt) > new Date(partnerMap.get(otherUser.id)!.lastMessageTime)) {
           partnerMap.set(otherUser.id, {
@@ -104,10 +107,13 @@ export const ChatInterface = () => {
     if (!selectedPartnerId || !user.id) return;
     try {
       const res = await axios.get(`/api/dbhandler?model=message`);
-      const filtered = res.data.filter((msg: any) => 
-        (msg.senderId === user.id && msg.receiverId === selectedPartnerId) ||
-        (msg.senderId === selectedPartnerId && msg.receiverId === user.id)
-      ).sort((a: any, b: any) => new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime());
+      const filtered = res.data.filter((msg: any) => {
+        if (isAdmin) {
+          return msg.senderId === selectedPartnerId || msg.receiverId === selectedPartnerId;
+        } else {
+          return msg.senderId === user.id || msg.receiverId === user.id;
+        }
+      }).sort((a: any, b: any) => new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime());
       
       setMessages(filtered);
     } catch (error) {
@@ -155,7 +161,7 @@ export const ChatInterface = () => {
     }
   };
 
-  const selectedPartner = partners.find(p => p.id === selectedPartnerId) || (adminUser && selectedPartnerId === adminUser.id ? { name: adminUser.name, avatarUrl: adminUser.avatarUrl } : null);
+  const selectedPartner = partners.find(p => p.id === selectedPartnerId) || (adminUser && selectedPartnerId === adminUser.id ? { name: "Pharmacist", avatarUrl: "/logo.png" } : null);
 
   if (user.email === "nil") {
     return (
@@ -250,7 +256,10 @@ export const ChatInterface = () => {
                   </div>
                 ) : (
                   messages.map((msg, idx) => {
-                    const isOwn = msg.senderId === user.id;
+                    const isOwn = isAdmin 
+                      ? (msg.sender?.role === "admin" || msg.sender?.role === "staff" || msg.sender?.role === "professional") 
+                      : msg.senderId === user.id;
+
                     const prevMsg = messages[idx - 1];
                     const showTime = !prevMsg || new Date(msg.createdAt).getTime() - new Date(prevMsg.createdAt).getTime() > 300000; // 5 min gap
 

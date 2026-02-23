@@ -3,7 +3,6 @@
 import { useIsAdmin } from "@/hooks/useIsAdmin";
 import { Button } from "@/components/ui/button";
 import { Phone, MessageCircle, Clock, ShieldCheck, HeartPulse, Search } from "lucide-react";
-import Image from "next/image";
 import Link from "next/link";
 import React, { useState, useEffect, useRef } from "react";
 import axios from "axios";
@@ -16,8 +15,17 @@ import {
 import landingimg from '@/public/pharmacist.png'
 import { RiseAndFadeText } from "./textctrl";
 import { GlobalSearch } from "./index";
+import { useAppContext } from "@/hooks/useAppContext";
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogTrigger,
+} from "@/components/ui/dialog";
 
 const Hero = () => {
+  const { user } = useAppContext();
   const thingsToDo = [
     "Order authentic medications online",
     "Consult with expert pharmacists",
@@ -78,10 +86,35 @@ const Hero = () => {
                   Shop All Meds
                 </Button>
               </Link>
-              <Button size="lg" variant="outline" className="h-14 px-8 rounded-xl text-lg gap-2 border-2">
-                <MessageCircle className="w-5 h-5 text-green-500" />
-                WhatsApp Order
-              </Button>
+              {user?.email !== "nil" ? (
+                <Link href="/contact">
+                  <Button size="lg" variant="outline" className="h-14 px-8 rounded-xl text-lg gap-2 border-2">
+                    <MessageCircle className="w-5 h-5 text-primary" />
+                    Speak to the Pharmacist
+                  </Button>
+                </Link>
+              ) : (
+                <Dialog>
+                  <DialogTrigger asChild>
+                    <Button size="lg" variant="outline" className="h-14 px-8 rounded-xl text-lg gap-2 border-2">
+                      <MessageCircle className="w-5 h-5 text-primary" />
+                      Speak to the Pharmacist
+                    </Button>
+                  </DialogTrigger>
+                  <DialogContent className="sm:max-w-md rounded-2xl">
+                    <DialogHeader>
+                      <DialogTitle className="text-2xl font-bold">Login Required</DialogTitle>
+                    </DialogHeader>
+                    <div className="flex flex-col items-center justify-center py-6 text-center">
+                       <MessageCircle className="h-16 w-16 text-primary mb-4 opacity-50" />
+                       <p className="text-muted-foreground mb-6">You need to log in to chat directly with our expert pharmacists.</p>
+                       <Link href="/account" className="w-full">
+                         <Button size="lg" className="rounded-xl w-full text-lg h-14">Sign In to Continue</Button>
+                       </Link>
+                    </div>
+                  </DialogContent>
+                </Dialog>
+              )}
             </div>
 
             {/* Value Badges */}
@@ -100,12 +133,10 @@ const Hero = () => {
           {/* Right Column: Visuals */}
           <div className="relative hidden lg:block animate-in fade-in slide-in-from-right duration-700">
             <div className="relative aspect-square w-full max-w-lg mx-auto overflow-hidden rounded-3xl border-8 border-background shadow-2xl rotate-2 hover:rotate-0 transition-transform duration-500">
-               <Image
-                src={landingimg}
+               <img
+                src={landingimg.src}
                 alt="Expert Pharmacist"
-                fill
-                className="object-cover scale-110 hover:scale-100 transition-transform duration-700"
-                priority
+                className="w-full h-full object-cover scale-110 hover:scale-100 transition-transform duration-700"
               />
             </div>
             
