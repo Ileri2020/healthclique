@@ -1,85 +1,114 @@
 "use client";
+
 import React, { useEffect, useState } from 'react';
 import Post from './post';
 import axios from 'axios';
+import { Skeleton } from '@/components/ui/skeleton';
 
-const Posts = ({ page }) => {
-  const [allpost, setallpost] = useState(null);
-  const [sortOrder, setSortOrder] = useState('desc');
-  const [postTypes, setPostTypes] = useState({ video: true, audio: true, image: true, });
+interface PostsProps {
+  category: string;
+}
+
+const Posts = ({ category }: PostsProps) => {
+  const [posts, setPosts] = useState<any[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [sortOrder, setSortOrder] = useState<'asc' | 'desc'>('desc');
+  const [types, setTypes] = useState({ video: true, audio: true, image: true });
 
   useEffect(() => {
-    const fetchallpost = () =>{
-      axios.get('/api/dbhandler', { params: { model: 'posts', } })
-        .then(response => {
-          const posts = response.data;
-          let filteredPosts = posts.filter(post => post.for === page && postTypes[post.type]);
-          filteredPosts = filteredPosts.sort((a, b) => sortOrder === 'asc' ? new Date(a.updatedAt).getTime() - new Date(b.updatedAt).getTime() : new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime());
-          setallpost(filteredPosts);
-        })
-        .catch(error => {
-          console.error(error);
+    const fetchPosts = async () => {
+      setLoading(true);
+      try {
+        const res = await axios.get('/api/dbhandler', { 
+          params: { model: 'post' } // Using 'post' instead of 'posts' as per dbhandler route mapping
         });
-    }
-    fetchallpost();
-  }, [sortOrder, postTypes, page]);
+        let data = res.data;
+        
+        if (Array.isArray(data)) {
+          // Filter by category
+          if (category !== "All") {
+            data = data.filter((p: any) => p.category === category);
+          }
+          
+          // Filter by type
+          data = data.filter((p: any) => types[p.type as keyof typeof types]);
 
-  const handleSortChange = (e) => {
-    setSortOrder(e.target.value);
-  }
+          // Sort
+          data.sort((a: any, b: any) => {
+            const dateA = new Date(a.createdAt).getTime();
+            const dateB = new Date(b.createdAt).getTime();
+            return sortOrder === 'desc' ? dateB - dateA : dateA - dateB;
+          });
 
-  const handlePostTypeChange = (e) => {
-    setPostTypes({ ...postTypes, [e.target.name]: e.target.checked, });
-  }
+          setPosts(data);
+        }
+      } catch (err) {
+        console.error(err);
+      } finally {
+        setLoading(false);
+      }
+    };
+    fetchPosts();
+  }, [category, sortOrder, types]);
 
-  if (!allpost) return <div>Loading...</div>;
+  const toggleType = (type: keyof typeof types) => {
+    setTypes(prev => ({ ...prev, [type]: !prev[type] }));
+  };
 
   return (
-    <div className='flex flex-col w-fit mx-auto'>
-      <div className="/absolute w-[360px] flex flex-row justify-between">
-        <select value={sortOrder} onChange={handleSortChange} className="mb-4 w-20">
-          <option value="asc">Asc</option>
-          <option value="desc">Dsc</option>
-        </select>
-        <div className="mb-4">
-          <label>
-            <input type="checkbox" name="video" checked={postTypes.video} onChange={handlePostTypeChange} />
-            Video
-          </label>
-          <label className="ml-4">
-            <input type="checkbox" name="audio" checked={postTypes.audio} onChange={handlePostTypeChange} />
-            Audio
-          </label>
-          <label className="ml-4">
-            <input type="checkbox" name="image" checked={postTypes.image} onChange={handlePostTypeChange} />
-            Image
-          </label>
+    <div className='w-full max-w-2xl mx-auto'>
+      <div className="flex flex-wrap items-center justify-between mb-8 gap-4 bg-muted/30 p-4 rounded-2xl border border-dashed border-primary/20">
+        <div className="flex gap-4">
+          {Object.entries(types).map(([type, active]) => (
+            <button
+              key={type}
+              onClick={() => toggleType(type as any)}
+              className={`text-xs font-bold uppercase px-3 py-1 rounded-full transition-all border ${
+                active 
+                  ? 'bg-primary text-primary-foreground border-primary' 
+                  : 'bg-background text-muted-foreground border-border'
+              }`}
+            >
+              {type}
+            </button>
+          ))}
         </div>
+        
+        <select 
+          value={sortOrder} 
+          onChange={(e) => setSortOrder(e.target.value as any)}
+          className="text-xs font-bold bg-background border rounded-lg p-1"
+        >
+          <option value="desc">Newest First</option>
+          <option value="asc">Oldest First</option>
+        </select>
       </div>
-      {allpost && allpost.length > 0 ? (
-        allpost.map((post, index)=>{
-          //console.log('post', index, 'post id', post.id)
-          return(
-            <Post 
-              key={index} 
-              url={post.url} 
-              ownerurl={(post?.user?.avatarUrl==undefined) ? 'https://res.cloudinary.com/dc5khnuiu/image/upload/v1752627019/uxokaq0djttd7gsslwj9.png' : post.user.avatarUrl}
-              time={post.updatedAt} 
-              owner={post?.user?.name == undefined ? "Engr Adepoju" : post.user.name} 
-              event={post.event} 
-              post={post.description} 
-              type={post.type} 
-              id={post.id} 
-              for={post.for} 
-              title={post.title}
-            />
-          )
-        })
+
+      {loading ? (
+        <div className="space-y-8">
+          {[1, 2, 3].map(i => (
+            <div key={i} className="space-y-4">
+              <Skeleton className="h-12 w-3/4 rounded-xl" />
+              <Skeleton className="h-[300px] w-full rounded-3xl" />
+              <Skeleton className="h-8 w-1/2 rounded-xl" />
+            </div>
+          ))}
+        </div>
+      ) : posts.length > 0 ? (
+        <div className="space-y-6">
+          {posts.map((post) => (
+            <Post key={post.id} post={post} />
+          ))}
+        </div>
       ) : (
-        <div className='w-full mt-20 justify-center items-center font-bold text-xl'>No {page}s available.</div>
+        <div className='flex flex-col items-center justify-center py-20 text-center opacity-40'>
+          <div className="text-6xl mb-4">🩺</div>
+          <div className='font-black text-2xl'>No {category} Records Found</div>
+          <p className='text-sm mt-2'>Be the first to share clinical insights in this category.</p>
+        </div>
       )}
     </div>
-  )
-}
+  );
+};
 
 export default Posts;

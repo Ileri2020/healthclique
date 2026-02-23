@@ -30,6 +30,11 @@ export default {Links : [
       path: "/contact",
     },
     {
+      name: <AiOutlineProfile />,
+      title: "Blog",
+      path: "/blog",
+    },
+    {
       name: <VscAccount />,
       title: "Account",
       path: "/account",

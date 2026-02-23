@@ -4,6 +4,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { PrismaClient } from "@prisma/client";
 import bcrypt from "bcrypt";
 import cloudinary from "cloudinary";
+import { auth } from "@/auth";
 
 cloudinary.v2.config({
   cloud_name: process.env.CLOUDINARY_CLOUD_NAME,
@@ -40,6 +41,7 @@ const modelMap: Record<string, any> = {
   stock: prisma.stock,
   user: prisma.user,
   message: prisma.message,
+  brand: prisma.brand,
 };
 
 // =====================
@@ -56,7 +58,7 @@ async function parseJson(req: NextRequest) {
 
 function parseId(id: string | null, model: string) {
   if (!id) return null;
-  return ["user", "category", "product"].includes(model) ? id : Number(id);
+  return ["user", "category", "product", "brand"].includes(model) ? id : Number(id);
 }
 
 async function handleUpload(file: File | string) {
@@ -164,6 +166,7 @@ export async function POST(req: NextRequest) {
       if (model === "product") body.images = urls;
       if (model === "user") body.avatarUrl = urls[0]; // single avatar
       if (model === "category") body.image = urls[0]; // single category image
+      if (model === "post") body.contentUrl = urls[0]; // blog media URL
     }
 
     // 2️⃣ Merge other FormData values
@@ -223,6 +226,18 @@ export async function POST(req: NextRequest) {
     if (model === "user" && body.password) {
       const salt = await bcrypt.genSalt();
       body.password = await bcrypt.hash(body.password, salt);
+    }
+
+    // --- POST: only admins can create blog posts ---
+    if (model === "post") {
+      const session = await auth();
+      const role = (session?.user as any)?.role || "customer";
+      if (role !== "admin") {
+        return NextResponse.json(
+          { error: "Only admins can create blog posts" },
+          { status: 403 }
+        );
+      }
     }
 
     // --- Ensure numeric fields ---

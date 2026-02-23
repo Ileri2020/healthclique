@@ -4,7 +4,8 @@ import { CartItems } from '@/components/myComponents/subs/index';
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Button } from "@/components/ui/button";
 import { PayDrawer } from "@/components/myComponents/paydrawer";
-import { BookDrawer } from '../../components/myComponents/bookdrawer';
+import { BookDrawer } from "../../components/myComponents/bookdrawer";
+import { CreditFacilityDrawer } from "@/components/myComponents/credit-facility-drawer";
 import { Booked } from "@/components/myComponents/booked";
 import { useAppContext } from "@/hooks/useAppContext";
 import { PRICE_MARKUPS } from "@/lib/stock-pricing";
@@ -17,8 +18,15 @@ const Cart = () => {
   const { items, subtotal } = useCart();
   const { user } = useAppContext();
 
-  const role = user?.role || "customer";
+  const role = (user?.role || "customer") as string;
   const markup = PRICE_MARKUPS[role as keyof typeof PRICE_MARKUPS] || 1.3;
+
+  const isWholesaleRole =
+    role.toLowerCase() === "wholesaler" ||
+    role.toLowerCase() === "professional" ||
+    role.toLowerCase() === "institution";
+  const meetsHighOrder = subtotal >= 1_000_000;
+  const showCreditFacility = isWholesaleRole || meetsHighOrder;
 
   const [prescriptionImage, setPrescriptionImage] = useState<string | null>(null);
   const [isUploading, setIsUploading] = useState(false);
@@ -136,15 +144,28 @@ const Cart = () => {
 
             <div>
               <div className="mx-auto max-w-3xl flex flex-col mt-5 gap-4">
-                <div className="flex flex-row justify-between items-center border-t pt-4">
-                  <div className="text-lg">Total: <span className="text-accent text-2xl font-bold ml-2">₦ {subtotal.toLocaleString()}</span></div>
-                  <div className="flex flex-row gap-2">
+                <div className="flex flex-col gap-3 border-t pt-4">
+                  <div className="flex flex-row justify-between items-center">
+                    <div className="text-lg">
+                      Total:{" "}
+                      <span className="text-accent text-2xl font-bold ml-2">
+                        ₦ {subtotal.toLocaleString()}
+                      </span>
+                    </div>
+                  </div>
+                  <div className="flex flex-row flex-wrap gap-2">
                     <Booked />
-                    <BookDrawer cart={items} prescriptionUrl={prescriptionImage} />
-                    <PayDrawer 
-                      cart={items} 
-                      disabled={hasPrescriptionItems && !prescriptionImage} 
+                    <BookDrawer
+                      cart={items}
+                      prescriptionUrl={prescriptionImage}
                     />
+                    <PayDrawer
+                      cart={items}
+                      disabled={hasPrescriptionItems && !prescriptionImage}
+                    />
+                    {showCreditFacility && (
+                      <CreditFacilityDrawer />
+                    )}
                   </div>
                 </div>
               </div>
