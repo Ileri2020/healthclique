@@ -1,6 +1,6 @@
 ================================================================================
 LOIS SPICE PROJECT - SOURCE CODE CONSOLIDATION
-Generated: 2026-02-23 21:48:16
+Generated: 2026-02-23 23:34:28
 ================================================================================
 
 
@@ -4022,6 +4022,7 @@ import { Badge } from "@/components/ui/badge"
 import { FileText, AlertCircle, Star } from "lucide-react"
 import { ProductReviews } from "@/components/myComponents/subs/productReviews"
 import { PriceFeedback } from "@/components/myComponents/subs/priceFeedback"
+import Similar from "@/components/myComponents/subs/similar"
 
 const Description = () => {
   const [product, setProduct] = useState<any>(null);
@@ -4123,6 +4124,12 @@ const Description = () => {
               </Badge>
             </div>
             <h1 className="text-3xl font-bold md:text-5xl">{product.name}</h1>
+            <div className="flex items-center gap-1 mt-2 mb-4">
+              {Array.from({ length: 5 }).map((_, i) => (
+                <Star key={i} className="h-5 w-5 fill-yellow-400 text-yellow-400" />
+              ))}
+              <span className="ml-2 text-sm font-medium text-muted-foreground">5.0 (Customer Reviews)</span>
+            </div>
           
           {isPrescription && (
             <div className="flex items-center gap-2 p-3 rounded-xl bg-destructive/10 text-destructive border border-destructive/20 text-sm font-semibold">
@@ -4202,6 +4209,11 @@ const Description = () => {
         <div className="mb-8 border-b pb-4">
           <h2 className="text-2xl font-bold">Similar Products</h2>
         </div>
+        
+        <div className="mb-10 hidden md:block">
+           <Similar similar={similarProducts} />
+        </div>
+
         <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
           {similarProducts.map((simProd) => (
              <ProductCard
@@ -10973,6 +10985,82 @@ export function PriceFeedback({ productId, productName }: { productId: string, p
   );
 }
 
+export function InlinePriceFeedback({ productId, productName }: { productId: string, productName: string }) {
+  const [feedback, setFeedback] = useState("");
+  const [comment, setComment] = useState("");
+  const [submitting, setSubmitting] = useState(false);
+  const { user } = useAppContext();
+
+  const handleSubmit = async () => {
+    if (!feedback) {
+      toast.error("Please select a feedback option");
+      return;
+    }
+    
+    if (!user || user.email === "nil") {
+      toast.error("Please sign in to provide feedback");
+      return;
+    }
+
+    setSubmitting(true);
+    try {
+      await axios.post("/api/dbhandler?model=priceFeedback", {
+        userId: user.id,
+        productId,
+        feedback,
+        comment,
+      });
+      toast.success("Feedback submitted successfully. Thank you!");
+      setFeedback("");
+      setComment("");
+    } catch (error) {
+      toast.error("Failed to submit feedback");
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
+  return (
+    <div className="space-y-4 pt-6 mt-6 border-t">
+      <h3 className="text-sm font-semibold flex items-center gap-2 text-accent">
+        <MessageSquareWarning className="h-4 w-4" />
+        Pricing Feedback
+      </h3>
+      <p className="text-sm text-muted-foreground">
+        What do you think about the pricing?
+      </p>
+      
+      <div className="grid grid-cols-2 gap-3">
+        {["High Price", "Low Price"].map((opt) => (
+          <Button 
+            key={opt}
+            variant={feedback === opt ? "default" : "outline"}
+            className={feedback === opt ? "bg-primary text-white" : ""}
+            onClick={() => setFeedback(opt)}
+          >
+            {opt}
+          </Button>
+        ))}
+      </div>
+
+      <div className="mt-4">
+        <Textarea 
+          placeholder="Expected price or additional comments..."
+          value={comment}
+          onChange={(e) => setComment(e.target.value)}
+          className="resize-none"
+          rows={3}
+        />
+      </div>
+
+      <Button className="w-full" onClick={handleSubmit} disabled={submitting}>
+        {submitting ? "Submitting..." : "Submit Feedback"}
+      </Button>
+    </div>
+  );
+}
+
+
 
 
 ================================================================================
@@ -10992,7 +11080,7 @@ import { getProductPrice, isProductInStock } from "@/lib/stock-pricing";
 import Link from "next/link";
 import * as React from "react";
 import { MessageCircle, ShoppingCart, Heart, Star, Edit3, Trash2, Eye, FileText } from "lucide-react";
-import { PriceFeedback } from "@/components/myComponents/subs/priceFeedback";
+import { InlinePriceFeedback } from "@/components/myComponents/subs/priceFeedback";
 import { useAppContext } from "@/hooks/useAppContext";
 import { useIsAdmin } from "@/hooks/useIsAdmin";
 import {
@@ -11113,29 +11201,17 @@ export function ProductCard({
     : currentPrice;
 
   const renderStars = () => {
-    const fullStars = Math.floor(ratingValue);
-    const hasHalfStar = ratingValue % 1 >= 0.5;
-
     return (
       <div className="flex items-center">
         {Array.from({ length: 5 }).map((_, i) => (
           <Star
             key={`star-${product.id}-${i}`}
-            className={cn(
-              "h-4 w-4",
-              i < fullStars
-                ? "fill-yellow-400 text-yellow-400"
-                : i === fullStars && hasHalfStar
-                  ? "fill-yellow-400/50 text-yellow-400"
-                  : "stroke-muted/40 text-muted"
-            )}
+            className="h-4 w-4 fill-yellow-400 text-yellow-400"
           />
         ))}
-        {ratingValue > 0 && (
-          <span className="ml-1 text-xs text-muted-foreground">
-            {ratingValue.toFixed(1)}
-          </span>
-        )}
+        <span className="ml-1 text-xs text-muted-foreground">
+          5.0
+        </span>
       </div>
     );
   };
@@ -11194,9 +11270,9 @@ export function ProductCard({
                  )}
               </div>
 
-              {/* Price Feedback Button */}
-              <div className="mt-8 border-t pt-4">
-                <PriceFeedback productId={product.id} productName={product.name} />
+              {/* Price Feedback Form */}
+              <div className="mt-8">
+                <InlinePriceFeedback productId={product.id} productName={product.name} />
               </div>
             </SheetContent>
           </Sheet>

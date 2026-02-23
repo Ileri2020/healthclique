@@ -14,6 +14,7 @@ import { Badge } from "@/components/ui/badge"
 import { FileText, AlertCircle, Star } from "lucide-react"
 import { ProductReviews } from "@/components/myComponents/subs/productReviews"
 import { PriceFeedback } from "@/components/myComponents/subs/priceFeedback"
+import Similar from "@/components/myComponents/subs/similar"
 
 const Description = () => {
   const [product, setProduct] = useState<any>(null);
@@ -115,6 +116,12 @@ const Description = () => {
               </Badge>
             </div>
             <h1 className="text-3xl font-bold md:text-5xl">{product.name}</h1>
+            <div className="flex items-center gap-1 mt-2 mb-4">
+              {Array.from({ length: 5 }).map((_, i) => (
+                <Star key={i} className="h-5 w-5 fill-yellow-400 text-yellow-400" />
+              ))}
+              <span className="ml-2 text-sm font-medium text-muted-foreground">5.0 (Customer Reviews)</span>
+            </div>
           
           {isPrescription && (
             <div className="flex items-center gap-2 p-3 rounded-xl bg-destructive/10 text-destructive border border-destructive/20 text-sm font-semibold">
@@ -194,6 +201,11 @@ const Description = () => {
         <div className="mb-8 border-b pb-4">
           <h2 className="text-2xl font-bold">Similar Products</h2>
         </div>
+        
+        <div className="mb-10 hidden md:block">
+           <Similar similar={similarProducts} />
+        </div>
+
         <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
           {similarProducts.map((simProd) => (
              <ProductCard

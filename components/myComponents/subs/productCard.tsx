@@ -11,7 +11,7 @@ import { getProductPrice, isProductInStock } from "@/lib/stock-pricing";
 import Link from "next/link";
 import * as React from "react";
 import { MessageCircle, ShoppingCart, Heart, Star, Edit3, Trash2, Eye, FileText } from "lucide-react";
-import { PriceFeedback } from "@/components/myComponents/subs/priceFeedback";
+import { InlinePriceFeedback } from "@/components/myComponents/subs/priceFeedback";
 import { useAppContext } from "@/hooks/useAppContext";
 import { useIsAdmin } from "@/hooks/useIsAdmin";
 import {
@@ -132,29 +132,17 @@ export function ProductCard({
     : currentPrice;
 
   const renderStars = () => {
-    const fullStars = Math.floor(ratingValue);
-    const hasHalfStar = ratingValue % 1 >= 0.5;
-
     return (
       <div className="flex items-center">
         {Array.from({ length: 5 }).map((_, i) => (
           <Star
             key={`star-${product.id}-${i}`}
-            className={cn(
-              "h-4 w-4",
-              i < fullStars
-                ? "fill-yellow-400 text-yellow-400"
-                : i === fullStars && hasHalfStar
-                  ? "fill-yellow-400/50 text-yellow-400"
-                  : "stroke-muted/40 text-muted"
-            )}
+            className="h-4 w-4 fill-yellow-400 text-yellow-400"
           />
         ))}
-        {ratingValue > 0 && (
-          <span className="ml-1 text-xs text-muted-foreground">
-            {ratingValue.toFixed(1)}
-          </span>
-        )}
+        <span className="ml-1 text-xs text-muted-foreground">
+          5.0
+        </span>
       </div>
     );
   };
@@ -213,9 +201,9 @@ export function ProductCard({
                  )}
               </div>
 
-              {/* Price Feedback Button */}
-              <div className="mt-8 border-t pt-4">
-                <PriceFeedback productId={product.id} productName={product.name} />
+              {/* Price Feedback Form */}
+              <div className="mt-8">
+                <InlinePriceFeedback productId={product.id} productName={product.name} />
               </div>
             </SheetContent>
           </Sheet>
