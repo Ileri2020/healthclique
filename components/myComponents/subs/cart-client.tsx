@@ -257,7 +257,7 @@ export function CartClient({ className, cart }: CartProps) {
                           </button>
                         </div>
                         <p className="text-xs text-muted-foreground">
-                          {item.category && typeof item.category === 'object' ? item.category.name : item.category}
+                          {item.category ? (typeof item.category === 'string' ? item.category : (item.category as any).name) : null}
                         </p>
                       </div>
                       <div className="mt-2 flex items-center justify-between">

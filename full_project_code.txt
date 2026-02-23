@@ -1,6 +1,6 @@
 ================================================================================
 LOIS SPICE PROJECT - SOURCE CODE CONSOLIDATION
-Generated: 2026-02-23 20:48:40
+Generated: 2026-02-23 21:48:16
 ================================================================================
 
 
@@ -1549,20 +1549,13 @@ const modelMap: Record<string, any> = {
   user: prisma.user,
   message: prisma.message,
   brand: prisma.brand,
+  // @ts-ignore
+  priceFeedback: prisma.priceFeedback,
 };
 
 // =====================
 // Utilities
 // =====================
-async function parseJson(req: NextRequest) {
-  try {
-    const json = await req.json();
-    return typeof json === "object" && json !== null ? json : {};
-  } catch (err) {
-    return {};
-  }
-}
-
 function parseId(id: string | null, model: string) {
   if (!id) return null;
   return ["user", "category", "product", "brand"].includes(model) ? id : Number(id);
@@ -1570,22 +1563,21 @@ function parseId(id: string | null, model: string) {
 
 async function handleUpload(file: File | string) {
   let dataURI = typeof file === "string" ? file : "";
-
   if (typeof file !== "string") {
     const buffer = await file.arrayBuffer();
     const b64 = Buffer.from(buffer).toString("base64");
     dataURI = `data:${file.type};base64,${b64}`;
   }
-
-  const res = await cloudinary.v2.uploader.upload(dataURI, { resource_type: "auto" });
-  return res;
+  return await cloudinary.v2.uploader.upload(dataURI, { resource_type: "auto" });
 }
 
 // ==================== GET ====================
 export async function GET(req: NextRequest) {
   const { searchParams } = new URL(req.url);
-  const model = searchParams.get("model") || null;
+  const model = searchParams.get("model");
   const id = parseId(searchParams.get("id"), model || "");
+  const limit = parseInt(searchParams.get("limit") || "50");
+  const minimal = searchParams.get("minimal") === "true";
 
   if (!model || !modelMap[model]) return NextResponse.json({ error: "Invalid model" }, { status: 400 });
 
@@ -1594,46 +1586,80 @@ export async function GET(req: NextRequest) {
   try {
     if (!id) {
       if (model === "featuredProduct") {
-        const items = await prisma.featuredProduct.findMany({
-          include: { product: { include: { category: true, stock: true, reviews: true } } },
-        });
-        return NextResponse.json(items);
+        return NextResponse.json(await prisma.featuredProduct.findMany({
+          take: limit,
+          include: { 
+            product: { 
+              include: { 
+                category: true, 
+                stock: !minimal, 
+                reviews: false // Never load reviews for lists
+              } 
+            } 
+          },
+        }));
       }
 
       if (model === "review" || model === "post") {
-        const items = await prismaModel.findMany({
+        return NextResponse.json(await prismaModel.findMany({
+          take: limit,
           include: { user: { select: { id: true, email: true, name: true, avatarUrl: true } } },
-        });
-        return NextResponse.json(items);
+          orderBy: { createdAt: 'desc' }
+        }));
       }
 
       if (model === "category") {
-          const items = await prisma.category.findMany({
-              include: { 
-                  products: { take: 3, select: { images: true } },
-                  _count: { select: { products: true } }
-              }
-          });
-          return NextResponse.json(items);
+        return NextResponse.json(await prisma.category.findMany({
+          include: { 
+            products: { take: 3, select: { images: true } },
+            _count: { select: { products: true } }
+          }
+        }));
       }
 
-      if (model === "product" && searchParams.get("include")) {
+      if (model === "product") {
+        const brand = searchParams.get("brand");
+        const categoryId = searchParams.get("categoryId");
         const includeParams = searchParams.get("include")?.split(",");
-        const include: Record<string, boolean> = {};
-        includeParams?.forEach(inc => { include[inc] = true; });
-        return NextResponse.json(await prisma.product.findMany({ include }));
+        
+        const where: any = {};
+        if (brand) where.brand = { contains: brand, mode: 'insensitive' };
+        if (categoryId) where.categoryId = categoryId;
+
+        const include: any = {};
+        if (includeParams) {
+          includeParams.forEach(inc => { if (inc !== 'reviews') include[inc] = true; });
+        } else if (!minimal) {
+          include.category = true;
+          include.stock = true;
+        } else {
+          include.category = true;
+        }
+
+        return NextResponse.json(await prisma.product.findMany({
+          where,
+          include: Object.keys(include).length > 0 ? include : undefined,
+          take: limit,
+          orderBy: { createdAt: 'desc' }
+        }));
       }
 
-      return NextResponse.json(await prismaModel.findMany());
+      return NextResponse.json(await prismaModel.findMany({ take: limit }));
     } else {
-      if (model === "review") {
-        const items = await prismaModel.findMany({ where: { contentId: id } });
-        return NextResponse.json(items);
-      } else {
-        const item = await prismaModel.findUnique({ where: { id } });
-        if (!item) return NextResponse.json({ error: "Document not found" }, { status: 404 });
-        return NextResponse.json(item);
+      // Single item fetch
+      const include: any = {};
+      if (model === "product") {
+        include.category = true;
+        include.stock = true;
+        include.reviews = { include: { user: { select: { name: true, avatarUrl: true } } } };
       }
+      
+      const item = await prismaModel.findUnique({ 
+        where: { id },
+        include: Object.keys(include).length > 0 ? include : undefined
+      });
+      if (!item) return NextResponse.json({ error: "Document not found" }, { status: 404 });
+      return NextResponse.json(item);
     }
   } catch (error) {
     console.error("Database GET error:", error);
@@ -1641,82 +1667,65 @@ export async function GET(req: NextRequest) {
   }
 }
 
-
-
 // ==================== POST ====================
 export async function POST(req: NextRequest) {
   const { searchParams } = new URL(req.url);
   const model = searchParams.get("model");
+  const session = await auth();
+  const role = (session?.user as any)?.role || "visitor";
 
-  if (!model || !modelMap[model]) {
-    return NextResponse.json({ error: "Invalid model" }, { status: 400 });
+  const protectedModels = ["product", "category", "featuredProduct", "stock", "coupon", "brand", "post"];
+  if (protectedModels.includes(model || "") && role !== "admin" && role !== "staff") {
+    return NextResponse.json({ error: "Unauthorized access" }, { status: 403 });
   }
 
-  const prismaModel = modelMap[model];
+  if (!model || !modelMap[model]) return NextResponse.json({ error: "Invalid model" }, { status: 400 });
 
+  const prismaModel = modelMap[model];
   const contentType = req.headers.get("content-type") || "";
   let body: any = {};
 
-  // ==================== Handle FormData ====================
-  if (contentType.includes("multipart/form-data") || contentType.includes("application/x-www-form-urlencoded")) {
+  if (contentType.includes("multipart/form-data")) {
     const formData = await req.formData();
-
-    // 1️⃣ Handle file uploads
     const files = formData.getAll("file") as File[];
-    if (files?.length > 0) {
-      const urls: string[] = [];
+    if (files.length > 0) {
+      const urls = [];
       for (const file of files) {
         const uploadRes = await handleUpload(file);
         urls.push(uploadRes.url);
       }
-
       if (model === "product") body.images = urls;
-      if (model === "user") body.avatarUrl = urls[0]; // single avatar
-      if (model === "category") body.image = urls[0]; // single category image
-      if (model === "post") body.contentUrl = urls[0]; // blog media URL
+      if (model === "user") body.avatarUrl = urls[0];
+      if (model === "category") body.image = urls[0];
+      if (model === "post") body.contentUrl = urls[0];
     }
-
-    // 2️⃣ Merge other FormData values
-    formData.forEach((value, key) => {
-      if (key === "file") return; // skip files
-      body[key] = value;
-    });
-  } 
-  // ==================== Handle JSON ====================
-  else if (contentType.includes("application/json")) {
+    formData.forEach((value, key) => { if (key !== "file") body[key] = value; });
+  } else {
     body = await req.json();
-  } 
-  else {
-    return NextResponse.json({ error: "Unsupported Content-Type" }, { status: 415 });
   }
 
   try {
-    // ==================== Model-specific logic ====================
-
-    // --- CART: calculate total ---
     if (model === "cart") {
       const { userId, products, status } = body;
-
-      const productIds = products.map((p: any) => p.productId);
       const dbProducts = await prisma.product.findMany({
-        where: { id: { in: productIds } },
+        where: { id: { in: products.map((p: any) => p.productId) } },
         select: { id: true, price: true },
       });
 
       let total = 0;
-      let role = "customer";
+      let userRole = "customer";
       if (userId && userId !== "nil") {
         const dbUser = await prisma.user.findUnique({ where: { id: userId } });
-        if (dbUser) role = dbUser.role;
+        if (dbUser) userRole = dbUser.role;
       }
-      const markup = PRICE_MARKUPS[role] || 1.3;
+      const markup = PRICE_MARKUPS[userRole] || 1.3;
 
       products.forEach((item: any) => {
         const found = dbProducts.find((p) => p.id === item.productId);
         if (found) total += (found.price * markup) * item.quantity;
       });
 
-      const newCart = await prisma.cart.create({
+      return NextResponse.json(await prisma.cart.create({
         data: {
           userId,
           total,
@@ -1724,565 +1733,94 @@ export async function POST(req: NextRequest) {
           products: { create: products.map((p: any) => ({ productId: p.productId, quantity: p.quantity })) },
         },
         include: { products: true },
-      });
-
-      return NextResponse.json(newCart);
+      }));
     }
 
-    // --- USER: hash password ---
     if (model === "user" && body.password) {
-      const salt = await bcrypt.genSalt();
-      body.password = await bcrypt.hash(body.password, salt);
+      body.password = await bcrypt.hash(body.password, await bcrypt.genSalt());
     }
 
-    // --- POST: only admins can create blog posts ---
-    if (model === "post") {
-      const session = await auth();
-      const role = (session?.user as any)?.role || "customer";
-      if (role !== "admin") {
-        return NextResponse.json(
-          { error: "Only admins can create blog posts" },
-          { status: 403 }
-        );
-      }
-    }
-
-    // --- Ensure numeric fields ---
+    // Parsing
     if (body.price) body.price = parseFloat(body.price);
+    ['requiresPrescription', 'scarce'].forEach(field => {
+       if (body[field] === "true") body[field] = true;
+       if (body[field] === "false") body[field] = false;
+    });
 
-    // --- Ensure boolean fields ---
-    if (body.requiresPrescription === "true") body.requiresPrescription = true;
-    if (body.requiresPrescription === "false") body.requiresPrescription = false;
-    if (body.scarce === "true") body.scarce = true;
-    if (body.scarce === "false") body.scarce = false;
-
-    // 4️⃣ Create new item
-    const newItem = await prismaModel.create({ data: body });
-    return NextResponse.json(newItem);
+    return NextResponse.json(await prismaModel.create({ data: body }));
   } catch (error) {
     console.error("Database POST error:", error);
-    return NextResponse.json({ error: "Failed to create item" }, { status: 500 });
+    return NextResponse.json({ error: "Creation failed" }, { status: 500 });
   }
 }
-
-
-
-
 
 // ==================== PUT ====================
 export async function PUT(req: NextRequest) {
   const { searchParams } = new URL(req.url);
   const model = searchParams.get("model");
-  if (!model || !modelMap[model]) {
-    return NextResponse.json({ error: "Invalid model" }, { status: 400 });
+  const session = await auth();
+  const role = (session?.user as any)?.role || "visitor";
+
+  if (model !== "user" && role !== "admin" && role !== "staff") {
+    return NextResponse.json({ error: "Unauthorized access" }, { status: 403 });
   }
+
+  if (!model || !modelMap[model]) return NextResponse.json({ error: "Invalid model" }, { status: 400 });
 
   const prismaModel = modelMap[model];
   const contentType = req.headers.get("content-type") || "";
-  const body: any = {};
+  let body: any = {};
 
-  let data: Record<string, any> = {};
-
-  // ==================== FormData ====================
-  if (contentType.includes("multipart/form-data") || contentType.includes("application/x-www-form-urlencoded")) {
+  if (contentType.includes("multipart/form-data")) {
     const formData = await req.formData();
-    console.log("PUT formData entries:", Array.from(formData.entries()));
-    data = Object.fromEntries(formData.entries());
-
-    // ⿡ Handle file uploads
     const file = formData.get("file") as File | null;
     if (file) {
-      try {
-        const uploadRes = await handleUpload(file);
-        console.log("Upload cloudinary response:", uploadRes);
-        if (model === "category") body.image = uploadRes.url;
-        if (model === "user") body.avatarUrl = uploadRes.url;
-        if (model === "product") body.images = [uploadRes.url];
-      } catch (err) {
-        console.error("Cloudinary upload failed:", err);
-        return NextResponse.json({ error: "File upload failed" }, { status: 500 });
-      }
-    } else if (formData.get("image")) {
-      body.image = formData.get("image") as string;
+      const uploadRes = await handleUpload(file);
+      if (model === "category") body.image = uploadRes.url;
+      if (model === "user") body.avatarUrl = uploadRes.url;
+      if (model === "product") body.images = [uploadRes.url];
     }
-
-    // ⿢ Merge other fields from FormData
-    formData.forEach((value, key) => {
-      if (key === "file" || key === "image") return;
-      body[key] = value;
-    });
-  } 
-  // ==================== JSON ====================
-  else if (contentType.includes("application/json")) {
-    data = await req.json();
-    Object.assign(body, data); // merge JSON into body
-
-    // If JSON includes file URLs (e.g., avatarUrl, images, image), preserve them
-    if (data.avatarUrl && model === "user") body.avatarUrl = data.avatarUrl;
-    if (data.image && model === "category") body.image = data.image;
-    if (data.images && model === "product") body.images = data.images;
-  } 
-  // ==================== Unsupported ====================
-  else {
-    return NextResponse.json({ error: "Unsupported Content-Type" }, { status: 415 });
+    formData.forEach((value, key) => { if (key !== "file") body[key] = value; });
+  } else {
+    body = await req.json();
   }
 
-  // ⿣ Ensure ID exists
   const id = parseId(body.id, model);
-  if (!id) return NextResponse.json({ error: "Missing or invalid id" }, { status: 400 });
+  if (!id) return NextResponse.json({ error: "Missing ID" }, { status: 400 });
 
-  // ⿤ Remove `id` from body before update
-  const { id: _ignore, ...updatedData } = body;
-
-  // ⿥ Ensure updatedData is not empty
-  if (!updatedData || Object.keys(updatedData).length === 0) {
-    return NextResponse.json({ error: "Nothing to update" }, { status: 400 });
-  }
-
-  console.log("Updating item with data:", updatedData, "model:", model, "id:", id);
-
-  // ⿦ Perform update
+  const { id: _, ...updatedData } = body;
   try {
-    const updatedItem = await prismaModel.update({
+    return NextResponse.json(await prismaModel.update({
       where: { id: String(id) },
       data: updatedData,
-    });
-    return NextResponse.json(updatedItem);
+    }));
   } catch (error) {
     console.error("Database PUT error:", error);
-    return NextResponse.json({ error: "Failed to update item" }, { status: 500 });
+    return NextResponse.json({ error: "Update failed" }, { status: 500 });
   }
 }
-
-
-
-
 
 // ==================== DELETE ====================
 export async function DELETE(req: NextRequest) {
   const { searchParams } = new URL(req.url);
   const model = searchParams.get("model");
   const id = parseId(searchParams.get("id"), model || "");
+  const session = await auth();
+  const role = (session?.user as any)?.role || "visitor";
 
-  if (!model || !modelMap[model]) return NextResponse.json({ error: "Invalid model" }, { status: 400 });
-  if (!id) return NextResponse.json({ error: "Missing id" }, { status: 400 });
+  if (role !== "admin" && role !== "staff") {
+    return NextResponse.json({ error: "Unauthorized" }, { status: 403 });
+  }
 
-  const prismaModel = modelMap[model];
+  if (!model || !modelMap[model] || !id) return NextResponse.json({ error: "Invalid request" }, { status: 400 });
 
   try {
-    await prismaModel.delete({ where: { id } });
+    await modelMap[model].delete({ where: { id } });
     return NextResponse.json({ success: true });
   } catch (error) {
-    console.error("Database DELETE error:", error);
-    return NextResponse.json({ error: "Failed to delete item" }, { status: 500 });
+    return NextResponse.json({ error: "Deletion failed" }, { status: 500 });
   }
 }
-
-
-
-
-
-
-// // ==================== POST ====================
-// export async function POST(req: NextRequest) {
-//   const { searchParams } = new URL(req.url);
-//   const model = searchParams.get("model");
-
-//   if (!model || !modelMap[model]) {
-//     return NextResponse.json({ error: "Invalid model" }, { status: 400 });
-//   }
-
-//   const prismaModel = modelMap[model];
-//   const formData = await req.formData();
-//   const body: any = {};
-
-//   // 1️⃣ Handle file uploads
-//   const files = formData.getAll("file") as File[];
-//   if (files?.length > 0) {
-//     const urls: string[] = [];
-//     for (const file of files) {
-//       const uploadRes = await handleUpload(file);
-//       urls.push(uploadRes.url);
-//     }
-
-//     if (model === "product") body.images = urls;
-//     if (model === "user") body.avatarUrl = urls[0]; // single avatar
-//     if (model === "category") body.image = urls[0]; // single category image
-//   }
-
-//   // 2️⃣ Merge other FormData values
-//   formData.forEach((value, key) => {
-//     if (key === "file") return; // skip files
-//     body[key] = value;
-//   });
-
-//   try {
-//     // 3️⃣ Model-specific logic
-
-//     // --- CART: calculate total ---
-//     if (model === "cart") {
-//       const { userId, products, status } = body;
-
-//       const productIds = products.map((p: any) => p.productId);
-//       const dbProducts = await prisma.product.findMany({
-//         where: { id: { in: productIds } },
-//         select: { id: true, price: true },
-//       });
-
-//       let total = 0;
-//       products.forEach((item: any) => {
-//         const found = dbProducts.find((p) => p.id === item.productId);
-//         if (found) total += found.price * item.quantity;
-//       });
-
-//       const newCart = await prisma.cart.create({
-//         data: {
-//           userId,
-//           total,
-//           status: status || "pending",
-//           products: { create: products.map((p: any) => ({ productId: p.productId, quantity: p.quantity })) },
-//         },
-//         include: { products: true },
-//       });
-
-//       return NextResponse.json(newCart);
-//     }
-
-//     // --- USER: hash password ---
-//     if (model === "user" && body.password) {
-//       const salt = await bcrypt.genSalt();
-//       body.password = await bcrypt.hash(body.password, salt);
-//     }
-
-//     // --- Ensure numeric fields ---
-//     if (body.price) body.price = parseFloat(body.price);
-
-//     // 4️⃣ Create new item
-//     const newItem = await prismaModel.create({ data: body });
-//     return NextResponse.json(newItem);
-//   } catch (error) {
-//     console.error("Database POST error:", error);
-//     return NextResponse.json({ error: "Failed to create item" }, { status: 500 });
-//   }
-// }
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-// "use server";
-
-// import { PrismaClient } from '@prisma/client';
-// import { NextRequest } from 'next/server';
-// import bcrypt from 'bcrypt';
-
-// const prisma = new PrismaClient();
-
-// // Centralized model mapping
-// const modelMap: Record<string, any> = {
-//   cart: prisma.cart,
-//   cartItem: prisma.cartItem,
-//   category: prisma.category,
-//   coupon: prisma.coupon,
-//   featuredProduct: prisma.featuredProduct,
-//   notification: prisma.notification,
-//   payment: prisma.payment,
-//   post: prisma.post,
-//   product: prisma.product,
-//   refund: prisma.refund,
-//   review: prisma.review,
-//   shippingAddress: prisma.shippingAddress,
-//   stock: prisma.stock,
-//   user: prisma.user,
-// };
-
-// // Utility: parse JSON safely
-// async function parseJson(req: NextRequest) {
-//   try {
-//     const json = await req.json();
-//     return typeof json === "object" && json !== null ? json : {};
-//   } catch (err) {
-//     return {};
-//   }
-// }
-
-
-// // Utility: convert id to proper type based on model
-// function parseId(id: string | null, model: string) {
-//   if (!id) return null;
-//   // Assuming `user` uses string id (UUID) and others are numbers
-//   return model === 'user' ? id : Number(id);
-// }
-
-// // ==================== GET ====================
-// export async function GET(req: NextRequest) {
-//   const { searchParams } = new URL(req.url);
-//   const model = searchParams.get('model') || null;
-//   const id = parseId(searchParams.get('id'), model || '');
-
-//   if (!model || !modelMap[model]) {
-//     return new Response(JSON.stringify({ message: "Invalid model" }), {
-//       status: 400,
-//       headers: { 'Content-Type': 'application/json' },
-//     });
-//   }
-
-//   const prismaModel = modelMap[model];
-
-//   try {
-//     if (!id) {
-//       // Fetch all items
-//       if (model === 'featuredProduct') {
-//         const items = await prisma.featuredProduct.findMany({
-//           include: {
-//             product: {
-//               include: {
-//                 category: true,
-//                 stock: true,
-//                 reviews: true,
-//               },
-//             },
-//           },
-//         });
-//         return new Response(JSON.stringify(items), {
-//           status: 200,
-//           headers: { 'Content-Type': 'application/json' },
-//         });
-//       }
-
-//       if (model === 'review' || model === 'post') {
-//         const items = await prismaModel.findMany({
-//           include: {
-//             user: { select: { id: true, email: true, name: true, avatarUrl: true } },
-//           },
-//         });
-//         return new Response(JSON.stringify(items), { status: 200, headers: { 'Content-Type': 'application/json' } });
-//       } else {
-//         const items = await prismaModel.findMany();
-//         return new Response(JSON.stringify(items), { status: 200, headers: { 'Content-Type': 'application/json' } });
-//       }
-//     } else {
-//       // Fetch single item or related items
-//       if (model === 'review') {
-//         const items = await prismaModel.findMany({ where: { contentId: id } });
-//         return new Response(JSON.stringify(items), { status: 200, headers: { 'Content-Type': 'application/json' } });
-//       } else {
-//         const item = await prismaModel.findUnique({ where: { id } });
-//         if (!item) return new Response(JSON.stringify({ error: "Document not found" }), { status: 404, headers: { 'Content-Type': 'application/json' } });
-//         return new Response(JSON.stringify(item), { status: 200, headers: { 'Content-Type': 'application/json' } });
-//       }
-//     }
-//   } catch (error) {
-//     console.error('Database GET error:', error);
-//     return new Response(JSON.stringify({ error: 'Failed to fetch items' }), { status: 500, headers: { 'Content-Type': 'application/json' } });
-//   }
-// }
-
-// // ==================== POST ====================
-// export async function POST(req: NextRequest) {
-//   const { searchParams } = new URL(req.url);
-//   const model = searchParams.get("model");
-
-//   if (!model || !modelMap[model]) {
-//     return new Response(JSON.stringify({ message: "Invalid model" }), {
-//       status: 400,
-//       headers: { "Content-Type": "application/json" },
-//     });
-//   }
-
-//   const prismaModel = modelMap[model];
-//   const body = await parseJson(req);
-//   if (!body) return new Response("Invalid JSON", { status: 400 });
-
-//   try {
-//     const data = { ...body };
-//     console.log("Data to create :", data);
-
-//     // HANDLE CART CREATION (TOTAL IS NOW AUTO-CALCULATED)
-//     if (model === "cart") {
-//       const { userId, products, status } = data;
-
-//       // 1. Fetch product prices from DB
-//       const productIds = products.map((p) => p.productId);
-
-//       const dbProducts = await prisma.product.findMany({
-//         where: {
-//           id: { in: productIds },
-//         },
-//         select: { id: true, price: true },
-//       });
-
-//       // 2. Calculate total based on quantity × price
-//       let total = 0;
-
-//       products.forEach((item) => {
-//         const found = dbProducts.find((p) => p.id === item.productId);
-//         if (found) {
-//           total += found.price * item.quantity;
-//         }
-//       });
-
-//       // 3. Create cart with calculated total
-//       const newCart = await prisma.cart.create({
-//         data: {
-//           userId,
-//           total,          // ← backend-generated
-//           status: status || "pending",
-//           products: {
-//             create: products.map((p) => ({
-//               productId: p.productId,
-//               quantity: p.quantity,
-//             })),
-//           },
-//         },
-//         include: {
-//           products: true,
-//         },
-//       });
-
-//       return new Response(JSON.stringify(newCart), {
-//         status: 200,
-//         headers: { "Content-Type": "application/json" },
-//       });
-//     }
-
-
-
-//     // DEFAULT CREATE
-//     const newItem = await prismaModel.create({
-//       data,
-//     });
-
-//     return new Response(JSON.stringify(newItem), {
-//       status: 200,
-//       headers: { "Content-Type": "application/json" },
-//     });
-//   } catch (error) {
-//     console.error("Database POST error:", error);
-//     return new Response(JSON.stringify({ error: "Failed to create item" }), {
-//       status: 500,
-//       headers: { "Content-Type": "application/json" },
-//     });
-//   }
-// }
-
-
-// // ==================== PUT ====================
-// export async function PUT(req: NextRequest) {
-//   const { searchParams } = new URL(req.url);
-//   const model = searchParams.get('model') || null;
-
-//   if (!model || !modelMap[model]) {
-//     return new Response(JSON.stringify({ message: "Invalid model" }), {
-//       status: 400,
-//       headers: { 'Content-Type': 'application/json' },
-//     });
-//   }
-
-//   const prismaModel = modelMap[model];
-//   const body = await parseJson(req);
-//   if (!body) return new Response('Invalid JSON', { status: 400 });
-
-//   const id = parseId(body.id, model);
-//   if (!id) return new Response(JSON.stringify({ error: 'Missing id' }), { status: 400, headers: { 'Content-Type': 'application/json' } });
-
-//   try {
-//     const { id: _ignore, ...updatedData } = body;
-//     const updatedItem = await prismaModel.update({ where: { id }, data: updatedData });
-//     return new Response(JSON.stringify(updatedItem), { status: 200, headers: { 'Content-Type': 'application/json' } });
-//   } catch (error) {
-//     console.error('Database PUT error:', error);
-//     return new Response(JSON.stringify({ error: 'Failed to update item' }), { status: 500, headers: { 'Content-Type': 'application/json' } });
-//   }
-// }
-
-// // ==================== DELETE ====================
-// export async function DELETE(req: NextRequest) {
-//   const { searchParams } = new URL(req.url);
-//   const model = searchParams.get('model') || null;
-//   const id = parseId(searchParams.get('id'), model || '');
-
-//   if (!model || !modelMap[model]) {
-//     return new Response(JSON.stringify({ message: "Invalid model" }), {
-//       status: 400,
-//       headers: { 'Content-Type': 'application/json' },
-//     });
-//   }
-//   if (!id) return new Response(JSON.stringify({ error: 'Missing id' }), { status: 400, headers: { 'Content-Type': 'application/json' } });
-
-//   const prismaModel = modelMap[model];
-
-//   try {
-//     await prismaModel.delete({ where: { id } });
-//     return new Response(JSON.stringify({ success: true }), { status: 200, headers: { 'Content-Type': 'application/json' } });
-//   } catch (error) {
-//     console.error('Database DELETE error:', error);
-//     return new Response(JSON.stringify({ error: 'Failed to delete item' }), { status: 500, headers: { 'Content-Type': 'application/json' } });
-//   }
-// }
 
 
 
@@ -4473,7 +4011,7 @@ import { motion } from "framer-motion"
 import { Button } from "@/components/ui/button"
 import { useParams } from "next/navigation"
 import { useEffect, useState } from "react"
-import Similar from "@/components/myComponents/subs/similar"
+import { ProductCard } from "@/components/myComponents/subs/productCard"
 import { GlobalSearch } from "@/components/myComponents/subs"
 import { useCart } from "@/hooks/use-cart"
 import { toast } from "sonner"
@@ -4481,7 +4019,9 @@ import { HeartPulse, Loader2, MessageCircle, ShoppingCart } from "lucide-react"
 import { useAppContext } from "@/hooks/useAppContext"
 import { getProductPrice } from "@/lib/stock-pricing"
 import { Badge } from "@/components/ui/badge"
-import { FileText, AlertCircle } from "lucide-react"
+import { FileText, AlertCircle, Star } from "lucide-react"
+import { ProductReviews } from "@/components/myComponents/subs/productReviews"
+import { PriceFeedback } from "@/components/myComponents/subs/priceFeedback"
 
 const Description = () => {
   const [product, setProduct] = useState<any>(null);
@@ -4630,25 +4170,16 @@ const Description = () => {
                 Speak to a Representative
               </Button>
             ) : (
-              <>
-                <Button size="lg" onClick={handleAddToCart} className="flex-1 gap-2 rounded-xl h-14 text-lg">
+                <Button size="lg" onClick={handleAddToCart} className="w-full gap-2 rounded-xl h-14 text-lg">
                   <ShoppingCart className="h-5 w-5" />
                   Add to Cart
                 </Button>
-                <Button 
-                  size="lg" 
-                  variant="outline" 
-                  onClick={() => window.open(whatsappOrderUrl, "_blank")}
-                  className="flex-1 gap-2 rounded-xl h-14 text-lg border-2"
-                >
-                  <MessageCircle className="h-5 w-5 text-green-500" />
-                  Order via WhatsApp
-                </Button>
-              </>
             )}
           </div>
+          
+          <PriceFeedback productId={product.id} productName={product.name} />
 
-          <div className="grid grid-cols-1 gap-4 rounded-2xl bg-muted/30 p-4 sm:grid-cols-2">
+          <div className="grid grid-cols-1 gap-4 mt-4 rounded-2xl bg-muted/30 p-4 sm:grid-cols-2">
             <div className="flex items-center gap-3">
               <HeartPulse className="h-5 w-5 text-primary" />
               <span className="text-sm font-medium">Authenticity Guaranteed</span>
@@ -4661,12 +4192,35 @@ const Description = () => {
         </div>
       </div>
 
+      {/* Review Section */}
+      <div className="mt-12 bg-muted/10 p-4 md:p-8 rounded-3xl border shadow-sm">
+         <ProductReviews productId={product.id} />
+      </div>
+
       {/* Similar Products */}
       <div className="mt-20">
         <div className="mb-8 border-b pb-4">
           <h2 className="text-2xl font-bold">Similar Products</h2>
         </div>
-        <Similar similar={similarProducts} />
+        <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+          {similarProducts.map((simProd) => (
+             <ProductCard
+               key={simProd.id}
+               className="w-full"
+               variant="default"
+               orientation="vertical"
+               product={{
+                 ...simProd,
+                 inStock: true,
+                 categoryName: simProd.category?.name || "General"
+               }}
+               onAddToCart={() => {
+                 addItem(simProd, 1);
+                 toast.success(`${simProd.name} added to cart`);
+               }}
+             />
+          ))}
+        </div>
       </div>
     </motion.section>
   );
@@ -4797,7 +4351,7 @@ const Store = () => {
           </Link>
         </div>
 
-        <div className="mb-10 max-w-2xl mx-auto">
+        <div className="mb-2 w-full p-1 max-w-2xl mx-auto">
           <GlobalSearch placeholder="Search more products in our store..." />
         </div>
         
@@ -7178,7 +6732,7 @@ export function CartClient({ className, cart }: CartProps) {
                           </button>
                         </div>
                         <p className="text-xs text-muted-foreground">
-                          {item.category}
+                          {item.category ? (typeof item.category === 'string' ? item.category : (item.category as any).name) : null}
                         </p>
                       </div>
                       <div className="mt-2 flex items-center justify-between">
@@ -7547,11 +7101,14 @@ export const ChatInterface = () => {
       const partnerMap = new Map<string, ChatPartner>();
       
       allMessages.forEach((msg: any) => {
-        const otherUser = msg.senderId === user.id ? msg.receiver : msg.sender;
-        if (!otherUser || otherUser.id === user.id) return;
+        const senderIsAdmin = msg.sender?.role === "admin" || msg.sender?.role === "staff" || msg.sender?.role === "professional";
+        const receiverIsAdmin = msg.receiver?.role === "admin" || msg.receiver?.role === "staff" || msg.receiver?.role === "professional";
         
-        // We only want to list non-admin users for admins to chat with
-        // if (otherUser.role === 'admin') return;
+        let otherUser = null;
+        if (!senderIsAdmin) otherUser = msg.sender;
+        else if (!receiverIsAdmin) otherUser = msg.receiver;
+        
+        if (!otherUser) return;
 
         if (!partnerMap.has(otherUser.id) || new Date(msg.createdAt) > new Date(partnerMap.get(otherUser.id)!.lastMessageTime)) {
           partnerMap.set(otherUser.id, {
@@ -7578,10 +7135,13 @@ export const ChatInterface = () => {
     if (!selectedPartnerId || !user.id) return;
     try {
       const res = await axios.get(`/api/dbhandler?model=message`);
-      const filtered = res.data.filter((msg: any) => 
-        (msg.senderId === user.id && msg.receiverId === selectedPartnerId) ||
-        (msg.senderId === selectedPartnerId && msg.receiverId === user.id)
-      ).sort((a: any, b: any) => new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime());
+      const filtered = res.data.filter((msg: any) => {
+        if (isAdmin) {
+          return msg.senderId === selectedPartnerId || msg.receiverId === selectedPartnerId;
+        } else {
+          return msg.senderId === user.id || msg.receiverId === user.id;
+        }
+      }).sort((a: any, b: any) => new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime());
       
       setMessages(filtered);
     } catch (error) {
@@ -7629,7 +7189,7 @@ export const ChatInterface = () => {
     }
   };
 
-  const selectedPartner = partners.find(p => p.id === selectedPartnerId) || (adminUser && selectedPartnerId === adminUser.id ? { name: adminUser.name, avatarUrl: adminUser.avatarUrl } : null);
+  const selectedPartner = partners.find(p => p.id === selectedPartnerId) || (adminUser && selectedPartnerId === adminUser.id ? { name: "Pharmacist", avatarUrl: "/logo.png" } : null);
 
   if (user.email === "nil") {
     return (
@@ -7724,7 +7284,10 @@ export const ChatInterface = () => {
                   </div>
                 ) : (
                   messages.map((msg, idx) => {
-                    const isOwn = msg.senderId === user.id;
+                    const isOwn = isAdmin 
+                      ? (msg.sender?.role === "admin" || msg.sender?.role === "staff" || msg.sender?.role === "professional") 
+                      : msg.senderId === user.id;
+
                     const prevMsg = messages[idx - 1];
                     const showTime = !prevMsg || new Date(msg.createdAt).getTime() - new Date(prevMsg.createdAt).getTime() > 300000; // 5 min gap
 
@@ -7835,8 +7398,8 @@ const CommonMedications = () => {
   const fetchData = useCallback(async () => {
     try {
       const [prodRes, featRes] = await Promise.all([
-        fetch("/api/dbhandler?model=product&include=category"),
-        fetch("/api/dbhandler?model=featuredProduct"),
+        fetch("/api/dbhandler?model=product&include=category&minimal=true&limit=15"),
+        fetch("/api/dbhandler?model=featuredProduct&minimal=true&limit=15"),
       ]);
       const prodData = await prodRes.json();
       const featData = await featRes.json();
@@ -7948,7 +7511,7 @@ const CommonMedications = () => {
         <Carousel
           opts={{ align: "start", loop: true }}
           plugins={[plugin.current]}
-          className="w-full relative px-4"
+          className="w-full relative px-2 md:px-4"
         >
           <CarouselContent className="-ml-4">
             {pharmacyProducts.map((product) => {
@@ -7956,7 +7519,7 @@ const CommonMedications = () => {
               return (
                 <CarouselItem
                   key={product.id}
-                  className="pl-4 basis-full sm:basis-1/2 md:basis-1/3 lg:basis-1/4 xl:basis-1/5 pt-2 pb-2"
+                  className="pl-4 basis-1/2 md:basis-1/3 lg:basis-1/4 xl:basis-1/5 pt-2 pb-2"
                 >
                   <div className="relative group/card">
                     <ProductCard
@@ -8847,8 +8410,8 @@ const FeaturedProducts = () => {
 
   async function fetchData() {
     try {
-      // 1. Fetch Admin Featured Products
-      const featRes = await fetch("/api/dbhandler?model=featuredProduct");
+      // 1. Fetch Admin Featured Products (Minimal payload)
+      const featRes = await fetch("/api/dbhandler?model=featuredProduct&minimal=true&limit=15");
       const featData = await featRes.json();
       setProducts(featData.map((item: any) => ({
         ...item.product,
@@ -8857,28 +8420,33 @@ const FeaturedProducts = () => {
 
       // If no featured products, fetch latest 10 products as fallback
       if (featData.length === 0) {
-        const fallbackRes = await fetch("/api/dbhandler?model=product");
+        const fallbackRes = await fetch("/api/dbhandler?model=product&minimal=true&limit=10");
         const fallbackData = await fallbackRes.json();
-        setProducts(fallbackData.slice(-10).map((p: any) => ({
+        setProducts(fallbackData.map((p: any) => ({
             ...p,
             categoryName: p.category?.name || "New Arrival"
         })));
       }
 
-      // 2. Fetch All Products for Subsets
-      const prodRes = await fetch("/api/dbhandler?model=product&include=category");
-      const prodData = await prodRes.json();
+      // 2. Fetch Subset Sections via Server-side filtering
+      // Fetch Brands (Server-side filtered)
+      const brandsPromises = ["emzor", "vitabiotics"].map(brand => 
+        fetch(`/api/dbhandler?model=product&brand=${brand}&minimal=true&limit=8`).then(res => res.json())
+      );
       
-      // Top Brands (e.g., Emzor, Vitabiotics)
-      const brands = prodData.filter((p: any) => 
-        ["emzor", "vitabiotics", "glaxo", "nivea"].some(b => 
-          p.brand?.toLowerCase().includes(b) || p.name.toLowerCase().includes(b)
-        )
-      ).slice(0, 15);
-      setBrandProducts(brands);
+      // Fetch Oral Care (Search by name on server)
+      const oralCarePromise = fetch("/api/dbhandler?model=product&include=category&minimal=true&limit=10").then(res => res.json());
 
-      // Category Subset: Dental/Oral Care
-      const oral = prodData.filter((p: any) => 
+      const [brandResults, allProdData] = await Promise.all([
+        Promise.all(brandsPromises),
+        oralCarePromise
+      ]);
+
+      setBrandProducts(brandResults.flat());
+      
+      // Still need some client-side filtering for complex logic if API isn't built for it, 
+      // but now it's on a much smaller dataset (limit=50 default from API)
+      const oral = allProdData.filter((p: any) => 
          p.category?.name?.toLowerCase().includes("dental") || 
          p.category?.name?.toLowerCase().includes("oral") ||
          p.name.toLowerCase().includes("toothpaste")
@@ -8924,7 +8492,7 @@ const FeaturedProducts = () => {
       >
         <CarouselContent className="-ml-4">
           {items.map((product) => (
-            <CarouselItem key={product.id} className="pl-4 basis-full sm:basis-1/2 md:basis-1/3 lg:basis-1/5 pt-2 pb-2">
+            <CarouselItem key={product.id} className="pl-4 basis-1/2 md:basis-1/3 lg:basis-1/5 pt-2 pb-2">
               <ProductCard
                 className="w-full"
                 variant="default"
@@ -10045,7 +9613,6 @@ LOCATION: components\myComponents\subs\hero.tsx
 import { useIsAdmin } from "@/hooks/useIsAdmin";
 import { Button } from "@/components/ui/button";
 import { Phone, MessageCircle, Clock, ShieldCheck, HeartPulse, Search } from "lucide-react";
-import Image from "next/image";
 import Link from "next/link";
 import React, { useState, useEffect, useRef } from "react";
 import axios from "axios";
@@ -10058,8 +9625,17 @@ import {
 import landingimg from '@/public/pharmacist.png'
 import { RiseAndFadeText } from "./textctrl";
 import { GlobalSearch } from "./index";
+import { useAppContext } from "@/hooks/useAppContext";
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogTrigger,
+} from "@/components/ui/dialog";
 
 const Hero = () => {
+  const { user } = useAppContext();
   const thingsToDo = [
     "Order authentic medications online",
     "Consult with expert pharmacists",
@@ -10120,10 +9696,35 @@ const Hero = () => {
                   Shop All Meds
                 </Button>
               </Link>
-              <Button size="lg" variant="outline" className="h-14 px-8 rounded-xl text-lg gap-2 border-2">
-                <MessageCircle className="w-5 h-5 text-green-500" />
-                WhatsApp Order
-              </Button>
+              {user?.email !== "nil" ? (
+                <Link href="/contact">
+                  <Button size="lg" variant="outline" className="h-14 px-8 rounded-xl text-lg gap-2 border-2">
+                    <MessageCircle className="w-5 h-5 text-primary" />
+                    Speak to the Pharmacist
+                  </Button>
+                </Link>
+              ) : (
+                <Dialog>
+                  <DialogTrigger asChild>
+                    <Button size="lg" variant="outline" className="h-14 px-8 rounded-xl text-lg gap-2 border-2">
+                      <MessageCircle className="w-5 h-5 text-primary" />
+                      Speak to the Pharmacist
+                    </Button>
+                  </DialogTrigger>
+                  <DialogContent className="sm:max-w-md rounded-2xl">
+                    <DialogHeader>
+                      <DialogTitle className="text-2xl font-bold">Login Required</DialogTitle>
+                    </DialogHeader>
+                    <div className="flex flex-col items-center justify-center py-6 text-center">
+                       <MessageCircle className="h-16 w-16 text-primary mb-4 opacity-50" />
+                       <p className="text-muted-foreground mb-6">You need to log in to chat directly with our expert pharmacists.</p>
+                       <Link href="/account" className="w-full">
+                         <Button size="lg" className="rounded-xl w-full text-lg h-14">Sign In to Continue</Button>
+                       </Link>
+                    </div>
+                  </DialogContent>
+                </Dialog>
+              )}
             </div>
 
             {/* Value Badges */}
@@ -10142,12 +9743,10 @@ const Hero = () => {
           {/* Right Column: Visuals */}
           <div className="relative hidden lg:block animate-in fade-in slide-in-from-right duration-700">
             <div className="relative aspect-square w-full max-w-lg mx-auto overflow-hidden rounded-3xl border-8 border-background shadow-2xl rotate-2 hover:rotate-0 transition-transform duration-500">
-               <Image
-                src={landingimg}
+               <img
+                src={landingimg.src}
                 alt="Expert Pharmacist"
-                fill
-                className="object-cover scale-110 hover:scale-100 transition-transform duration-700"
-                priority
+                className="w-full h-full object-cover scale-110 hover:scale-100 transition-transform duration-700"
               />
             </div>
             
@@ -11263,6 +10862,120 @@ export default Posts;
 
 
 ================================================================================
+LOCATION: components\myComponents\subs\priceFeedback.tsx
+================================================================================
+
+"use client";
+
+import { useState } from "react";
+import axios from "axios";
+import { toast } from "sonner";
+import { Button } from "@/components/ui/button";
+import { Textarea } from "@/components/ui/textarea";
+import { useAppContext } from "@/hooks/useAppContext";
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogTrigger,
+} from "@/components/ui/dialog";
+import { MessageSquareWarning } from "lucide-react";
+
+export function PriceFeedback({ productId, productName }: { productId: string, productName: string }) {
+  const [open, setOpen] = useState(false);
+  const [feedback, setFeedback] = useState("");
+  const [comment, setComment] = useState("");
+  const [submitting, setSubmitting] = useState(false);
+  const { user } = useAppContext();
+
+  const handleSubmit = async () => {
+    if (!feedback) {
+      toast.error("Please select a feedback option");
+      return;
+    }
+    
+    if (!user || user.email === "nil") {
+      toast.error("Please sign in to provide feedback");
+      return;
+    }
+
+    setSubmitting(true);
+    try {
+      await axios.post("/api/dbhandler?model=priceFeedback", {
+        userId: user.id,
+        productId,
+        feedback,
+        comment,
+      });
+      toast.success("Feedback submitted successfully. Thank you!");
+      setOpen(false);
+      setFeedback("");
+      setComment("");
+    } catch (error) {
+      toast.error("Failed to submit feedback");
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
+  return (
+    <Dialog open={open} onOpenChange={setOpen}>
+      <DialogTrigger asChild>
+        <Button variant="outline" className="w-full gap-2 mt-6 bg-accent/10 border-accent/20 text-accent hover:bg-accent hover:text-white transition-all">
+          <MessageSquareWarning className="h-4 w-4" />
+          Give Price Feedback
+        </Button>
+      </DialogTrigger>
+      <DialogContent className="max-w-md p-6">
+        <DialogHeader>
+          <DialogTitle className="text-xl">Price Feedback for {productName}</DialogTitle>
+        </DialogHeader>
+        
+        <div className="space-y-4 py-4">
+          <p className="text-sm text-muted-foreground">
+            What do you think about the pricing of this product?
+          </p>
+          
+          <div className="grid grid-cols-2 gap-3">
+            {["Too Expensive", "Slightly Expensive", "Fair Pricing", "Too Cheap"].map((opt) => (
+              <Button 
+                key={opt}
+                variant={feedback === opt ? "default" : "outline"}
+                className={feedback === opt ? "bg-primary text-white" : ""}
+                onClick={() => setFeedback(opt)}
+              >
+                {opt}
+              </Button>
+            ))}
+          </div>
+
+          <div className="mt-4">
+            <label className="text-sm font-medium mb-1 block">Additional Comments (Optional)</label>
+            <Textarea 
+              placeholder="Tell us more about your pricing experience..."
+              value={comment}
+              onChange={(e) => setComment(e.target.value)}
+              className="resize-none"
+              rows={3}
+            />
+          </div>
+        </div>
+
+        <div className="flex justify-end gap-3 w-full">
+          <Button variant="ghost" onClick={() => setOpen(false)}>Cancel</Button>
+          <Button onClick={handleSubmit} disabled={submitting}>
+            {submitting ? "Submitting..." : "Submit Feedback"}
+          </Button>
+        </div>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
+
+
+================================================================================
 LOCATION: components\myComponents\subs\productCard.tsx
 ================================================================================
 
@@ -11279,6 +10992,7 @@ import { getProductPrice, isProductInStock } from "@/lib/stock-pricing";
 import Link from "next/link";
 import * as React from "react";
 import { MessageCircle, ShoppingCart, Heart, Star, Edit3, Trash2, Eye, FileText } from "lucide-react";
+import { PriceFeedback } from "@/components/myComponents/subs/priceFeedback";
 import { useAppContext } from "@/hooks/useAppContext";
 import { useIsAdmin } from "@/hooks/useIsAdmin";
 import {
@@ -11381,12 +11095,14 @@ export function ProductCard({
 
   // Rating Logic
   const ratingValue = React.useMemo(() => {
-    if (typeof product.rating === 'number') return product.rating;
+    if (typeof product.rating === 'number' && product.rating > 0) return product.rating;
     if (Array.isArray(product.reviews) && product.reviews.length > 0) {
       const total = product.reviews.reduce((acc: number, r: any) => acc + (r.rating || 0), 0);
       return total / product.reviews.length;
     }
-    return 0;
+    // If no reviews data is available (e.g. minimal fetch), 
+    // we don't assume 0 unless there's an explicit rating field
+    return product.averageRating || 0; 
   }, [product]);
 
   const hasDiscount = showDiscount && (product.discount ?? 0) > 0;
@@ -11477,6 +11193,11 @@ export function ProductCard({
                      </div>
                  )}
               </div>
+
+              {/* Price Feedback Button */}
+              <div className="mt-8 border-t pt-4">
+                <PriceFeedback productId={product.id} productName={product.name} />
+              </div>
             </SheetContent>
           </Sheet>
       </div>
@@ -11538,11 +11259,11 @@ export function ProductCard({
           >
             <img
               alt={product?.name || "Product"}
-              className={cn(
-                "object-cover w-full transition-transform duration-300 ease-in-out",
-                isHovered ? "scale-100" : "scale-110"
-              )}
               src={image}
+              className={cn(
+                "object-cover w-full h-full transition-transform duration-300 ease-in-out",
+                isHovered ? "scale-105" : "scale-100"
+              )}
             />
 
             {/* Category badge moved to bottom-left */}
@@ -11704,6 +11425,160 @@ export function ProductCard({
           </div>
         </Card>
       </Link>
+    </div>
+  );
+}
+
+
+
+================================================================================
+LOCATION: components\myComponents\subs\productReviews.tsx
+================================================================================
+
+"use client";
+
+import { useState, useEffect } from "react";
+import axios from "axios";
+import { toast } from "sonner";
+import { Button } from "@/components/ui/button";
+import { Textarea } from "@/components/ui/textarea";
+import { Star, UserCircle2 } from "lucide-react";
+import { useAppContext } from "@/hooks/useAppContext";
+
+export function ProductReviews({ productId }: { productId: string }) {
+  const [reviews, setReviews] = useState<any[]>([]);
+  const [rating, setRating] = useState(0);
+  const [hoverRating, setHoverRating] = useState(0);
+  const [comment, setComment] = useState("");
+  const [submitting, setSubmitting] = useState(false);
+  const { user } = useAppContext();
+
+  useEffect(() => {
+    fetchReviews();
+  }, [productId]);
+
+  const fetchReviews = async () => {
+    try {
+      // Instead of writing a custom review query, just fetch the product with reviews included
+      // But the dbhandler doesn't easily paginate nested reviews. Let's just fetch full product for now.
+      const res = await axios.get(`/api/dbhandler?model=product&id=${productId}`);
+      if (res.data?.reviews) {
+        setReviews(res.data.reviews);
+      }
+    } catch (error) {
+      console.error("Failed to load reviews");
+    }
+  };
+
+  const handleReviewSubmit = async () => {
+    if (!rating) {
+      toast.error("Please provide a star rating");
+      return;
+    }
+    
+    if (!user || user.email === "nil") {
+      toast.error("Please sign in to leave a review");
+      return;
+    }
+
+    setSubmitting(true);
+    try {
+      await axios.post("/api/dbhandler?model=review", {
+        userId: user.id,
+        productId,
+        rating,
+        comment,
+      });
+      toast.success("Review submitted successfully");
+      setRating(0);
+      setHoverRating(0);
+      setComment("");
+      fetchReviews();
+    } catch (error) {
+      toast.error("Failed to submit review");
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
+  return (
+    <div className="space-y-8">
+      {/* Review Submission Form */}
+      <div className="bg-card border rounded-2xl p-6 shadow-sm">
+        <h4 className="font-bold text-lg mb-4">Write a Review</h4>
+        
+        <div className="flex gap-2 mb-4">
+          {[1, 2, 3, 4, 5].map((star) => (
+            <Star
+              key={star}
+              className={`h-8 w-8 cursor-pointer transition-colors ${
+                star <= (hoverRating || rating)
+                  ? "fill-yellow-400 text-yellow-400"
+                  : "text-muted-foreground stroke-muted"
+              }`}
+              onMouseEnter={() => setHoverRating(star)}
+              onMouseLeave={() => setHoverRating(0)}
+              onClick={() => setRating(star)}
+            />
+          ))}
+        </div>
+
+        <Textarea 
+          placeholder="Share your thoughts about this product..."
+          value={comment}
+          onChange={(e) => setComment(e.target.value)}
+          rows={4}
+          className="resize-none mb-4"
+        />
+
+        <Button onClick={handleReviewSubmit} disabled={submitting} className="w-full sm:w-auto">
+          {submitting ? "Posting..." : "Post Review"}
+        </Button>
+      </div>
+
+      {/* Review List */}
+      <div className="space-y-4">
+        <h4 className="font-bold text-lg border-b pb-2">Customer Feedback ({reviews.length})</h4>
+        
+        {reviews.length === 0 ? (
+          <div className="text-center py-8 text-muted-foreground italic bg-muted/20 rounded-xl">
+            No reviews yet. Be the first to share your experience!
+          </div>
+        ) : (
+          <div className="space-y-4">
+            {reviews.map((r, i) => (
+              <div key={i} className="flex gap-4 p-4 rounded-xl border bg-card">
+                <div className="flex-shrink-0 mt-1">
+                  {r.user?.avatarUrl ? (
+                    <img src={r.user.avatarUrl} alt="Avatar" className="w-10 h-10 rounded-full object-cover" />
+                  ) : (
+                    <UserCircle2 className="w-10 h-10 text-muted-foreground" />
+                  )}
+                </div>
+                <div className="flex flex-col flex-1">
+                   <div className="flex justify-between items-start">
+                      <p className="font-bold text-sm">{r.user?.name || "Anonymous User"}</p>
+                      <span className="text-xs text-muted-foreground">
+                        {new Date(r.createdAt).toLocaleDateString()}
+                      </span>
+                   </div>
+                   <div className="flex gap-1 my-1">
+                      {[1, 2, 3, 4, 5].map((star) => (
+                        <Star
+                          key={star}
+                          className={`h-3 w-3 ${
+                            star <= r.rating ? "fill-yellow-400 text-yellow-400" : "text-muted stroke-muted"
+                          }`}
+                        />
+                      ))}
+                   </div>
+                   <p className="text-sm mt-2 text-foreground/90">{r.comment}</p>
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
     </div>
   );
 }
@@ -21570,6 +21445,7 @@ import Link from "next/link";
 import Nav from "./nav";
 import { Button, buttonVariants } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { Dialog, DialogContent, DialogTrigger, DialogTitle } from "@/components/ui/dialog";
 import Sidenav from "./sidenav";
 import { ModeToggle } from "@/components/ui/mode-toggle";
 import { Suspense } from "react";
@@ -21624,12 +21500,20 @@ const Navbar = (): JSX.Element => {
           </Link>
 
           <div className="flex items-center gap-2 lg:hidden">
-            <Button
-              variant={"outline"}
-              className="relative flex justify-center items-center rounded-full w-[35px] h-[35px] overflow-clip text-accent text-xl"
-            >
-              <AiOutlineSearch />
-            </Button>
+            <Dialog>
+              <DialogTrigger asChild>
+                <Button
+                  variant={"outline"}
+                  className="relative flex justify-center items-center rounded-full w-[35px] h-[35px] overflow-clip text-accent text-xl"
+                >
+                  <AiOutlineSearch />
+                </Button>
+              </DialogTrigger>
+              <DialogContent className="p-0 border-none bg-transparent shadow-none w-11/12 overflow-visible translate-y-[-30vh]">
+                <DialogTitle className="sr-only">Search</DialogTitle>
+                <GlobalSearch placeholder="Search medications..." className="w-full" />
+              </DialogContent>
+            </Dialog>
             <Cart />
           </div>
 
@@ -21677,6 +21561,7 @@ import { useEffect, useState } from "react"
 import axios from "axios"
 import { ChevronRight, LayoutGrid, Stethoscope, Tag, ShoppingCart, MessageSquare } from "lucide-react"
 import { Cart } from "../myComponents/subs/cart"
+import { Button } from "../ui/button";
 
 const Sidenav = () => {
     const pathname = usePathname();
@@ -21718,9 +21603,9 @@ const Sidenav = () => {
                     <SheetTitle className="text-left text-2xl font-black text-primary tracking-tighter italic">Health <span className="text-accent">Clique</span></SheetTitle>
                 </SheetHeader>
                 
-                <div className="flex-1 overflow-y-auto px-6 py-4 space-y-8 scrollbar-hide">
+                <div className="flex-1 overflow-y-auto px-2 md:px-4 py-2 space-y-3 scrollbar-hide">
                     {/* Cart & Talk Action */}
-                    <div className="flex gap-4">
+                    <div className="flex gap-2 md:gap-4">
                         <Cart className="flex-1" />
                         <Link 
                             href="/contact" 
@@ -21768,7 +21653,7 @@ const Sidenav = () => {
                         <div className="space-y-4">
                             <h3 className="text-xs font-black uppercase tracking-widest text-muted-foreground/60 flex items-center gap-2 px-2">
                                 <LayoutGrid className="w-4 h-4" />
-                                Department
+                                Cartegories
                             </h3>
                             <div className="grid grid-cols-1 gap-1">
                                 {displayedCategories.map((category) => (
@@ -23777,25 +23662,18 @@ LOCATION: next.config.ts
 import type { NextConfig } from "next";
 
 const nextConfig: NextConfig = {
-  /* config options here */
-  // webpack5: false,
-
-  // serverExternalPackages: ["mongoose"],
-
-  // experimental: {
-  //   // appDir: true,
-  //   esmExternals: "loose", // <-- add this
-  //   serverComponentsExternalPackages: ["mongoose"] // <-- and this
-  // },
-
-  // and the following to enable top-level await support for Webpack
-  // webpack: (config) => {
-  //   config.experiments = {
-  //     ...config.experiments,
-  //     topLevelAwait: true
-  //   };
-  //   return config;
-  // },
+  images: {
+    remotePatterns: [
+      {
+        protocol: "https",
+        hostname: "res.cloudinary.com",
+      },
+      {
+         protocol: "https",
+         hostname: "images.unsplash.com",
+      }
+    ],
+  },
 };
 
 export default nextConfig;
@@ -27256,6 +27134,7 @@ model User {
   cart               Cart[]
   //orders   Order[]
   reviews            Review[]
+  priceFeedbacks     PriceFeedback[]
   addresses          ShippingAddress[]
   post               Post[]
   notification       Notification[]
@@ -27319,6 +27198,7 @@ model Product {
   stock                    Stock[] //@relation(fields: [stockId], references: [id])
   //stockId  String?   @db.ObjectId
   reviews                  Review[]
+  priceFeedbacks           PriceFeedback[]
   cartItems                CartItem[]
   Featured                 FeaturedProduct?
   images                   String[]
@@ -27434,6 +27314,18 @@ model Review {
   reply      Boolean  @default(false)
   createdAt  DateTime @default(now())
   updatedAt  DateTime @updatedAt
+}
+
+model PriceFeedback {
+  id        String   @id @default(auto()) @map("_id") @db.ObjectId
+  user      User     @relation(fields: [userId], references: [id])
+  userId    String   @db.ObjectId
+  product   Product  @relation(fields: [productId], references: [id])
+  productId String   @db.ObjectId
+  feedback  String // e.g. "Too Expensive", "Too Cheap"
+  comment   String?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 }
 
 model Wishlist {
@@ -33550,5 +33442,5 @@ export const normalizeDateTime = (dateTime?: string): string => {
 
 
 ================================================================================
-TOTAL FILES CONSOLIDATED: 300
+TOTAL FILES CONSOLIDATED: 302
 ================================================================================
