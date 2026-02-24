@@ -2,7 +2,9 @@
 
 import React, { useEffect, useState } from "react";
 import { useAppContext } from "@/hooks/useAppContext";
-import { Plus, Pencil, Trash2, Hash } from "lucide-react";
+import Link from "next/link";
+import { ScrollArea } from "@/components/ui/scroll-area";
+import { Plus, Pencil, Trash2, Hash, ArrowUpDown, Search } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import {
   Dialog,
@@ -32,6 +34,10 @@ const PartnerBrands = () => {
   const [isDialogOpen, setIsDialogOpen] = useState(false);
   const [editingBrand, setEditingBrand] = useState<Brand | null>(null);
   const [formData, setFormData] = useState({ name: "", order: 0 });
+
+  const [isBulkOrderOpen, setIsBulkOrderOpen] = useState(false);
+  const [bulkBrands, setBulkBrands] = useState<Brand[]>([]);
+  const [bulkSearch, setBulkSearch] = useState("");
 
   const fetchBrands = async () => {
     try {
@@ -106,6 +112,45 @@ const PartnerBrands = () => {
     setIsDialogOpen(true);
   };
 
+  const handleBulkUpdate = async () => {
+    try {
+      const res = await fetch("/api/dbhandler?model=brand", {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(bulkBrands),
+      });
+
+      if (res.ok) {
+        toast.success("All rankings updated");
+        setIsBulkOrderOpen(false);
+        fetchBrands();
+      } else {
+        toast.error("Failed to update rankings");
+      }
+    } catch (error) {
+      toast.error("Something went wrong");
+    }
+  };
+
+  const swapOrder = (brandId: string, newOrder: number) => {
+    if (isNaN(newOrder)) return;
+    setBulkBrands(prev => {
+      const currentBrand = prev.find(b => b.id === brandId);
+      if (!currentBrand) return prev;
+      
+      const oldOrder = currentBrand.order;
+      const brandToSwap = prev.find(b => b.order === newOrder);
+      
+      const updated = prev.map(b => {
+        if (b.id === brandId) return { ...b, order: newOrder };
+        if (brandToSwap && b.id === brandToSwap.id) return { ...b, order: oldOrder };
+        return b;
+      });
+      
+      return updated.sort((a,b) => (a.order - b.order) || a.name.localeCompare(b.name));
+    });
+  };
+
   const [showAll, setShowAll] = useState(false);
 
   if (loading) return null;
@@ -122,7 +167,62 @@ const PartnerBrands = () => {
         </div>
 
         {isAdmin && (
-          <div className="flex justify-end mb-8">
+          <div className="flex justify-end mb-8 gap-4">
+            <Dialog open={isBulkOrderOpen} onOpenChange={(open) => {
+              if (open) setBulkBrands([...brands]);
+              setIsBulkOrderOpen(open);
+            }}>
+              <DialogTrigger asChild>
+                <Button variant="outline" className="gap-2 rounded-full border-primary/20 hover:border-primary">
+                  <ArrowUpDown className="h-4 w-4" /> Bulk Reorder
+                </Button>
+              </DialogTrigger>
+              <DialogContent className="sm:max-w-[600px] h-[80vh] flex flex-col p-0 overflow-hidden">
+                <DialogHeader className="p-6 pb-2">
+                  <DialogTitle>Management: Global Brand Ranking</DialogTitle>
+                  <DialogDescription>
+                    Update brand display order. Changing an index will swap it with the existing brand at that position.
+                  </DialogDescription>
+                </DialogHeader>
+                
+                <div className="px-6 py-2 relative">
+                  <Search className="absolute left-9 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+                  <Input 
+                    placeholder="Search brands to reorder..." 
+                    className="pl-10"
+                    value={bulkSearch}
+                    onChange={(e) => setBulkSearch(e.target.value)}
+                  />
+                </div>
+
+                <ScrollArea className="flex-1 px-6">
+                  <div className="space-y-2 py-4">
+                    {bulkBrands
+                      .filter(b => b.name.toLowerCase().includes(bulkSearch.toLowerCase()))
+                      .map((brand) => (
+                      <div key={brand.id} className="flex items-center justify-between p-3 rounded-lg bg-muted/30 border border-transparent hover:border-primary/20 transition-all">
+                        <span className="font-semibold text-sm">{brand.name}</span>
+                        <div className="flex items-center gap-3">
+                          <Label className="text-xs text-muted-foreground">Order:</Label>
+                          <Input 
+                            type="number" 
+                            value={brand.order}
+                            onChange={(e) => swapOrder(brand.id, parseInt(e.target.value))}
+                            className="w-20 h-8 text-center font-bold"
+                          />
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </ScrollArea>
+
+                <DialogFooter className="p-6 pt-2 border-t mt-auto">
+                  <Button variant="ghost" onClick={() => setIsBulkOrderOpen(false)}>Cancel</Button>
+                  <Button onClick={handleBulkUpdate}>Save All Changes</Button>
+                </DialogFooter>
+              </DialogContent>
+            </Dialog>
+
             <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
               <DialogTrigger asChild>
                 <Button 
@@ -204,9 +304,12 @@ const PartnerBrands = () => {
                     </span>
                   </div>
                 )}
-                <div className="text-2xl font-black text-foreground/40 group-hover:text-primary transition-all duration-300 transform group-hover:scale-110 cursor-default">
+                <Link 
+                  href={`/store?brand=${encodeURIComponent(brand.name)}`}
+                  className="text-2xl font-black text-foreground/40 hover:text-primary transition-all duration-300 transform hover:scale-110 cursor-pointer text-center"
+                >
                   {brand.name}
-                </div>
+                </Link>
               </div>
             </div>
           ))}

@@ -298,6 +298,23 @@ export async function PUT(req: NextRequest) {
     body = await req.json();
   }
 
+  // Support for bulk brand reordering
+  if (model === "brand" && Array.isArray(body)) {
+    try {
+      const updates = body.map((item: any) => 
+        prisma.brand.update({
+          where: { id: item.id },
+          data: { order: parseInt(item.order) || 0 }
+        })
+      );
+      await prisma.$transaction(updates);
+      return NextResponse.json({ success: true, count: updates.length });
+    } catch (error) {
+      console.error("Bulk update error:", error);
+      return NextResponse.json({ error: "Bulk update failed" }, { status: 500 });
+    }
+  }
+
   const id = parseId(body.id, model);
   if (!id) return NextResponse.json({ error: "Missing ID" }, { status: 400 });
 

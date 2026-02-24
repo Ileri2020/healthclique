@@ -23,6 +23,7 @@ const Stocks = () => {
   const searchParams = useSearchParams();
   const categoryFilter = searchParams.get("category");
   const concernFilter = searchParams.get("concern"); // ✅ NEW: health concern filter
+  const brandFilter = searchParams.get("brand");
   
   const { addItem } = useCart();
   const [products, setProducts] = useState<any[]>([]);
@@ -56,6 +57,14 @@ const Stocks = () => {
         );
       }
       
+      // Filter by brand if ?brand= param is present
+      if (brandFilter) {
+        data = data.filter((p: any) => 
+           p.brand?.name?.toLowerCase() === brandFilter.toLowerCase() ||
+           p.brandId === brandFilter
+        );
+      }
+      
       setProducts(data);
       setCurrentPage(1); // Reset to first page on filter change
     } catch (err) {
@@ -63,7 +72,7 @@ const Stocks = () => {
     } finally {
       setLoading(false);
     }
-  }, [categoryFilter, concernFilter]);
+  }, [categoryFilter, concernFilter, brandFilter]);
 
   useEffect(() => {
     fetchProducts();
