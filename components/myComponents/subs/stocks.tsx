@@ -35,7 +35,7 @@ const Stocks = () => {
   const fetchProducts = useCallback(async () => {
     setLoading(true);
     try {
-      const res = await axios.get('/api/dbhandler?model=product&include=category');
+      const res = await axios.get('/api/dbhandler?model=product&include=category,brand,stock');
       let data = res.data;
       
       if (categoryFilter) {

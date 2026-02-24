@@ -15,6 +15,8 @@ import { FileText, AlertCircle, Star } from "lucide-react"
 import { ProductReviews } from "@/components/myComponents/subs/productReviews"
 import { PriceFeedback } from "@/components/myComponents/subs/priceFeedback"
 import Similar from "@/components/myComponents/subs/similar"
+import useEmblaCarousel from "embla-carousel-react";
+import Autoplay from "embla-carousel-autoplay";
 
 const Description = () => {
   const [product, setProduct] = useState<any>(null);
@@ -24,6 +26,8 @@ const Description = () => {
   const { id } = useParams();
   const { addItem } = useCart();
   const { user } = useAppContext();
+  
+  const [emblaRef] = useEmblaCarousel({ loop: true }, [Autoplay({ delay: 3000, stopOnInteraction: false })] as any);
 
   const regClass = product?.regulatoryClassification || "OTC";
   const isPrescription = regClass === "Prescription Medicine";
@@ -42,8 +46,11 @@ const Description = () => {
         const data = await res.json();
         setProduct(data);
 
-        // Fetch similar products (same category or just random for now)
-        const simRes = await fetch(`/api/dbhandler?model=product`);
+        // Fetch similar products (same category or brand)
+        let simUrl = `/api/dbhandler?model=product`;
+        if (data.categoryId) simUrl += `&categoryId=${data.categoryId}`;
+        
+        const simRes = await fetch(simUrl);
         const allProds = await simRes.json();
         const filtered = allProds
           .filter((p: any) => p.id !== id)
@@ -207,10 +214,40 @@ const Description = () => {
         </div>
       </div>
 
-      {/* Review Section */}
       <div className="mt-12 bg-muted/10 p-4 md:p-8 rounded-3xl border shadow-sm">
          <ProductReviews productId={product.id} />
       </div>
+
+      {/* Closely Similar Carousel */}
+      {similarProducts.length > 0 && (
+        <div className="mt-16 overflow-hidden" ref={emblaRef}>
+          <div className="mb-6 px-2">
+            <h2 className="text-xl font-bold text-primary flex items-center gap-2">
+              <HeartPulse className="h-5 w-5" /> Recommended for You
+            </h2>
+          </div>
+          <div className="flex gap-4 p-2">
+            {similarProducts.map((simProd) => (
+              <div key={`carousel-${simProd.id}`} className="flex-[0_0_auto] w-[260px]">
+                <ProductCard
+                  className="w-full"
+                  variant="compact"
+                  orientation="vertical"
+                  product={{
+                    ...simProd,
+                    inStock: true,
+                    categoryName: simProd.category?.name || "General"
+                  }}
+                  onAddToCart={() => {
+                    addItem(simProd, 1);
+                    toast.success(`${simProd.name} added to cart`);
+                  }}
+                />
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
 
       {/* Similar Products */}
       <div className="mt-20">
