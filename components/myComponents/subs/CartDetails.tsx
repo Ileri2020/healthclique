@@ -38,6 +38,7 @@ interface CartData {
     total: number;
     deliveryFee?: number;
     status: string;
+    pharmacistSummary?: string;
     createdAt: string;
     products: CartItem[];
     payment?: {
@@ -243,6 +244,50 @@ export function CartDetails({ cartId, onPaymentSuccess }: CartDetailsProps) {
                             <RefreshCcw className="mr-2 h-3 w-3" /> Make Current
                         </Button>
                     </div>
+
+                    {/* Pharmacist Summary Row */}
+                    {(cart?.pharmacistSummary || (user?.role === "admin" || user?.role === "staff")) && (
+                        <div className="mt-2 p-3 bg-primary/5 rounded-xl border border-primary/20 space-y-2">
+                            <div className="flex items-center justify-between">
+                                <label className="text-[10px] font-black uppercase tracking-widest text-primary flex items-center gap-2">
+                                    <div className="w-1.5 h-1.5 rounded-full bg-primary animate-pulse" />
+                                    Pharmacist's Medical Summary
+                                </label>
+                                {(user?.role === "admin" || user?.role === "staff") && (
+                                    <Badge variant="outline" className="text-[8px] h-4">Admin Access</Badge>
+                                )}
+                            </div>
+                            
+                            {(user?.role === "admin" || user?.role === "staff") ? (
+                                <div className="space-y-2">
+                                    <textarea 
+                                        className="w-full min-h-[80px] text-xs p-2 rounded-lg border bg-background focus:ring-1 focus:ring-primary outline-none transition-all"
+                                        placeholder="Enter dosage instructions, precautions, and medical notes..."
+                                        value={cart?.pharmacistSummary || ""}
+                                        onChange={(e) => setCart(prev => prev ? ({ ...prev, pharmacistSummary: e.target.value }) : null)}
+                                    />
+                                    <Button 
+                                        size="sm" 
+                                        className="h-7 text-[10px] font-bold w-full"
+                                        onClick={async () => {
+                                            try {
+                                                await axios.put(`/api/dbhandler?model=cart&id=${cart?.id}`, { pharmacistSummary: cart?.pharmacistSummary });
+                                                toast.success("Summary updated successfully");
+                                            } catch (err) {
+                                                toast.error("Failed to save summary");
+                                            }
+                                        }}
+                                    >
+                                        Save Summary
+                                    </Button>
+                                </div>
+                            ) : (
+                                <p className="text-xs font-medium text-foreground/80 leading-relaxed italic">
+                                    "{cart?.pharmacistSummary}"
+                                </p>
+                            )}
+                        </div>
+                    )}
                 </div>
             </CardHeader>
 

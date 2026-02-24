@@ -261,7 +261,7 @@ export async function POST(req: NextRequest) {
 
     // Parsing
     if (body.price) body.price = parseFloat(body.price);
-    ['requiresPrescription', 'scarce'].forEach(field => {
+    ['requiresPrescription', 'scarce', 'isRead'].forEach(field => {
        if (body[field] === "true") body[field] = true;
        if (body[field] === "false") body[field] = false;
     });
@@ -340,6 +340,9 @@ export async function PUT(req: NextRequest) {
 
   const { id: _, ...updatedData } = body;
   
+  if (updatedData.isRead === "true") updatedData.isRead = true;
+  if (updatedData.isRead === "false") updatedData.isRead = false;
+
   if (model === "product") {
     if (updatedData.brand !== undefined) {
       if (updatedData.brand) {

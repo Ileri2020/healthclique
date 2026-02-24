@@ -116,6 +116,14 @@ export const ChatInterface = () => {
       }).sort((a: any, b: any) => new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime());
       
       setMessages(filtered);
+
+      // Mark unread incoming messages as read
+      const unreadIncoming = filtered.filter((msg: any) => msg.receiverId === user.id && !msg.isRead);
+      if (unreadIncoming.length > 0) {
+        await Promise.all(unreadIncoming.map((msg: any) => 
+          axios.put(`/api/dbhandler?model=message&id=${msg.id}`, { isRead: true })
+        ));
+      }
     } catch (error) {
       console.error("Error fetching messages:", error);
     }

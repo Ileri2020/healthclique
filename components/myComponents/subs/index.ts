@@ -16,4 +16,5 @@ export const CartItems = dynamic(()=>import("./cartitem"), { ssr: false, })
 export const FeaturedIngredients = dynamic(()=>import("./featuredIngredients"), { ssr: false, })
 export const GlobalSearch = dynamic(()=>import("./GlobalSearch").then(mod => mod.GlobalSearch), { ssr: false, })
 export const SnapPrescription = dynamic(()=>import("./SnapPrescription").then(mod => mod.SnapPrescription), { ssr: false, })
+export const NotificationUI = dynamic(()=>import("./NotificationUI").then(mod => mod.NotificationUI), { ssr: false, })
  

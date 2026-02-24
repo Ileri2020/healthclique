@@ -12,51 +12,41 @@ export async function POST(req: NextRequest) {
     }
 
     const results = await Promise.all(
-      products.map(async (item: { name: string; quantity: number | string; grams?: string }) => {
-        // Try exact match first
-        let product = await prisma.product.findFirst({
+      products.map(async (item: { name: string; quantity: number | string; grams?: string; activeIngredients?: string[]; category?: string }) => {
+        // Search criteria
+        const searchTerms = [item.name.trim()];
+        if (item.activeIngredients) searchTerms.push(...item.activeIngredients);
+        
+        // Find many possible matches
+        const options = await prisma.product.findMany({
           where: {
-            name: {
-              equals: item.name.trim(),
-              mode: "insensitive",
-            },
+            OR: [
+              { name: { contains: item.name.trim(), mode: "insensitive" } },
+              item.category ? { category: { name: { contains: item.category, mode: "insensitive" } } } : {},
+              item.activeIngredients?.[0] ? { activeIngredients: { some: { name: { contains: item.activeIngredients[0], mode: "insensitive" } } } } : {},
+            ]
           },
           include: {
             category: true,
             stock: true,
-          }
+            brand: true,
+            activeIngredients: true,
+          },
+          take: 5 // Limit options per item to keep UI clean
         });
 
-        // If not found, try a partial match
-        if (!product) {
-          product = await prisma.product.findFirst({
-            where: {
-              name: {
-                contains: item.name.trim(),
-                mode: "insensitive",
-              },
-            },
-            include: {
-              category: true,
-              stock: true,
-            }
-          });
-        }
-
-        if (product) {
-          return {
-            ...product,
+        return {
+          identifiedItem: item,
+          options: options.map(opt => ({
+            ...opt,
             requestedQuantity: typeof item.quantity === 'string' ? parseInt(item.quantity) || 1 : item.quantity,
             requestedGrams: item.grams
-          };
-        }
-        return null;
+          }))
+        };
       })
     );
 
-    const foundProducts = results.filter((p) => p !== null);
-
-    return NextResponse.json({ products: foundProducts });
+    return NextResponse.json({ results });
   } catch (error) {
     console.error("Batch search error:", error);
     return NextResponse.json({ error: "Failed to search products" }, { status: 500 });

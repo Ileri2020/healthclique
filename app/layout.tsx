@@ -6,6 +6,7 @@ import { Providers } from "@/store/providers";
 import Navbar from "@/components/utility/navbar";
 import { AppContextProvider } from "@/context/appContext";
 import { Footer } from "@/components/myComponents/subs/footer";
+import { NotificationUI } from "@/components/myComponents/subs";
 import { CartProvider } from "@/hooks/use-cart";
 import { SessionProvider } from "next-auth/react"
 import { usersession } from "@/session";
@@ -72,6 +73,7 @@ export default async function RootLayout({
                     disableTransitionOnChange
                   >
                     <Navbar />
+                    <NotificationUI />
                     {children}
                     <Footer />
                   </ThemeProvider>

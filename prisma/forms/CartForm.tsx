@@ -16,6 +16,7 @@ export default function CartForm() {
     productId: '',
     quantity: 0,
     total: 0,
+    pharmacistSummary: '',
   });
   const [editId, setEditId] = useState(null);
 
@@ -78,6 +79,7 @@ export default function CartForm() {
       productId: '',
       quantity: 0,
       total: 0,
+      pharmacistSummary: '',
     });
     setEditId(null);
   };
@@ -176,6 +178,16 @@ export default function CartForm() {
           </div>
         </div>
 
+        <div className="space-y-1 pt-2 border-t">
+          <Label className="text-xs font-bold uppercase text-muted-foreground">Pharmacist Summary (Dosage, Precautions)</Label>
+          <textarea 
+            placeholder="Enter medical notes..." 
+            value={formData.pharmacistSummary} 
+            onChange={(e) => setFormData({ ...formData, pharmacistSummary: e.target.value })}
+            className="w-full min-h-[100px] text-sm p-3 rounded-xl border bg-muted/10 outline-none focus:ring-1 focus:ring-primary transition-all"
+          />
+        </div>
+
         <div className="flex gap-2">
           <Button type="submit" className="flex-1 font-bold">{editId ? 'Update Cart' : 'Add to Cart'}</Button>
           {editId && <Button type="button" variant="outline" onClick={resetForm} className="flex-1">Cancel</Button>}
@@ -199,6 +211,11 @@ export default function CartForm() {
                     <p className="text-[10px] text-muted-foreground">x{item.quantity}</p>
                   </div>
                 </div>
+                {item.pharmacistSummary && (
+                  <p className="text-[10px] bg-primary/5 p-2 rounded-lg italic border border-primary/10 mt-1 line-clamp-2">
+                    Note: {item.pharmacistSummary}
+                  </p>
+                )}
                 <div className='flex gap-2 mt-2'>
                   <Button size="sm" variant="outline" onClick={() => handleEdit(item)} className='flex-1 h-7 text-[10px]'>Edit</Button>
                   <Button size="sm" variant="outline" onClick={() => handleDelete(item.id)} className='flex-1 h-7 text-[10px] border-destructive text-destructive hover:bg-destructive hover:text-white'>Remove</Button>
