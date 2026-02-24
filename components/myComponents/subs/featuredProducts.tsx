@@ -55,8 +55,8 @@ const FeaturedProducts = () => {
 
       // 2. Fetch Subset Sections via Server-side filtering
       // Fetch Brands (Server-side filtered)
-      const brandsPromises = ["emzor", "vitabiotics"].map(brand => 
-        fetch(`/api/dbhandler?model=product&brand=${brand}&minimal=true&limit=8`).then(res => res.json())
+      const brandsPromises = ["Emzor", "Vitabiotics", "Pfizer", "GSK", "Shalina", "Fidson"].map(brand => 
+        fetch(`/api/dbhandler?model=product&brand=${brand}&minimal=true&limit=6`).then(res => res.json())
       );
       
       // Fetch Oral Care (Search by name on server)

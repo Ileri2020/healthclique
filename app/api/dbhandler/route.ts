@@ -116,7 +116,7 @@ export async function GET(req: NextRequest) {
         const includeParams = searchParams.get("include")?.split(",");
         
         const where: any = {};
-        if (brand) where.brand = { contains: brand, mode: 'insensitive' };
+        if (brand) where.brand = { name: { contains: brand, mode: 'insensitive' } };
         if (categoryId) where.categoryId = categoryId;
 
         const include: any = {};

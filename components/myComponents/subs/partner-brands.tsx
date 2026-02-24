@@ -106,7 +106,11 @@ const PartnerBrands = () => {
     setIsDialogOpen(true);
   };
 
+  const [showAll, setShowAll] = useState(false);
+
   if (loading) return null;
+
+  const displayedBrands = showAll ? brands : brands.slice(0, 10);
 
   return (
     <section className="py-16 bg-muted/20 relative group">
@@ -171,7 +175,7 @@ const PartnerBrands = () => {
         )}
         
         <div className="flex flex-wrap justify-center items-center gap-8 md:gap-16">
-          {brands.map((brand) => (
+          {displayedBrands.map((brand) => (
             <div 
               key={brand.id} 
               className="relative group/card flex items-center justify-center p-4 min-w-[120px]"
@@ -211,6 +215,18 @@ const PartnerBrands = () => {
             <div className="text-muted-foreground italic text-sm">No pharmaceutical companies added yet.</div>
           )}
         </div>
+
+        {brands.length > 10 && (
+          <div className="flex justify-center mt-12">
+            <Button 
+              variant="outline" 
+              onClick={() => setShowAll(!showAll)}
+              className="rounded-full px-8 hover:bg-primary hover:text-primary-foreground transition-all"
+            >
+              {showAll ? "Show Less" : `Show All Brands (${brands.length})`}
+            </Button>
+          </div>
+        )}
       </div>
     </section>
   );
