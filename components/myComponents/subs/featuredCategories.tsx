@@ -123,15 +123,20 @@ const CategoryCard = ({ category, isAdmin, onRefresh }: { category: any, isAdmin
   );
 };
 
+import { useAppContext } from "@/hooks/useAppContext";
+
 const FeaturedCategories = () => {
+  const { user } = useAppContext();
   const [categories, setCategories] = useState<any[]>([]);
-  const isAdmin = useIsAdmin();
+  const isAdmin = user?.role === "admin" || user?.role === "staff";
   const autoplay1 = useRef(Autoplay({ delay: 3000, stopOnInteraction: false }));
   const autoplay2 = useRef(Autoplay({ delay: 3000, stopOnInteraction: false }));
 
   const fetchCategories = async () => {
     const cats = await getCategories();
-    setCategories(cats);
+    // Filter out categories with 0 products if not admin/staff
+    const activeCats = isAdmin ? cats : cats.filter(c => c.productCount > 0);
+    setCategories(activeCats);
   };
 
   useEffect(() => {

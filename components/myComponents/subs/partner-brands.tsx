@@ -33,7 +33,7 @@ import Autoplay from "embla-carousel-autoplay";
 
 const PartnerBrands = () => {
   const { user } = useAppContext();
-  const isAdmin = user?.role === "admin";
+  const isAdmin = user?.role === "admin" || user?.role === "staff";
   const [brands, setBrands] = useState<Brand[]>([]);
   const [loading, setLoading] = useState(true);
   
@@ -159,10 +159,13 @@ const PartnerBrands = () => {
 
   const [showAll, setShowAll] = useState(false);
 
+  // Filter out brands with 0 products if not admin/staff
+  const activeBrands = isAdmin ? brands : brands.filter(b => (b._count?.products || 0) > 0);
+
   // Divide brands into 3 rows for carousels
-  const row1 = brands.filter((_, i) => i % 3 === 0);
-  const row2 = brands.filter((_, i) => i % 3 === 1);
-  const row3 = brands.filter((_, i) => i % 3 === 2);
+  const row1 = activeBrands.filter((_, i) => i % 3 === 0);
+  const row2 = activeBrands.filter((_, i) => i % 3 === 1);
+  const row3 = activeBrands.filter((_, i) => i % 3 === 2);
 
   const CarouselRow = ({ items, speed = 3000, direction = "ltr" }: { items: Brand[], speed?: number, direction?: "ltr" | "rtl" }) => {
     const [emblaRef] = useEmblaCarousel({ 
