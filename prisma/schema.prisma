@@ -77,18 +77,21 @@ model Category {
 }
 
 model Product {
-  id                       String           @id @default(auto()) @map("_id") @db.ObjectId
+  id                       String             @id @default(auto()) @map("_id") @db.ObjectId
   name                     String
   description              String?
-  category                 Category         @relation(fields: [categoryId], references: [id])
-  categoryId               String           @db.ObjectId
-  activeIngredients        String[]
+  category                 Category           @relation(fields: [categoryId], references: [id])
+  categoryId               String             @db.ObjectId
+  activeIngredientIds      String[]           @db.ObjectId
+  activeIngredients        ActiveIngredient[] @relation(fields: [activeIngredientIds], references: [id])
   scarce                   Boolean?
   for                      String[] //patients like oncology/cancer, hiv, etc
-  brand                    String?
+  brandId                  String?            @db.ObjectId
+  brand                    Brand?             @relation(fields: [brandId], references: [id])
   price                    Float
   /// Health concerns this product addresses e.g. ["Pain Relief", "Gut Health"]
-  healthConcerns           String[]         @default([])
+  healthConcernIds         String[]           @db.ObjectId
+  healthConcerns           HealthConcern[]    @relation(fields: [healthConcernIds], references: [id])
   stock                    Stock[] //@relation(fields: [stockId], references: [id])
   //stockId  String?   @db.ObjectId
   reviews                  Review[]
@@ -97,10 +100,10 @@ model Product {
   Featured                 FeaturedProduct?
   images                   String[]
   //orderItems OrderItem[]
-  regulatoryClassification String?          @default("OTC") // "Prescription Medicine", "OTC", "Pharmacy Only Medicine", "Controlled Medicine"
-  requiresPrescription     Boolean          @default(false)
-  createdAt                DateTime         @default(now())
-  updatedAt                DateTime         @updatedAt
+  regulatoryClassification String?            @default("OTC") // "Prescription Medicine", "OTC", "Pharmacy Only Medicine", "Controlled Medicine"
+  requiresPrescription     Boolean            @default(false)
+  createdAt                DateTime           @default(now())
+  updatedAt                DateTime           @updatedAt
   wishlist                 Wishlist[]
 }
 
@@ -246,11 +249,30 @@ model Message {
 }
 
 model Brand {
-  id        String   @id @default(auto()) @map("_id") @db.ObjectId
-  name      String
-  order     Int      @default(0)
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
+  id        String    @id @default(auto()) @map("_id") @db.ObjectId
+  name      String    @unique
+  order     Int       @default(0)
+  products  Product[]
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+}
+
+model ActiveIngredient {
+  id         String    @id @default(auto()) @map("_id") @db.ObjectId
+  name       String    @unique
+  productIds String[]  @db.ObjectId
+  products   Product[] @relation(fields: [productIds], references: [id])
+  createdAt  DateTime  @default(now())
+  updatedAt  DateTime  @updatedAt
+}
+
+model HealthConcern {
+  id         String    @id @default(auto()) @map("_id") @db.ObjectId
+  name       String    @unique
+  productIds String[]  @db.ObjectId
+  products   Product[] @relation(fields: [productIds], references: [id])
+  createdAt  DateTime  @default(now())
+  updatedAt  DateTime  @updatedAt
 }
 
 model Visit {

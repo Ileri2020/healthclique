@@ -58,19 +58,29 @@ async function dbHandler({
       case 'POST':
         // const data = body;  Spicy, pepperish and groundnut yaji spice blend
         console.log('post product body:', body)
-        const newItem = await prismaModel.create({
+         const newItem = await prismaModel.create({
             data: {
               description: body.description,
               name: body.name,
               categoryId: body.categoryId,
               price: parseFloat(body.price),
-              brand: body.brand,
               scarce: body.scarce,
-              activeIngredients: Array.isArray(body.activeIngredients) ? body.activeIngredients : [],
-              healthConcerns: Array.isArray(body.healthConcerns) ? body.healthConcerns : [],
               regulatoryClassification: body.regulatoryClassification || "OTC",
               requiresPrescription: body.requiresPrescription === true || body.requiresPrescription === "true",
               images: [body.url],
+              brand: body.brand ? {
+                connectOrCreate: { where: { name: body.brand }, create: { name: body.brand } }
+              } : undefined,
+              activeIngredients: {
+                connectOrCreate: (Array.isArray(body.activeIngredients) ? body.activeIngredients : []).map((name: string) => ({
+                  where: { name }, create: { name }
+                }))
+              },
+              healthConcerns: {
+                connectOrCreate: (Array.isArray(body.healthConcerns) ? body.healthConcerns : []).map((name: string) => ({
+                  where: { name }, create: { name }
+                }))
+              },
             },
           }
         );

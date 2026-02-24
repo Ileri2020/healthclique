@@ -125,6 +125,9 @@ export async function GET(req: NextRequest) {
         } else if (!minimal) {
           include.category = true;
           include.stock = true;
+          include.brand = true;
+          include.activeIngredients = true;
+          include.healthConcerns = true;
         } else {
           include.category = true;
         }
@@ -144,6 +147,9 @@ export async function GET(req: NextRequest) {
       if (model === "product") {
         include.category = true;
         include.stock = true;
+        include.brand = true;
+        include.activeIngredients = true;
+        include.healthConcerns = true;
         include.reviews = { include: { user: { select: { name: true, avatarUrl: true } } } };
       }
       
@@ -240,6 +246,20 @@ export async function POST(req: NextRequest) {
        if (body[field] === "false") body[field] = false;
     });
 
+    if (model === "product") {
+      if (body.brand) {
+        body.brand = { connectOrCreate: { where: { name: body.brand }, create: { name: body.brand } } };
+      } else {
+        delete body.brand;
+      }
+      if (Array.isArray(body.activeIngredients)) {
+        body.activeIngredients = { connectOrCreate: body.activeIngredients.map((name: string) => ({ where: { name }, create: { name } })) };
+      }
+      if (Array.isArray(body.healthConcerns)) {
+        body.healthConcerns = { connectOrCreate: body.healthConcerns.map((name: string) => ({ where: { name }, create: { name } })) };
+      }
+    }
+
     return NextResponse.json(await prismaModel.create({ data: body }));
   } catch (error) {
     console.error("Database POST error:", error);
@@ -282,6 +302,22 @@ export async function PUT(req: NextRequest) {
   if (!id) return NextResponse.json({ error: "Missing ID" }, { status: 400 });
 
   const { id: _, ...updatedData } = body;
+  
+  if (model === "product") {
+    if (updatedData.brand !== undefined) {
+      if (updatedData.brand) {
+        updatedData.brand = { connectOrCreate: { where: { name: updatedData.brand }, create: { name: updatedData.brand } } };
+      } else {
+        updatedData.brand = { disconnect: true };
+      }
+    }
+    if (Array.isArray(updatedData.activeIngredients)) {
+      updatedData.activeIngredients = { set: [], connectOrCreate: updatedData.activeIngredients.map((name: string) => ({ where: { name }, create: { name } })) };
+    }
+    if (Array.isArray(updatedData.healthConcerns)) {
+      updatedData.healthConcerns = { set: [], connectOrCreate: updatedData.healthConcerns.map((name: string) => ({ where: { name }, create: { name } })) };
+    }
+  }
   try {
     return NextResponse.json(await prismaModel.update({
       where: { id: String(id) },

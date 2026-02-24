@@ -69,9 +69,9 @@ export default function ProductForm({ initialProduct, hideList = false }: { init
     const set = new Set<string>();
     products.forEach((p: any) => {
       if (Array.isArray(p.activeIngredients)) {
-        p.activeIngredients.forEach((ing: string) => set.add(ing));
+        p.activeIngredients.forEach((ing: any) => set.add(ing?.name || ing));
       } else if (typeof p.activeIngredients === "string") {
-        p.activeIngredients.split(",").map(i => i.trim()).filter(Boolean).forEach(ing => set.add(ing));
+        p.activeIngredients.split(",").map((i: string) => i.trim()).filter(Boolean).forEach((ing: string) => set.add(ing));
       }
     });
     return Array.from(set);
@@ -82,7 +82,7 @@ export default function ProductForm({ initialProduct, hideList = false }: { init
     const set = new Set<string>(HEALTH_CONCERNS);
     products.forEach((p: any) => {
       if (Array.isArray(p.healthConcerns)) {
-        p.healthConcerns.forEach((hc: string) => set.add(hc));
+        p.healthConcerns.forEach((hc: any) => set.add(hc?.name || hc));
       }
     });
     return Array.from(set);
@@ -121,9 +121,9 @@ export default function ProductForm({ initialProduct, hideList = false }: { init
         price: initialProduct.price || 0,
         costPrice: initialProduct.costPrice || 0,
         images: initialProduct.images || null,
-        healthConcerns: initialProduct.healthConcerns || [],
-        activeIngredients: initialProduct.activeIngredients?.join(", ") || '',
-        brand: initialProduct.brand || '',
+        healthConcerns: Array.isArray(initialProduct.healthConcerns) ? initialProduct.healthConcerns.map((hc: any) => hc?.name || hc) : [],
+        activeIngredients: Array.isArray(initialProduct.activeIngredients) ? initialProduct.activeIngredients.map((i: any) => i?.name || i).join(", ") : '',
+        brand: initialProduct.brand?.name || initialProduct.brand || '',
         scarce: initialProduct.scarce || false,
         regulatoryClassification: initialProduct.regulatoryClassification || 'OTC',
         requiresPrescription: initialProduct.requiresPrescription || false,
@@ -136,7 +136,7 @@ export default function ProductForm({ initialProduct, hideList = false }: { init
     if (!hideList) fetchProducts();
     fetchCategories();
     axios.get('/api/dbhandler?model=product').then(res => {
-      const brands = Array.from(new Set(res.data.map((p: any) => p.brand).filter(Boolean))) as string[];
+      const brands = Array.from(new Set(res.data.map((p: any) => p.brand?.name || p.brand).filter(Boolean))) as string[];
       setAllBrands(brands);
     });
   }, [hideList, fetchProducts, fetchCategories]);
@@ -278,9 +278,9 @@ export default function ProductForm({ initialProduct, hideList = false }: { init
       price: product.price ?? 0,
       costPrice: product.costPrice ?? 0,
       images: product.images ?? [],
-      healthConcerns: product.healthConcerns ?? [],
-      activeIngredients: product.activeIngredients?.join(", ") || '',
-      brand: product.brand || '',
+      healthConcerns: Array.isArray(product.healthConcerns) ? product.healthConcerns.map((hc: any) => hc?.name || hc) : [],
+      activeIngredients: Array.isArray(product.activeIngredients) ? product.activeIngredients.map((i: any) => i?.name || i).join(", ") : '',
+      brand: product.brand?.name || product.brand || '',
       scarce: product.scarce || false,
       regulatoryClassification: product.regulatoryClassification || 'OTC',
       requiresPrescription: product.requiresPrescription || false,
@@ -291,13 +291,15 @@ export default function ProductForm({ initialProduct, hideList = false }: { init
 
   // ✅ Search and Filter Logic
   const filteredProducts = useMemo(() => {
-    let result = products.filter((p: any) => 
-      p.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      p.description?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      HEALTH_CONCERNS.some(c => p.healthConcerns?.includes(c) && c.toLowerCase().includes(searchTerm.toLowerCase())) ||
-      (p.category?.name?.toLowerCase().includes(searchTerm.toLowerCase())) ||
-      (p.brand?.toLowerCase().includes(searchTerm.toLowerCase()))
-    );
+    let result = products.filter((p: any) => {
+      const pHealthConcerns = Array.isArray(p.healthConcerns) ? p.healthConcerns.map((hc: any) => hc?.name || hc) : [];
+      const brandName = p.brand?.name || p.brand || "";
+      return p.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
+        p.description?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+        HEALTH_CONCERNS.some(c => pHealthConcerns.includes(c) && c.toLowerCase().includes(searchTerm.toLowerCase())) ||
+        (p.category?.name?.toLowerCase().includes(searchTerm.toLowerCase())) ||
+        (brandName.toLowerCase().includes(searchTerm.toLowerCase()))
+    });
 
     if (sortOrder !== "none") {
       result = [...result].sort((a, b) => {
