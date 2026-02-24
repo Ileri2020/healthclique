@@ -4,7 +4,7 @@
   "private": true,
   "scripts": {
     "dev": "node consolidate.js && next dev",
-    "build": "node consolidate.js && npx prisma generate && next build",
+    "build": "npx prisma generate && next build",
     "consolidate": "node consolidate.js",
     "start": "next start",
     "lint": "next lint"
@@ -92,6 +92,7 @@
     "sharp": "^0.34.4",
     "sonner": "^1.7.0",
     "streamifier": "^0.1.1",
+    "swr": "^2.4.0",
     "tailwind-merge": "^2.6.0",
     "tailwindcss-3d": "^1.0.7",
     "tailwindcss-animate": "^1.0.7",

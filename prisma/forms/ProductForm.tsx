@@ -7,7 +7,8 @@ import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Checkbox } from '@/components/ui/checkbox';
 import { toast } from 'sonner';
-import { Search, ChevronLeft, ChevronRight, ArrowUpDown } from 'lucide-react';
+import { Search, ChevronLeft, ChevronRight, ArrowUpDown, X } from 'lucide-react';
+import { Badge } from '@/components/ui/badge';
 
 const ITEMS_PER_PAGE = 10;
 
@@ -41,6 +42,7 @@ export default function ProductForm({ initialProduct, hideList = false }: { init
   });
   const [file, setFile] = useState(null);
   const [categories, setCategories] = useState([]);
+  const [allBrands, setAllBrands] = useState<string[]>([]);
   const [preview, setPreview] = useState(null);
   const [uploadStatus , setUploadStatus] = useState("");
 
@@ -51,6 +53,43 @@ export default function ProductForm({ initialProduct, hideList = false }: { init
   const [currentPage, setCurrentPage] = useState(1);
   const [sortOrder, setSortOrder] = useState<"asc" | "desc" | "none">("none");
   const [sortBy, setSortBy] = useState<"name" | "price">("name");
+
+  // Name suggestions state
+  const [showNameSuggestions, setShowNameSuggestions] = useState(false);
+  
+  // Ingredients tags state
+  const [ingredientInput, setIngredientInput] = useState("");
+
+  const nameSuggestions = useMemo(() => {
+    if (formData.name.length < 2) return [];
+    return products.filter((p: any) => p.name.toLowerCase().includes(formData.name.toLowerCase())).slice(0, 5);
+  }, [formData.name, products]);
+
+  const allIngredients = useMemo(() => {
+    const set = new Set<string>();
+    products.forEach((p: any) => {
+      if (Array.isArray(p.activeIngredients)) {
+        p.activeIngredients.forEach((ing: string) => set.add(ing));
+      } else if (typeof p.activeIngredients === "string") {
+        p.activeIngredients.split(",").map(i => i.trim()).filter(Boolean).forEach(ing => set.add(ing));
+      }
+    });
+    return Array.from(set);
+  }, [products]);
+
+  // Health Concerns
+  const allHealthConcerns = useMemo(() => {
+    const set = new Set<string>(HEALTH_CONCERNS);
+    products.forEach((p: any) => {
+      if (Array.isArray(p.healthConcerns)) {
+        p.healthConcerns.forEach((hc: string) => set.add(hc));
+      }
+    });
+    return Array.from(set);
+  }, [products]);
+
+  const [healthConcernInput, setHealthConcernInput] = useState("");
+
 
   const fetchProducts = useCallback(async () => {
     try {
@@ -96,6 +135,10 @@ export default function ProductForm({ initialProduct, hideList = false }: { init
   useEffect(() => {
     if (!hideList) fetchProducts();
     fetchCategories();
+    axios.get('/api/dbhandler?model=product').then(res => {
+      const brands = Array.from(new Set(res.data.map((p: any) => p.brand).filter(Boolean))) as string[];
+      setAllBrands(brands);
+    });
   }, [hideList, fetchProducts, fetchCategories]);
 
   const resetForm = () => {
@@ -127,6 +170,23 @@ export default function ProductForm({ initialProduct, hideList = false }: { init
         : [...prev.healthConcerns, concern],
     }));
   };
+
+  const addIngredient = (ingredient: string) => {
+    if (!ingredient.trim()) return;
+    const current = formData.activeIngredients ? formData.activeIngredients.split(",").map(i => i.trim()).filter(Boolean) : [];
+    if (!current.includes(ingredient.trim())) {
+      current.push(ingredient.trim());
+      setFormData({ ...formData, activeIngredients: current.join(", ") });
+    }
+    setIngredientInput("");
+  };
+
+  const removeIngredient = (ingredient: string) => {
+    const current = formData.activeIngredients.split(",").map(i => i.trim()).filter(Boolean);
+    const updated = current.filter(i => i !== ingredient);
+    setFormData({ ...formData, activeIngredients: updated.join(", ") });
+  };
+
 
   const handleSubmit = async (e) => {
     e.preventDefault();
@@ -288,15 +348,37 @@ export default function ProductForm({ initialProduct, hideList = false }: { init
       <form onSubmit={handleSubmit} className='flex flex-col w-full max-w-sm gap-2 justify-center items-center p-3 border-2 border-secondary-foreground rounded-sm m-2 shadow-md bg-card'>
         <h2 className='font-bold text-xl mb-2 text-primary'>Product Management</h2>
 
-        <div className="w-full space-y-1">
+        <div className="w-full space-y-1 relative">
           <Label htmlFor="product-name">Product Name</Label>
           <Input
             id="product-name"
             placeholder="Name of product"
             value={formData.name}
-            onChange={(e) => setFormData({ ...formData, name: e.target.value })}
+            onChange={(e) => {
+              setFormData({ ...formData, name: e.target.value });
+              setShowNameSuggestions(true);
+            }}
+            onFocus={() => setShowNameSuggestions(true)}
+            onBlur={() => setTimeout(() => setShowNameSuggestions(false), 200)}
             className="border-primary/20 focus:border-primary"
           />
+          {showNameSuggestions && nameSuggestions.length > 0 && (
+            <div className="absolute top-full left-0 z-10 w-full bg-card border rounded-md shadow-lg p-2 max-h-40 overflow-y-auto">
+              <p className="text-[10px] text-muted-foreground mb-1 uppercase tracking-wider">Existing Products (Avoid Duplicates)</p>
+              {nameSuggestions.map((s: any) => (
+                <div 
+                  key={s.id} 
+                  className="text-sm p-2 hover:bg-muted cursor-pointer rounded" 
+                  onClick={() => {
+                    setFormData({ ...formData, name: s.name });
+                    setShowNameSuggestions(false);
+                  }}
+                >
+                  {s.name}
+                </div>
+              ))}
+            </div>
+          )}
         </div>
 
         <div className="w-full space-y-1">
@@ -314,23 +396,66 @@ export default function ProductForm({ initialProduct, hideList = false }: { init
           <Label htmlFor="product-brand">Brand</Label>
           <Input
             id="product-brand"
-            placeholder="Brand name"
+            placeholder="Brand / Company name"
+            list="brand-options"
             value={formData.brand}
             onChange={(e) => setFormData({ ...formData, brand: e.target.value })}
             className="border-primary/20 focus:border-primary"
           />
+          <datalist id="brand-options">
+            {allBrands.map((b) => <option key={b} value={b} />)}
+          </datalist>
         </div>
 
-        <div className="w-full space-y-1">
-          <Label htmlFor="product-ingredients">Active Ingredients</Label>
-          <Input
-            id="product-ingredients"
-            placeholder="Ingredient 1, Ingredient 2..."
-            value={formData.activeIngredients}
-            onChange={(e) => setFormData({ ...formData, activeIngredients: e.target.value })}
-            className="border-primary/20 focus:border-primary"
-          />
-          <p className="text-[10px] text-muted-foreground">Separate with commas</p>
+        <div className="w-full space-y-2">
+          <Label>Active Ingredients</Label>
+          {formData.activeIngredients && (
+            <div className="flex gap-2 flex-wrap bg-muted/20 p-2 rounded border">
+              {formData.activeIngredients.split(",").map(i => i.trim()).filter(Boolean).map(ing => (
+                <Badge key={ing} variant="secondary" className="flex items-center gap-1">
+                  {ing}
+                  <X className="w-3 h-3 cursor-pointer hover:text-destructive" onClick={() => removeIngredient(ing)} />
+                </Badge>
+              ))}
+            </div>
+          )}
+          <div className="flex gap-2">
+            <Input
+              placeholder="Add new ingredient & press Enter"
+              value={ingredientInput}
+              onChange={(e) => setIngredientInput(e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key === "Enter") {
+                  e.preventDefault();
+                  addIngredient(ingredientInput);
+                }
+              }}
+              className="border-primary/20 focus:border-primary"
+            />
+            <Button type="button" onClick={() => addIngredient(ingredientInput)}>Add</Button>
+          </div>
+          
+          {allIngredients.length > 0 && (
+            <div className="space-y-1 mt-2">
+              <p className="text-[10px] text-muted-foreground uppercase tracking-wider">Saved Ingredients (Click to add)</p>
+              <div className="flex flex-wrap gap-1 max-h-24 overflow-y-auto p-2 border rounded bg-card">
+                {allIngredients.map(ing => {
+                  const current = formData.activeIngredients ? formData.activeIngredients.split(",").map(i => i.trim()) : [];
+                  if (current.includes(ing)) return null;
+                  return (
+                    <Badge 
+                      key={ing} 
+                      variant="outline" 
+                      className="cursor-pointer hover:bg-primary/10 transition-colors" 
+                      onClick={() => addIngredient(ing)}
+                    >
+                      {ing}
+                    </Badge>
+                  );
+                })}
+              </div>
+            </div>
+          )}
         </div>
 
         <div className="w-full space-y-1 text-center flex flex-col items-center">
@@ -362,24 +487,47 @@ export default function ProductForm({ initialProduct, hideList = false }: { init
         {/* ✅ Health Concerns Multi-Select Checkboxes */}
         <div className="w-full space-y-2">
           <Label className="text-sm font-semibold">
-            Health Concerns
+            Health Concerns / Uses
             <span className="ml-1 text-xs font-normal text-muted-foreground">
               ({formData.healthConcerns.length} selected)
             </span>
           </Label>
-          <div className="grid grid-cols-2 gap-2 p-3 border rounded-md bg-muted/30">
-            {HEALTH_CONCERNS.map((concern) => (
+          <div className="grid grid-cols-2 gap-2 p-3 border rounded-md bg-muted/30 max-h-48 overflow-y-auto">
+            {allHealthConcerns.map((concern) => (
               <div key={concern} className="flex items-center gap-2">
                 <Checkbox
                   id={`concern-${concern}`}
                   checked={formData.healthConcerns.includes(concern)}
                   onCheckedChange={() => toggleConcern(concern)}
                 />
-                <Label htmlFor={`concern-${concern}`} className="text-xs font-normal cursor-pointer">
+                <Label htmlFor={`concern-${concern}`} className="text-xs font-normal cursor-pointer line-clamp-1 py-1">
                   {concern}
                 </Label>
               </div>
             ))}
+          </div>
+          <div className="flex gap-2">
+            <Input
+              placeholder="Add new health concern..."
+              value={healthConcernInput}
+              onChange={(e) => setHealthConcernInput(e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key === "Enter") {
+                  e.preventDefault();
+                  if (healthConcernInput.trim() && !allHealthConcerns.includes(healthConcernInput.trim())) {
+                      toggleConcern(healthConcernInput.trim());
+                      setHealthConcernInput("");
+                  }
+                }
+              }}
+              className="border-primary/20 focus:border-primary h-8 text-xs"
+            />
+            <Button size="sm" type="button" onClick={() => {
+                 if (healthConcernInput.trim() && !allHealthConcerns.includes(healthConcernInput.trim())) {
+                      toggleConcern(healthConcernInput.trim());
+                      setHealthConcernInput("");
+                 }
+            }}>New</Button>
           </div>
         </div>
 

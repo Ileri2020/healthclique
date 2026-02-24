@@ -1,6 +1,6 @@
 ================================================================================
 LOIS SPICE PROJECT - SOURCE CODE CONSOLIDATION
-Generated: 2026-02-23 23:55:56
+Generated: 2026-02-24 00:28:50
 ================================================================================
 
 
@@ -586,222 +586,131 @@ LOCATION: app\admin\analytics\page.tsx
 
 "use client";
 
-import { useEffect, useState } from "react";
-import axios from "axios";
-import { motion } from "framer-motion";
-import { 
-  Users, 
-  ShoppingCart, 
-  Package, 
-  TrendingUp,
-  DollarSign,
-  Activity
-} from "lucide-react";
-import { 
-  BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer,
-  LineChart, Line, AreaChart, Area
-} from "recharts";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { KpiSection } from "@/components/analytics/KpiSection";
+import { ChartCard } from "@/components/analytics/cards/ChartCard";
+import { RevenueChart } from "@/components/analytics/charts/RevenueChart";
+import { CartStatusChart } from "@/components/analytics/charts/CartStatusChart";
+import { TopProductsChart } from "@/components/analytics/charts/TopProductsChart";
+import { ProfitChart } from "@/components/analytics/charts/ProfitChart";
+import { VisitAnalysisChart } from "@/components/analytics/charts/VisitAnalysisChart";
+import { RefundReasonChart } from "@/components/analytics/charts/RefundReasonChart";
+import { Button } from "@/components/ui/button";
+import { Download, Calendar as CalendarIcon } from "lucide-react";
+import { useState } from "react";
+import { DateRange } from "react-day-picker";
+import { format, subDays } from "date-fns";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import { Calendar } from "@/components/ui/calendar";
+import { useEffect } from "react";
 
 export default function AnalyticsDashboard() {
-  const [loading, setLoading] = useState(true);
-  const [stats, setStats] = useState({
-    users: 0,
-    products: 0,
-    orders: 0,
-    revenue: 0,
-  });
-  
-  const [salesData, setSalesData] = useState<any[]>([]);
-  const [userRoles, setUserRoles] = useState<any[]>([]);
+    const [date, setDate] = useState<DateRange | undefined>({
+        from: subDays(new Date(), 30),
+        to: new Date(),
+    });
+    const [data, setData] = useState<any>(null);
+    const [isLoading, setIsLoading] = useState(false);
 
-  useEffect(() => {
-    const fetchAnalytics = async () => {
-      try {
-        setLoading(true);
-        // Using existing dbhandler endpoint for rapid prototyping
-        const [usersRes, productsRes, cartsRes] = await Promise.all([
-          axios.get("/api/dbhandler?model=user"),
-          axios.get("/api/dbhandler?model=product"),
-          axios.get("/api/dbhandler?model=cart")
-        ]);
-
-        const users = usersRes.data || [];
-        const products = productsRes.data || [];
-        const carts = cartsRes.data || [];
-
-        // Calculate Revenue from paid/successful/completed carts
-        // For now, let's sum total of all carts
-        const totalRevenue = carts.reduce((acc: number, cart: any) => acc + (cart.total || 0), 0);
-
-        setStats({
-          users: users.length,
-          products: products.length,
-          orders: carts.length,
-          revenue: totalRevenue
-        });
-
-        // Group Carts by Date (mocking a time series chart)
-        const salesByDate: Record<string, number> = {};
-        carts.forEach((cart: any) => {
-          const date = new Date(cart.createdAt).toLocaleDateString("en-US", { month: "short", day: "numeric" });
-          salesByDate[date] = (salesByDate[date] || 0) + (cart.total || 0);
-        });
-
-        const formattedSalesData = Object.entries(salesByDate).map(([date, total]) => ({
-          date,
-          revenue: total
-        })).slice(-15); // Last 15 days of activity
-
-        // Group Users by Role
-        const roleCount: Record<string, number> = {};
-        users.forEach((u: any) => {
-          roleCount[u.role] = (roleCount[u.role] || 0) + 1;
-        });
-        const formattedRoleData = Object.entries(roleCount).map(([name, value]) => ({
-          name: name.charAt(0).toUpperCase() + name.slice(1),
-          value
-        }));
-
-        setSalesData(formattedSalesData.length > 0 ? formattedSalesData : [{ date: "Today", revenue: 0 }]);
-        setUserRoles(formattedRoleData);
-
-      } catch (error) {
-        console.error("Failed to load analytics", error);
-      } finally {
-        setLoading(false);
-      }
+    const queryParams = {
+        from: date?.from?.toISOString(),
+        to: date?.to?.toISOString()
     };
 
-    fetchAnalytics();
-  }, []);
-
-  if (loading) {
-    return (
-      <div className="flex items-center justify-center min-h-[70vh]">
-        <div className="animate-spin text-primary">
-           <Activity size={48} />
-        </div>
-      </div>
-    );
-  }
-
-  return (
-    <motion.div 
-      initial={{ opacity: 0, y: 20 }}
-      animate={{ opacity: 1, y: 0 }}
-      className="p-8 max-w-7xl mx-auto space-y-8"
-    >
-      <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
-        <div>
-          <h1 className="text-3xl font-bold tracking-tight">Admin Analytics</h1>
-          <p className="text-muted-foreground">Overview of your platform's performance</p>
-        </div>
-      </div>
-
-      {/* KPI Cards */}
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
-        <Card className="bg-primary/5 border-primary/20">
-          <CardHeader className="flex flex-row items-center justify-between pb-2">
-            <CardTitle className="text-sm font-medium">Total Revenue</CardTitle>
-            <DollarSign className="h-4 w-4 text-primary" />
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold">₦{stats.revenue.toLocaleString()}</div>
-            <p className="text-xs text-muted-foreground mt-1">+20.1% from last month</p>
-          </CardContent>
-        </Card>
+    useEffect(() => {
+        if (!queryParams.from || !queryParams.to) return;
         
-        <Card>
-          <CardHeader className="flex flex-row items-center justify-between pb-2">
-            <CardTitle className="text-sm font-medium">Total Orders</CardTitle>
-            <ShoppingCart className="h-4 w-4 text-blue-500" />
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold">{stats.orders}</div>
-            <p className="text-xs text-muted-foreground mt-1">Active cart sessions</p>
-          </CardContent>
-        </Card>
+        setIsLoading(true);
+        fetch(`/api/analytics?from=${queryParams.from}&to=${queryParams.to}`)
+            .then(res => res.json())
+            .then(json => {
+                setData(json);
+                setIsLoading(false);
+            })
+            .catch(err => {
+                console.error("Failed to fetch analytics:", err);
+                setIsLoading(false);
+            });
+    }, [queryParams.from, queryParams.to]);
 
-        <Card>
-          <CardHeader className="flex flex-row items-center justify-between pb-2">
-            <CardTitle className="text-sm font-medium">Total Products</CardTitle>
-            <Package className="h-4 w-4 text-orange-500" />
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold">{stats.products}</div>
-            <p className="text-xs text-muted-foreground mt-1">Live in inventory</p>
-          </CardContent>
-        </Card>
-
-        <Card>
-          <CardHeader className="flex flex-row items-center justify-between pb-2">
-            <CardTitle className="text-sm font-medium">Total Users</CardTitle>
-            <Users className="h-4 w-4 text-green-500" />
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold">{stats.users}</div>
-            <p className="text-xs text-muted-foreground mt-1">Registered accounts</p>
-          </CardContent>
-        </Card>
-      </div>
-
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
-        {/* Revenue Chart */}
-        <Card className="col-span-1">
-          <CardHeader>
-            <CardTitle>Revenue Overview</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <div className="h-[300px] w-full mt-4">
-              <ResponsiveContainer width="100%" height="100%">
-                <AreaChart data={salesData} margin={{ top: 10, right: 10, left: 0, bottom: 0 }}>
-                  <defs>
-                    <linearGradient id="colorRev" x1="0" y1="0" x2="0" y2="1">
-                      <stop offset="5%" stopColor="#10b981" stopOpacity={0.8}/>
-                      <stop offset="95%" stopColor="#10b981" stopOpacity={0}/>
-                    </linearGradient>
-                  </defs>
-                  <XAxis dataKey="date" axisLine={false} tickLine={false} tick={{fontSize: 12}} />
-                  <YAxis axisLine={false} tickLine={false} tick={{fontSize: 12}} tickFormatter={(value) => `₦${value}`} />
-                  <Tooltip wrapperClassName="rounded-xl shadow-lg border-0" />
-                  <Area type="monotone" dataKey="revenue" stroke="#10b981" fillOpacity={1} fill="url(#colorRev)" />
-                </AreaChart>
-              </ResponsiveContainer>
+    return (
+        <div className="flex-1 space-y-6 p-4 md:p-8 pt-6">
+            <div className="flex flex-col space-y-2 md:flex-row md:items-center md:justify-between space-x-2">
+                <h2 className="text-3xl font-bold tracking-tight">Analytics Dashboard</h2>
+                <div className="flex items-center space-x-2">
+                    <Popover>
+                        <PopoverTrigger asChild>
+                            <Button variant="outline" className="justify-start text-left font-normal w-[240px]">
+                                <CalendarIcon className="mr-2 h-4 w-4" />
+                                {date?.from ? (
+                                    date.to ? (
+                                        <>
+                                            {format(date.from, "LLL dd, y")} -{" "}
+                                            {format(date.to, "LLL dd, y")}
+                                        </>
+                                    ) : (
+                                        format(date.from, "LLL dd, y")
+                                    )
+                                ) : (
+                                    <span>Pick a date range</span>
+                                )}
+                            </Button>
+                        </PopoverTrigger>
+                        <PopoverContent className="w-auto p-0" align="end">
+                            <Calendar
+                                initialFocus
+                                mode="range"
+                                defaultMonth={date?.from}
+                                selected={date}
+                                onSelect={setDate}
+                                numberOfMonths={2}
+                            />
+                        </PopoverContent>
+                    </Popover>
+                    <Button>
+                        <Download className="mr-2 h-4 w-4" />
+                        Export
+                    </Button>
+                </div>
             </div>
-          </CardContent>
-        </Card>
 
-        {/* User Roles Chart */}
-        <Card className="col-span-1">
-          <CardHeader>
-            <CardTitle>User Demographics</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <div className="h-[300px] w-full mt-4">
-              <ResponsiveContainer width="100%" height="100%">
-                <BarChart data={userRoles} margin={{ top: 10, right: 10, left: 0, bottom: 0 }}>
-                  <CartesianGrid strokeDasharray="3 3" vertical={false} />
-                  <XAxis dataKey="name" axisLine={false} tickLine={false} />
-                  <YAxis axisLine={false} tickLine={false} />
-                  <Tooltip cursor={{fill: 'transparent'}} />
-                  <Bar dataKey="value" fill="#3b82f6" radius={[4, 4, 0, 0]} />
-                </BarChart>
-              </ResponsiveContainer>
-            </div>
-          </CardContent>
-        </Card>
-      </div>
-      
-      {/* Additional Analytics / Heatmap section can go here */}
-      <div className="mt-8 bg-muted/30 rounded-2xl p-6 text-center border">
-        <TrendingUp className="mx-auto h-8 w-8 text-muted-foreground/50 mb-4" />
-        <h3 className="font-semibold text-lg">More Metrics Coming Soon</h3>
-        <p className="text-muted-foreground">Product performance, cohort analysis, and geographic heatmaps will be available in the next update.</p>
-      </div>
+            {isLoading && !data ? (
+                <div className="flex items-center justify-center h-64">
+                    <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary"></div>
+                </div>
+            ) : (
+                <>
+                    <KpiSection data={data?.kpis} isLoading={isLoading} />
 
-    </motion.div>
-  );
+                    <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-7">
+                        <ChartCard title="Revenue Over Time" className="col-span-4">
+                            <RevenueChart data={data?.revenueOverTime} isLoading={isLoading} />
+                        </ChartCard>
+                        <ChartCard title="Cart Status Distribution" className="col-span-3">
+                            <CartStatusChart data={data?.cartStatusCounts} isLoading={isLoading} />
+                        </ChartCard>
+                    </div>
+
+                    <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-7">
+                        <ChartCard title="Profit & Revenue Analysis" className="col-span-4">
+                            <ProfitChart data={data?.profitOverTime} isLoading={isLoading} />
+                        </ChartCard>
+                        <ChartCard title="Top Selling Products" className="col-span-3">
+                            <TopProductsChart data={data?.topProducts} isLoading={isLoading} />
+                        </ChartCard>
+                    </div>
+
+                    <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-7">
+                        <ChartCard title="Page Visit Analysis" className="col-span-4">
+                            <VisitAnalysisChart data={data?.visits} isLoading={isLoading} />
+                        </ChartCard>
+                        <ChartCard title="Refund Reasons" className="col-span-3">
+                            <RefundReasonChart data={data?.refunds} isLoading={isLoading} />
+                        </ChartCard>
+                    </div>
+                </>
+            )}
+        </div>
+    );
 }
 
 
@@ -957,6 +866,203 @@ const Admin = () => {
 };
 
 export default Admin;
+
+
+
+================================================================================
+LOCATION: app\api\analytics\route.ts
+================================================================================
+
+import { PrismaClient } from "@prisma/client";
+const prisma = new PrismaClient();
+import { NextResponse } from "next/server";
+
+export async function GET(req: Request) {
+  const { searchParams } = new URL(req.url);
+  const fromStr = searchParams.get("from");
+  const toStr = searchParams.get("to");
+
+  if (!fromStr || !toStr) {
+    return NextResponse.json({ error: "Missing from or to date" }, { status: 400 });
+  }
+
+  const from = new Date(fromStr);
+  const to = new Date(toStr);
+
+  try {
+    /* ================= PAID CARTS FOR REVENUE & PROFIT ================= */
+    const paidCarts = await prisma.cart.findMany({
+      where: {
+        status: "paid",
+        createdAt: { gte: from, lte: to },
+      },
+      include: {
+        products: {
+          include: { product: true }
+        }
+      }
+    });
+
+    const totalRevenue = paidCarts.reduce(
+      (sum, cart) => sum + cart.total,
+      0
+    );
+
+    const totalCost = paidCarts.reduce((sum, cart) => {
+      const cost = cart.products.reduce((pSum, item) => {
+        return pSum + ((item.product as any).costPrice || 0) * item.quantity;
+      }, 0);
+      return sum + cost;
+    }, 0);
+
+    const totalProfit = totalRevenue - totalCost;
+
+    /* ================= REVENUE OVER TIME (For chart) ================= */
+    // Grouping by day manually as Prisma doesn't do it easily for MongoDB
+    const revenueByDay: Record<string, number> = {};
+    paidCarts.forEach(cart => {
+      const day = cart.createdAt.toISOString().split("T")[0];
+      revenueByDay[day] = (revenueByDay[day] || 0) + cart.total;
+    });
+
+    const revenueOverTime = Object.entries(revenueByDay).map(([date, revenue]) => ({
+      date,
+      revenue
+    })).sort((a, b) => a.date.localeCompare(b.date));
+
+    /* ================= PROFIT OVER TIME (For chart) ================= */
+    const profitByDay: Record<string, { revenue: number; cost: number; profit: number }> = {};
+    paidCarts.forEach(cart => {
+      const day = cart.createdAt.toISOString().split("T")[0];
+      const cost = cart.products.reduce((pSum, item) => {
+        return pSum + ((item.product as any).costPrice || 0) * item.quantity;
+      }, 0);
+      
+      if (!profitByDay[day]) {
+        profitByDay[day] = { revenue: 0, cost: 0, profit: 0 };
+      }
+      profitByDay[day].revenue += cart.total;
+      profitByDay[day].cost += cost;
+      profitByDay[day].profit += (cart.total - cost);
+    });
+
+    const profitOverTime = Object.entries(profitByDay).map(([date, stats]) => ({
+      date,
+      ...stats
+    })).sort((a, b) => a.date.localeCompare(b.date));
+
+    /* ================= CART STATUS DISTRIBUTION ================= */
+    const cartStatusCountsRaw = await prisma.cart.groupBy({
+      by: ["status"],
+      where: {
+        createdAt: { gte: from, lte: to },
+      },
+      _count: { status: true },
+    });
+
+    const cartStatusCounts = cartStatusCountsRaw.map(c => ({
+      name: c.status,
+      value: c._count.status
+    }));
+
+    /* ================= TOP PRODUCTS ================= */
+    const topProductsRaw = await prisma.cartItem.groupBy({
+      by: ["productId"],
+      where: {
+        cart: {
+          status: "paid",
+          createdAt: { gte: from, lte: to }
+        }
+      },
+      _sum: { quantity: true },
+      orderBy: { _sum: { quantity: "desc" } },
+      take: 5,
+    });
+
+    const productIds = topProductsRaw.map(p => p.productId);
+
+    const products = await prisma.product.findMany({
+      where: { id: { in: productIds } },
+      select: { id: true, name: true }
+    });
+
+    const topProducts = topProductsRaw.map(tp => {
+      const prod = products.find(p => p.id === tp.productId);
+      return {
+        name: prod?.name || "Unknown",
+        quantity: tp._sum.quantity,
+      };
+    });
+
+    /* ================= VISITS OVER TIME ================= */
+    const visitsRaw = await prisma.visit.findMany({
+      where: {
+        createdAt: { gte: from, lte: to },
+      },
+      select: { createdAt: true }
+    });
+
+    const visitsByDay: Record<string, number> = {};
+    visitsRaw.forEach(v => {
+      const day = v.createdAt.toISOString().split("T")[0];
+      visitsByDay[day] = (visitsByDay[day] || 0) + 1;
+    });
+
+    const visits = Object.entries(visitsByDay).map(([date, count]) => ({
+      date,
+      count
+    })).sort((a, b) => a.date.localeCompare(b.date));
+
+    /* ================= REFUND REASONS ================= */
+    const refundsRaw = await prisma.refund.groupBy({
+      by: ["reason"],
+      where: {
+        createdAt: { gte: from, lte: to },
+      },
+      _count: { reason: true },
+    });
+
+    const refunds = refundsRaw.map(d => ({
+      reason: d.reason || "No reason",
+      count: d._count.reason
+    }));
+
+    /* ================= KPIs ================= */
+    const ordersCount = paidCarts.length;
+    
+    const refundAgg = await prisma.refund.aggregate({
+      where: { createdAt: { gte: from, lte: to } },
+      _sum: { amount: true }
+    });
+
+    const newUsers = await prisma.user.count({
+      where: { createdAt: { gte: from, lte: to } }
+    });
+
+    const totalUsers = await prisma.user.count();
+
+    return NextResponse.json({
+      revenue: totalRevenue,
+      profit: totalProfit,
+      revenueOverTime,
+      profitOverTime,
+      cartStatusCounts,
+      topProducts,
+      visits,
+      refunds,
+      kpis: {
+        totalRevenue,
+        totalOrders: ordersCount,
+        totalRefunds: refundAgg._sum.amount || 0,
+        newUsers,
+        totalUsers
+      }
+    });
+  } catch (error) {
+    console.error("Analytics API Error:", error);
+    return NextResponse.json({ error: "Internal Server Error" }, { status: 500 });
+  }
+}
 
 
 
@@ -3278,189 +3384,217 @@ export default BlogPage;
 
 
 ================================================================================
-LOCATION: app\cart\page.tsx
+LOCATION: app\cart\columns.tsx
 ================================================================================
 
 "use client"
-import { motion } from "framer-motion"
-import { CartItems } from '@/components/myComponents/subs/index';
-import { ScrollArea } from "@/components/ui/scroll-area";
-import { Button } from "@/components/ui/button";
-import { PayDrawer } from "@/components/myComponents/paydrawer";
-import { BookDrawer } from "../../components/myComponents/bookdrawer";
-import { Booked } from "@/components/myComponents/booked";
-import { useAppContext } from "@/hooks/useAppContext";
-import { PRICE_MARKUPS } from "@/lib/stock-pricing";
-import { useCart } from "@/hooks/use-cart";
-import { FileText, Upload, AlertTriangle } from "lucide-react";
-import Link from "next/link";
-import { useState } from "react"
-import { toast } from "sonner"
 
-const Cart = () => {
-  const { items, subtotal } = useCart();
-  const { user } = useAppContext();
+import { ColumnDef } from "@tanstack/react-table"
+import { Badge } from "@/components/ui/badge"
+import { Button } from "@/components/ui/button"
+import { format } from "date-fns"
+import { Eye } from "lucide-react"
 
-  const role = user?.role || "customer";
-
-  const [prescriptionImage, setPrescriptionImage] = useState<string | null>(null);
-  const [isUploading, setIsUploading] = useState(false);
-
-  const hasPrescriptionItems = items.some(item => item.regulatoryClassification === "Prescription Medicine");
-
-  const handlePrescriptionUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (!file) return;
-
-    if (file.size > 2 * 1024 * 1024) {
-      toast.error("Prescription image must be under 2MB");
-      return;
+export type CartSummary = {
+    id: string
+    name?: string
+    total: number
+    status: string
+    createdAt: string
+    _count: {
+        products: number
     }
+}
 
-    setIsUploading(true);
-    const formData = new FormData();
-    formData.append("file", file);
+export const getColumns = (): ColumnDef<CartSummary>[] => [
+    {
+        accessorKey: "name",
+        header: "Name",
+        cell: ({ row }) => <span className="font-medium">{row.original.name || "Main Cart"}</span>,
+    },
+    {
+        accessorKey: "createdAt",
+        header: "Date",
+        cell: ({ row }) => {
+            return <span className="text-xs text-muted-foreground whitespace-nowrap">
+                {format(new Date(row.original.createdAt), "MMM d, yyyy")}
+            </span>
+        },
+    },
+    {
+        accessorKey: "_count.products",
+        header: "Items",
+        cell: ({ row }) => <span className="text-center block">{row.original._count.products}</span>,
+    },
+    {
+        accessorKey: "status",
+        header: "Status",
+        cell: ({ row }) => {
+            const status = row.original.status
+            return (
+                <Badge variant={status === "paid" || status === "completed" ? "default" : "secondary"} className="capitalize">
+                    {status}
+                </Badge>
+            )
+        },
+    },
+    {
+        accessorKey: "total",
+        header: () => <div className="text-right">Total</div>,
+        cell: ({ row }) => {
+            const amount = parseFloat(row.getValue("total"))
+            return <div className="text-right font-medium">₦{amount.toLocaleString()}</div>
+        },
+    },
+]
 
+
+
+================================================================================
+LOCATION: app\cart\page.tsx
+================================================================================
+
+"use client";
+
+import { CartClient } from "@/components/myComponents/subs/cart-client";
+import { CartDetails } from "@/components/myComponents/subs/CartDetails";
+import { DataTableDemo } from "@/components/myComponents/subs/datatable";
+import { useAppContext } from "@/hooks/useAppContext";
+import axios from "axios";
+import { ShoppingBag } from "lucide-react";
+import { useEffect, useState } from "react";
+import { CartSummary, getColumns } from "./columns";
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+
+export default function CartPage() {
+  const { user } = useAppContext();
+  const [carts, setCarts] = useState<CartSummary[]>([]);
+  const [selectedCartId, setSelectedCartId] = useState<string | null>(null);
+  const [loading, setLoading] = useState(true);
+
+  const fetchCarts = async () => {
+    if (!user?.id || user.id === 'nil') return;
     try {
-      const res = await fetch("/api/product", {
-        method: "POST",
-        body: formData,
-      });
-      // Re-using the product API for upload for now or a generic one if exists
-      // Realistically we'd have a prescription-specific upload API
-      setPrescriptionImage(URL.createObjectURL(file));
-      toast.success("Prescription uploaded successfully");
-    } catch (err) {
-      toast.error("Failed to upload prescription");
+      setLoading(true);
+      // Fetches user's cart from MongoDB
+      const res = await axios.get(`/api/dbhandler?model=cart`);
+      const allCarts = res.data;
+      
+      // Filter for this user's carts explicitly if user-specific query is not built in dbhandler
+      const userCarts = allCarts.filter((c: any) => c.userId === user.id);
+      
+      // Compute lengths if needed by columns (like _count.products limit to length)
+      const modeledCarts = userCarts.map((c: any) => ({
+        ...c,
+        _count: {
+            products: c.products?.length || 0,
+        }
+      }));
+
+      // Sort recent first
+      modeledCarts.sort((a: any, b: any) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
+      
+      setCarts(modeledCarts);
+    } catch (error) {
+      console.error("Failed to fetch carts:", error);
     } finally {
-      setIsUploading(false);
+      setLoading(false);
     }
   };
 
+  useEffect(() => {
+    fetchCarts();
+  }, [user?.id]);
+
+  const handleViewDetails = (id: string) => {
+    setSelectedCartId(id);
+    if (window.innerWidth < 1024) {
+      setTimeout(() => {
+        document.getElementById('cart-details-view')?.scrollIntoView({ behavior: 'smooth' });
+      }, 100);
+    }
+  };
+
+  const columns = getColumns();
+
   return (
-    <motion.section
-      initial = {{ opacity: 0 }}
-      animate = {{
-        opacity : 1,
-        transition : { delay: 0.5, duration: 0.6, ease: "easeIn"}
-      }}
-      className="w-[100vw] overflow-clip"
-    >
-        {items.length < 1 ?
-          <div className="flex flex-col items-center justify-center h-[60vh] gap-4">
-            <div className="text-2xl font-bold">No stock in cart</div>
-            <div className="text-muted-foreground">Click to view booked orders</div>
-            <div><Booked /></div>
-          </div>
-          :
-          <div className="container mx-auto px-4 py-8">
-            <ScrollArea className="mx-auto max-w-3xl max-h-[65vh] flex flex-col pr-4">
-              {items.map((item, index)=>{
-                return(
-                  <CartItems 
-                    name={item.name} 
-                    price={item.price} 
-                    qty={item.quantity} 
-                    id={item.id} 
-                    totalPrice={item.price * item.quantity} 
-                    img={item.img} 
-                    key={item.id}
-                  />
-                )
-              })}
-            </ScrollArea>
-
-            {hasPrescriptionItems && (
-              <div className="mx-auto max-w-3xl mt-6 p-6 border-2 border-dashed border-destructive/30 rounded-2xl bg-destructive/5 space-y-4">
-                <div className="flex items-center gap-3 text-destructive">
-                  <FileText className="h-6 w-6" />
-                  <h3 className="text-lg font-bold">Prescription Required</h3>
-                </div>
-                <p className="text-sm text-muted-foreground">
-                  One or more items in your cart require a valid medical prescription. Please upload a clear image of your prescription to proceed.
-                </p>
-                
-                <div className="flex flex-col sm:flex-row items-center gap-4">
-                  <div className="relative w-full sm:w-48 aspect-[3/4] bg-muted rounded-xl border overflow-hidden flex items-center justify-center">
-                    {prescriptionImage ? (
-                      <img src={prescriptionImage} alt="Uploaded prescription" className="w-full h-full object-cover" />
-                    ) : (
-                      <div className="flex flex-col items-center gap-2 text-muted-foreground">
-                        <Upload className="h-8 w-8" />
-                        <span className="text-xs">No upload yet</span>
-                      </div>
-                    )}
-                  </div>
-                  
-                  <div className="flex-1 space-y-3">
-                    <Button 
-                      variant="outline" 
-                      className="w-full gap-2 border-primary/50"
-                      onClick={() => document.getElementById('prescription-input')?.click()}
-                      disabled={isUploading}
-                    >
-                      {isUploading ? "Uploading..." : "Select Prescription Image"}
-                    </Button>
-                    <input 
-                      id="prescription-input" 
-                      type="file" 
-                      accept="image/*" 
-                      className="hidden" 
-                      onChange={handlePrescriptionUpload}
-                    />
-                    <div className="flex items-start gap-2 text-[10px] text-muted-foreground leading-tight">
-                      <AlertTriangle className="h-3 w-3 shrink-0 text-amber-500" />
-                      Note: Our pharmacists will verify this prescription before dispensing your medication.
+    <div className="container mx-auto py-8 px-4 space-y-8">
+      <div className="flex flex-col gap-8">
+        <section className="space-y-4">
+          <h1 className="text-3xl font-bold tracking-tight">Shopping Cart</h1>
+          <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
+            <div className="lg:col-span-2 space-y-8">
+              <Card>
+                <CardHeader>
+                  <CardTitle className="flex items-center gap-2">
+                    <ShoppingBag className="h-5 w-5" />
+                    Current Session
+                  </CardTitle>
+                  <CardDescription>
+                    Manage items currently in your cart ready for checkout.
+                  </CardDescription>
+                </CardHeader>
+                <CardContent>
+                  <div className="flex items-center gap-4 bg-secondary/20 p-4 rounded-lg">
+                    {/* Reusing cart side drawer trigger */}
+                    <CartClient cart={{}} />
+                    <div className="text-sm text-muted-foreground">
+                      Click the icon to view and edit your current active checkout cart.
                     </div>
                   </div>
-                </div>
-              </div>
-            )}
+                </CardContent>
+              </Card>
 
-            <div>
-              <div className="mx-auto max-w-3xl flex flex-col mt-5 gap-4">
-                <div className="flex flex-col gap-3 border-t pt-4">
-                  <div className="flex flex-row justify-between items-center">
-                    <div className="text-lg">
-                      Total:{" "}
-                      <span className="text-accent text-2xl font-bold ml-2">
-                        ₦ {subtotal.toLocaleString()}
-                      </span>
+              {/* History Table */}
+              <Card>
+                <CardHeader>
+                  <CardTitle>Order History</CardTitle>
+                  <CardDescription>
+                    View your previous carts and their status. Multiple checkouts tracked here.
+                  </CardDescription>
+                </CardHeader>
+                <CardContent>
+                  {loading ? (
+                    <div className="text-center py-4">Loading history...</div>
+                  ) : carts.length > 0 ? (
+                    <DataTableDemo
+                      data={carts}
+                      columns={columns}
+                      onRowClick={(row) => handleViewDetails(row.id)}
+                    />
+                  ) : (
+                    <div className="text-center py-8 text-muted-foreground">
+                      No cart history found. Checkout a cart to see it here!
                     </div>
-                  </div>
-                  <div className="flex flex-row flex-wrap gap-2">
-                    <Booked />
-                    <BookDrawer
-                      cart={items}
-                      prescriptionUrl={prescriptionImage}
-                    />
-                    <PayDrawer
-                      cart={items}
-                      disabled={hasPrescriptionItems && !prescriptionImage}
-                    />
-                    {((user.role === "wholesaler" || user.role === "professional" || subtotal >= 1000000) && subtotal >= 200000) && (
-                      <Link href="/terms?applyCredit=true">
-                        <Button variant="outline" className="border-primary text-primary hover:bg-primary/10">
-                          Credit Facility
-                        </Button>
-                      </Link>
-                    )}
-                    {((user.role === "wholesaler" || user.role === "professional") && subtotal < 200000) && (
-                      <Button variant="ghost" disabled className="text-[10px] text-muted-foreground italic">
-                        Min. 200k for Credit
-                      </Button>
-                    )}
-                  </div>
-                </div>
-              </div>
+                  )}
+                </CardContent>
+              </Card>
             </div>
-          </div>
-        }
-    </motion.section>
-  )
-}
 
-export default Cart
+            {/* Right Panel: Selected Cart Details */}
+            <div id="cart-details-view" className="lg:col-span-1">
+              {selectedCartId ? (
+                <div className="sticky top-4 h-[calc(100vh-2rem)]">
+                  <CartDetails
+                    cartId={selectedCartId}
+                    onPaymentSuccess={() => {
+                      fetchCarts(); 
+                    }}
+                  />
+                </div>
+              ) : (
+                <div className="h-full min-h-[300px] flex items-center justify-center border-2 border-dashed rounded-lg text-muted-foreground bg-muted/10">
+                  Select an order history cart to view details
+                </div>
+              )}
+            </div>
+
+          </div>
+        </section>
+      </div>
+    </div>
+  );
+}
 
 
 
@@ -5232,6 +5366,472 @@ LOCATION: bin\middleware.ts
 LOCATION: components\analytics\analytics.tsx
 ================================================================================
 
+
+
+
+================================================================================
+LOCATION: components\analytics\cards\ChartCard.tsx
+================================================================================
+
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { cn } from "@/lib/utils";
+
+interface ChartCardProps {
+    title: string;
+    children: React.ReactNode;
+    className?: string;
+    action?: React.ReactNode;
+}
+
+export function ChartCard({ title, children, className, action }: ChartCardProps) {
+    return (
+        <Card className={cn("w-full shadow-sm hover:shadow-md transition-shadow", className)}>
+            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+                <CardTitle className="text-base font-semibold">{title}</CardTitle>
+                {action && <div>{action}</div>}
+            </CardHeader>
+            <CardContent className="pt-4">
+                {children}
+            </CardContent>
+        </Card>
+    );
+}
+
+
+
+================================================================================
+LOCATION: components\analytics\cards\KpiCard.tsx
+================================================================================
+
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+
+interface KpiCardProps {
+    title: string;
+    value: string | number;
+    description?: string;
+    icon?: React.ReactNode;
+    trend?: "up" | "down" | "neutral";
+}
+
+export function KpiCard({ title, value, description, icon }: KpiCardProps) {
+    return (
+        <Card className="shadow-sm">
+            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+                <CardTitle className="text-sm font-medium">{title}</CardTitle>
+                {icon && <div className="text-muted-foreground">{icon}</div>}
+            </CardHeader>
+            <CardContent>
+                <div className="text-2xl font-bold">{value}</div>
+                {description && (
+                    <p className="text-xs text-muted-foreground mt-1">
+                        {description}
+                    </p>
+                )}
+            </CardContent>
+        </Card>
+    );
+}
+
+
+
+================================================================================
+LOCATION: components\analytics\charts\CartStatusChart.tsx
+================================================================================
+
+"use client";
+
+import { useAnalytics } from "../hooks/useAnalytics";
+import { ResponsiveContainer, PieChart, Pie, Cell, Tooltip, Legend } from "recharts";
+
+const COLORS = ["#00C49F", "#FFBB28", "#FF8042", "#0088FE"];
+
+interface ChartProps {
+    data?: any;
+    isLoading?: boolean;
+}
+
+export function CartStatusChart({ data, isLoading }: ChartProps) {
+    if (isLoading && !data) return <div className="h-[300px] w-full animate-pulse bg-muted rounded-md" />;
+    if (!data || data.length === 0) return <div className="h-[300px] flex items-center justify-center text-muted-foreground">No data available</div>;
+
+    return (
+        <div className="h-[300px] w-full">
+            <ResponsiveContainer width="100%" height="100%">
+                <PieChart>
+                    <Pie
+                        data={data}
+                        cx="50%"
+                        cy="50%"
+                        innerRadius={60}
+                        outerRadius={80}
+                        fill="#8884d8"
+                        paddingAngle={5}
+                        dataKey="value"
+                    >
+                        {data.map((entry: any, index: number) => (
+                            <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
+                        ))}
+                    </Pie>
+                    <Tooltip
+                        contentStyle={{ backgroundColor: "hsl(var(--background))", borderRadius: "8px", border: "1px solid hsl(var(--border))" }}
+                        itemStyle={{ color: "hsl(var(--foreground))" }}
+                    />
+                    <Legend />
+                </PieChart>
+            </ResponsiveContainer>
+        </div>
+    );
+}
+
+
+
+================================================================================
+LOCATION: components\analytics\charts\ProfitChart.tsx
+================================================================================
+
+"use client";
+
+import { useAnalytics } from "../hooks/useAnalytics";
+import { ResponsiveContainer, ComposedChart, Line, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend } from "recharts";
+import { format } from "date-fns";
+
+interface ChartProps {
+    data?: any;
+    isLoading?: boolean;
+}
+
+export function ProfitChart({ data, isLoading }: ChartProps) {
+    if (isLoading && !data) return <div className="h-[300px] w-full animate-pulse bg-muted rounded-md" />;
+    if (!data || !Array.isArray(data) || data.length === 0) return <div className="h-[300px] flex items-center justify-center text-muted-foreground">No data available</div>;
+
+    const formattedData = data.map((d: any) => ({
+        ...d,
+        dateStr: format(new Date(d.date), "MMM d"),
+    }));
+
+    return (
+        <div className="h-[300px] w-full">
+            <ResponsiveContainer width="100%" height="100%">
+                <ComposedChart data={formattedData}>
+                    <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="hsl(var(--muted-foreground)/0.2)" />
+                    <XAxis dataKey="dateStr" tickLine={false} axisLine={false} tick={{ fontSize: 12, fill: "hsl(var(--muted-foreground))" }} />
+                    <YAxis tickLine={false} axisLine={false} tickFormatter={(val) => `₦${val}`} tick={{ fontSize: 12, fill: "hsl(var(--muted-foreground))" }} />
+                    <Tooltip
+                        contentStyle={{ backgroundColor: "hsl(var(--background))", borderRadius: "8px", border: "1px solid hsl(var(--border))" }}
+                        itemStyle={{ color: "hsl(var(--foreground))" }}
+                    />
+                    <Legend />
+                    <Bar dataKey="revenue" fill="hsl(var(--primary))" radius={[4, 4, 0, 0]} name="Revenue" barSize={30} />
+                    <Line type="monotone" dataKey="profit" stroke="#10b981" strokeWidth={2} name="Profit" />
+                </ComposedChart>
+            </ResponsiveContainer>
+        </div>
+    );
+}
+
+
+
+================================================================================
+LOCATION: components\analytics\charts\RefundReasonChart.tsx
+================================================================================
+
+"use client";
+
+import { ResponsiveContainer, PieChart, Pie, Cell, Tooltip, Legend } from "recharts";
+
+const COLORS = ["#00C49F", "#FFBB28", "#FF8042", "#0088FE", "#8884d8"];
+
+interface ChartProps {
+    data?: any;
+    isLoading?: boolean;
+}
+
+export function RefundReasonChart({ data, isLoading }: ChartProps) {
+    if (isLoading && !data) return <div className="h-[300px] w-full animate-pulse bg-muted rounded-md" />;
+
+    // Mock data for reasons if API only returns total list, or if API response structure is just list of amounts
+    // For now let's assume we want to visualize this even if data is simple
+    // If data is just array of { date, amount }, we can't do reasons.
+    // Let's create a derived dummy breakdown or just return null if no reasons data.
+
+    if (isLoading) return <div className="h-[300px] w-full animate-pulse bg-muted rounded-md" />;
+
+    // Placeholder logic until DB supports refund reasons
+    const dummyData = [
+        { name: "Damaged", value: 4 },
+        { name: "Wrong Item", value: 2 },
+        { name: "Late Delivery", value: 1 },
+        { name: "Changed Mind", value: 3 },
+    ];
+
+    return (
+        <div className="h-[300px] w-full">
+            <ResponsiveContainer width="100%" height="100%">
+                <PieChart>
+                    <Pie
+                        data={dummyData}
+                        cx="50%"
+                        cy="50%"
+                        innerRadius={60}
+                        outerRadius={80}
+                        fill="#8884d8"
+                        paddingAngle={5}
+                        dataKey="value"
+                    >
+                        {dummyData.map((entry, index) => (
+                            <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
+                        ))}
+                    </Pie>
+                    <Tooltip
+                        contentStyle={{ backgroundColor: "hsl(var(--background))", borderRadius: "8px", border: "1px solid hsl(var(--border))" }}
+                        itemStyle={{ color: "hsl(var(--foreground))" }}
+                    />
+                    <Legend />
+                </PieChart>
+            </ResponsiveContainer>
+        </div>
+    );
+}
+
+
+
+================================================================================
+LOCATION: components\analytics\charts\RevenueChart.tsx
+================================================================================
+
+import { useAnalytics } from "../hooks/useAnalytics";
+import { ResponsiveContainer, LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, AreaChart, Area, BarChart, Bar } from "recharts";
+import { format } from "date-fns";
+import { useState } from "react";
+import { Button } from "@/components/ui/button";
+
+interface ChartProps {
+    data?: any;
+    isLoading?: boolean;
+}
+
+export function RevenueChart({ data, isLoading }: ChartProps) {
+    const [chartType, setChartType] = useState<"line" | "area" | "bar">("line");
+
+    if (isLoading && !data) return <div className="h-[300px] w-full animate-pulse bg-muted rounded-md" />;
+    if (!data || !Array.isArray(data) || data.length === 0) return <div className="h-[300px] flex items-center justify-center text-muted-foreground">No data available</div>;
+
+    // Simple aggregation or formatting if needed
+    const formattedData = data.map((d: any) => ({
+        ...d,
+        dateStr: format(new Date(d.date), "MMM d"),
+    }));
+
+    return (
+        <div className="space-y-4">
+            <div className="flex justify-end space-x-2">
+                <Button variant={chartType === "line" ? "default" : "outline"} size="sm" onClick={() => setChartType("line")}>Line</Button>
+                <Button variant={chartType === "area" ? "default" : "outline"} size="sm" onClick={() => setChartType("area")}>Area</Button>
+                <Button variant={chartType === "bar" ? "default" : "outline"} size="sm" onClick={() => setChartType("bar")}>Bar</Button>
+            </div>
+            <div className="h-[300px] w-full">
+                <ResponsiveContainer width="100%" height="100%">
+                    {chartType === "line" ? (
+                        <LineChart data={formattedData}>
+                            <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="hsl(var(--muted-foreground)/0.2)" />
+                            <XAxis dataKey="dateStr" tickLine={false} axisLine={false} tick={{ fontSize: 12, fill: "hsl(var(--muted-foreground))" }} />
+                            <YAxis tickLine={false} axisLine={false} tickFormatter={(val) => `₦${val}`} tick={{ fontSize: 12, fill: "hsl(var(--muted-foreground))" }} />
+                            <Tooltip
+                                contentStyle={{ backgroundColor: "hsl(var(--background))", borderRadius: "8px", border: "1px solid hsl(var(--border))" }}
+                                itemStyle={{ color: "hsl(var(--foreground))" }}
+                            />
+                            <Line type="monotone" dataKey="revenue" stroke="hsl(var(--primary))" strokeWidth={2} dot={false} activeDot={{ r: 4 }} />
+                        </LineChart>
+                    ) : chartType === "area" ? (
+                        <AreaChart data={formattedData}>
+                            <defs>
+                                <linearGradient id="colorRevenue" x1="0" y1="0" x2="0" y2="1">
+                                    <stop offset="5%" stopColor="hsl(var(--primary))" stopOpacity={0.3} />
+                                    <stop offset="95%" stopColor="hsl(var(--primary))" stopOpacity={0} />
+                                </linearGradient>
+                            </defs>
+                            <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="hsl(var(--muted-foreground)/0.2)" />
+                            <XAxis dataKey="dateStr" tickLine={false} axisLine={false} tick={{ fontSize: 12, fill: "hsl(var(--muted-foreground))" }} />
+                            <YAxis tickLine={false} axisLine={false} tickFormatter={(val) => `₦${val}`} tick={{ fontSize: 12, fill: "hsl(var(--muted-foreground))" }} />
+                            <Tooltip
+                                contentStyle={{ backgroundColor: "hsl(var(--background))", borderRadius: "8px", border: "1px solid hsl(var(--border))" }}
+                                itemStyle={{ color: "hsl(var(--foreground))" }}
+                            />
+                            <Area type="monotone" dataKey="revenue" stroke="hsl(var(--primary))" fillOpacity={1} fill="url(#colorRevenue)" />
+                        </AreaChart>
+                    ) : (
+                        <BarChart data={formattedData}>
+                            <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="hsl(var(--muted-foreground)/0.2)" />
+                            <XAxis dataKey="dateStr" tickLine={false} axisLine={false} tick={{ fontSize: 12, fill: "hsl(var(--muted-foreground))" }} />
+                            <YAxis tickLine={false} axisLine={false} tickFormatter={(val) => `₦${val}`} tick={{ fontSize: 12, fill: "hsl(var(--muted-foreground))" }} />
+                            <Tooltip
+                                contentStyle={{ backgroundColor: "hsl(var(--background))", borderRadius: "8px", border: "1px solid hsl(var(--border))" }}
+                                itemStyle={{ color: "hsl(var(--foreground))" }}
+                            />
+                            <Bar dataKey="revenue" fill="hsl(var(--primary))" radius={[4, 4, 0, 0]} />
+                        </BarChart>
+                    )}
+                </ResponsiveContainer>
+            </div>
+        </div>
+    );
+}
+
+
+
+================================================================================
+LOCATION: components\analytics\charts\TopProductsChart.tsx
+================================================================================
+
+"use client";
+
+import { ResponsiveContainer, BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip } from "recharts";
+
+interface ChartProps {
+    data?: any;
+    isLoading?: boolean;
+}
+
+export function TopProductsChart({ data, isLoading }: ChartProps) {
+    if (isLoading && !data) return <div className="h-[300px] w-full animate-pulse bg-muted rounded-md" />;
+    if (!data || data.length === 0) return <div className="h-[300px] flex items-center justify-center text-muted-foreground">No data available</div>;
+
+    return (
+        <div className="h-[300px] w-full">
+            <ResponsiveContainer width="100%" height="100%">
+                <BarChart layout="vertical" data={data} margin={{ left: 40, right: 20 }}>
+                    <CartesianGrid strokeDasharray="3 3" horizontal={true} vertical={false} stroke="hsl(var(--muted-foreground)/0.2)" />
+                    <XAxis type="number" hide />
+                    <YAxis dataKey="name" type="category" width={80} tick={{ fontSize: 12, fill: "hsl(var(--muted-foreground))" }} tickLine={false} axisLine={false} />
+                    <Tooltip
+                        cursor={{ fill: "transparent" }}
+                        contentStyle={{ backgroundColor: "hsl(var(--background))", borderRadius: "8px", border: "1px solid hsl(var(--border))" }}
+                        itemStyle={{ color: "hsl(var(--foreground))" }}
+                    />
+                    <Bar dataKey="quantity" fill="hsl(var(--primary))" radius={[0, 4, 4, 0]} barSize={20} />
+                </BarChart>
+            </ResponsiveContainer>
+        </div>
+    );
+}
+
+
+
+================================================================================
+LOCATION: components\analytics\charts\VisitAnalysisChart.tsx
+================================================================================
+
+"use client";
+
+import { useAnalytics } from "../hooks/useAnalytics";
+import { ResponsiveContainer, BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend } from "recharts";
+import { format } from "date-fns";
+import { useState } from "react";
+import { Button } from "@/components/ui/button";
+
+interface ChartProps {
+    data?: any;
+    isLoading?: boolean;
+}
+
+export function VisitAnalysisChart({ data, isLoading }: ChartProps) {
+    if (isLoading && !data) return <div className="h-[300px] w-full animate-pulse bg-muted rounded-md" />;
+    if (!data || !Array.isArray(data) || data.length === 0) return <div className="h-[300px] flex items-center justify-center text-muted-foreground">No data available</div>;
+
+    const formattedData = data.map((d: any) => ({
+        ...d,
+        dateStr: format(new Date(d.date), "MMM d"),
+    }));
+
+    return (
+        <div className="h-[300px] w-full">
+            <ResponsiveContainer width="100%" height="100%">
+                <BarChart data={formattedData}>
+                    <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="hsl(var(--muted-foreground)/0.2)" />
+                    <XAxis dataKey="dateStr" tickLine={false} axisLine={false} tick={{ fontSize: 12, fill: "hsl(var(--muted-foreground))" }} />
+                    <YAxis tickLine={false} axisLine={false} tick={{ fontSize: 12, fill: "hsl(var(--muted-foreground))" }} />
+                    <Tooltip
+                        contentStyle={{ backgroundColor: "hsl(var(--background))", borderRadius: "8px", border: "1px solid hsl(var(--border))" }}
+                        itemStyle={{ color: "hsl(var(--foreground))" }}
+                    />
+                    <Bar dataKey="count" fill="hsl(var(--primary))" radius={[4, 4, 0, 0]} />
+                </BarChart>
+            </ResponsiveContainer>
+        </div>
+    );
+}
+
+
+
+================================================================================
+LOCATION: components\analytics\hooks\useAnalytics.ts
+================================================================================
+
+import useSWR from 'swr';
+
+const fetcher = (url: string) => fetch(url).then((res) => res.json());
+
+export function useAnalytics(metric: string, params?: Record<string, any>) {
+    const query = new URLSearchParams(params).toString();
+    const { data, error, isLoading } = useSWR(
+        `/api/admin/analytics?metric=${metric}&${query}`,
+        fetcher
+    );
+
+    return {
+        data,
+        isLoading,
+        isError: error,
+    };
+}
+
+
+
+================================================================================
+LOCATION: components\analytics\KpiSection.tsx
+================================================================================
+
+"use client";
+
+import { useAnalytics } from "./hooks/useAnalytics";
+import { KpiCard } from "./cards/KpiCard";
+import { DollarSign, ShoppingCart, Users, ArrowUpRight, ArrowDownRight } from "lucide-react";
+
+interface KpiSectionProps {
+    data?: any;
+    isLoading?: boolean;
+}
+
+export function KpiSection({ data, isLoading }: KpiSectionProps) {
+    if (isLoading && !data) return <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4 w-full h-24 animate-pulse bg-muted rounded-md" />;
+    if (!data) return null;
+
+    return (
+        <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
+            <KpiCard
+                title="Total Revenue"
+                value={`₦${data.totalRevenue.toLocaleString()}`}
+                icon={<DollarSign className="h-4 w-4 text-muted-foreground" />}
+            />
+            <KpiCard
+                title="Total Orders"
+                value={data.totalOrders.toLocaleString()}
+                icon={<ShoppingCart className="h-4 w-4 text-muted-foreground" />}
+            />
+            <KpiCard
+                title="Refunds"
+                value={`₦${data.totalRefunds.toLocaleString()}`}
+                icon={<ArrowDownRight className="h-4 w-4 text-red-500" />}
+            />
+            <KpiCard
+                title="New Users"
+                value={data.newUsers.toLocaleString()}
+                description={`of ${data.totalUsers.toLocaleString()} total`}
+                icon={<Users className="h-4 w-4 text-muted-foreground" />}
+            />
+        </div>
+    );
+}
 
 
 
@@ -7214,6 +7814,362 @@ export function Cart({ className }: CartProps) {
 
 
 ================================================================================
+LOCATION: components\myComponents\subs\CartDetails.tsx
+================================================================================
+
+"use client";
+
+import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Separator } from "@/components/ui/separator";
+import { cn } from "@/lib/utils";
+import axios from "axios";
+import { Loader2, RefreshCcw, ShoppingCart, Plus } from "lucide-react";
+import React, { useEffect, useState } from "react";
+// Check if Flutterwave hook exists
+// import FlutterWaveButtonHook from "../../payment/flutterwavehook"; 
+import { useAppContext } from "@/hooks/useAppContext";
+import { motion, AnimatePresence } from "framer-motion";
+import Link from "next/link";
+import { useCart } from "@/hooks/use-cart";
+import { toast } from "sonner";
+
+interface CartDetailsProps {
+    cartId: string;
+    onPaymentSuccess?: () => void;
+}
+
+interface CartItem {
+    id: string;
+    quantity: number;
+    product: {
+        id: string;
+        name: string;
+        price: number;
+        images: string[];
+    };
+}
+
+interface CartData {
+    id: string;
+    name?: string;
+    total: number;
+    deliveryFee?: number;
+    status: string;
+    createdAt: string;
+    products: CartItem[];
+    payment?: {
+        method: string;
+        amount: number;
+        tx_ref?: string;
+    } | null;
+}
+
+const normalizeState = (state?: string | null): string | null => {
+    if (!state) return null;
+    return state.replace(/state/i, "").replace(/[-\s]/g, "_").trim();
+};
+
+interface Address {
+    id: string;
+    address?: string | null;
+    city?: string | null;
+    state?: string | null;
+}
+
+export function CartDetails({ cartId, onPaymentSuccess }: CartDetailsProps) {
+    const [cart, setCart] = useState<CartData | null>(null);
+    const [loading, setLoading] = useState(true);
+    const [error, setError] = useState<string | null>(null);
+    const { user } = useAppContext();
+    const { clearCart, addItem } = useCart();
+
+    const [selectedAddressId, setSelectedAddressId] = useState<string | null>(null);
+    const [isEditingName, setIsEditingName] = useState(false);
+    const [editedName, setEditedName] = useState("");
+
+    useEffect(() => {
+        if (user?.addresses?.length && !selectedAddressId) {
+            setSelectedAddressId(user.addresses[0].id);
+        }
+    }, [user?.addresses]);
+
+    useEffect(() => {
+        const fetchCartDetails = async () => {
+            if (!cartId) return;
+            setLoading(true);
+            setError(null);
+            try {
+                // Fetching via dbhandler
+                const res = await axios.get(`/api/dbhandler?model=cart&id=${cartId}`);
+                if (res.data) {
+                    // Usually an array if fetching all, but id fetch might return an array of 1 or object
+                    const data = Array.isArray(res.data) ? res.data.find((c: any) => c.id === cartId) : res.data;
+                    setCart(data);
+                    setEditedName(data?.name || "");
+                } else {
+                    setError("Cart not found.");
+                }
+            } catch (err) {
+                console.error("Failed to fetch cart details:", err);
+                setError("Failed to load cart details.");
+            } finally {
+                setLoading(false);
+            }
+        };
+
+        fetchCartDetails();
+    }, [cartId]);
+
+    const handleSaveName = async () => {
+        if (!cart) return;
+        try {
+            await axios.put(`/api/dbhandler?model=cart&id=${cart.id}`, { name: editedName });
+            setCart({ ...cart, name: editedName });
+            setIsEditingName(false);
+            toast.success("Cart name updated");
+        } catch (err) {
+            console.error("Failed to update name", err);
+            toast.error("Failed to update cart name");
+        }
+    }
+
+    const calculateDeliveryFee = (address?: Address | null): number => {
+        return 3000; // Flat fee for Health Clique for now
+    };
+
+    const selectedAddress = user?.addresses?.find((a: Address) => a.id === selectedAddressId);
+    
+    // Safety check, handles DB nested products correctly if the structure is raw or transformed
+    const validProducts = Array.isArray(cart?.products) ? cart.products : [];
+    
+    const subtotal = validProducts.reduce((acc, item) => {
+        const price = item?.product?.price || (item as any)?.price || 0;
+        return acc + (price * (item?.quantity || 1));
+    }, 0);
+
+    const isLocked = cart?.status === "paid" || cart?.status === "completed" || cart?.status === "unconfirmed" || !!cart?.payment;
+
+    const deliveryFee = isLocked
+        ? (cart?.deliveryFee ?? 0)
+        : validProducts.length > 0 ? calculateDeliveryFee(selectedAddress) : 0;
+
+    const totalAmount = isLocked
+        ? (cart?.total || 0)
+        : subtotal + deliveryFee;
+
+    const handleMakeCurrent = () => {
+        if (!cart) return;
+        if (confirm("This will replace your current active cart with the items from this order. Continue?")) {
+            clearCart();
+            validProducts.forEach(item => {
+                const product: any = (item as any).product || item;
+                addItem({
+                    id: product.id,
+                    name: product.name,
+                    price: product.price,
+                    images: product.images,
+                    category: product.category || "General"
+                }, item.quantity);
+            });
+            toast.success("Cart updated successfully!");
+        }
+    };
+
+    const handleAddToCurrent = () => {
+        if (!cart) return;
+        validProducts.forEach(item => {
+            const product = (item as any).product || item;
+            addItem({
+                id: product.id,
+                name: product.name,
+                price: product.price,
+                images: product.images,
+                category: product.category || "General"
+            }, item.quantity);
+        });
+        toast.success("Items added to your active cart!");
+    };
+
+    const markAsPaid = async () => {
+        try {
+            await axios.put(`/api/dbhandler?model=cart&id=${cart?.id}`, {
+                status: "unconfirmed",
+                total: totalAmount,
+                deliveryFee: deliveryFee
+            });
+            setCart(prev => prev ? ({ ...prev, status: "unconfirmed" }) : null);
+            toast.success("Payment marked as pending verification.");
+            if (onPaymentSuccess) onPaymentSuccess();
+        } catch (err) {
+            toast.error("Failed to update cart status");
+        }
+    }
+
+    if (loading) {
+        return (
+            <Card className="w-full h-full min-h-[400px] flex items-center justify-center">
+                <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
+            </Card>
+        );
+    }
+
+    if (error || !cart) {
+        return (
+            <Card className="w-full">
+                <CardContent className="py-10 text-center text-muted-foreground">
+                    {error || "Cart not found"}
+                </CardContent>
+            </Card>
+        );
+    }
+
+    return (
+        <Card className="w-full h-full overflow-hidden flex flex-col border-none shadow-none lg:border lg:shadow-sm">
+            <CardHeader className="bg-muted/30 pb-4 border-b mb-4">
+                <div className="flex flex-col gap-4">
+                    <div className="flex items-center justify-between">
+                        <div className="flex items-center gap-2">
+                             {isEditingName ? (
+                                 <div className="flex items-center gap-2">
+                                     <input 
+                                         className="h-8 rounded border px-2 text-sm max-w-[150px]"
+                                         value={editedName}
+                                         onChange={(e) => setEditedName(e.target.value)}
+                                         placeholder="Name this cart..."
+                                     />
+                                     <Button size="sm" onClick={handleSaveName}>Save</Button>
+                                     <Button size="sm" variant="ghost" onClick={() => setIsEditingName(false)}>Cancel</Button>
+                                 </div>
+                             ) : (
+                                 <CardTitle className="text-xl font-semibold flex items-center gap-2 group cursor-pointer" onClick={() => setIsEditingName(true)}>
+                                     {cart?.name || (isLocked ? "Order Details" : "Review & Pay")}
+                                     <span className="text-xs text-muted-foreground opacity-0 group-hover:opacity-100 font-normal ml-2">(Edit Name)</span>
+                                 </CardTitle>
+                             )}
+                        </div>
+                        <Badge variant={cart?.status === 'paid' ? "default" : cart?.status === 'unconfirmed' ? "outline" : "secondary"}>
+                            {cart?.status || "Pending"}
+                        </Badge>
+                    </div>
+
+                    <div className="flex gap-2">
+                        <Button variant="outline" size="sm" className="flex-1 text-xs" onClick={handleAddToCurrent}>
+                            <Plus className="mr-2 h-3 w-3" /> Add to Cart
+                        </Button>
+                        <Button variant="outline" size="sm" className="flex-1 text-xs" onClick={handleMakeCurrent}>
+                            <RefreshCcw className="mr-2 h-3 w-3" /> Make Current
+                        </Button>
+                    </div>
+                </div>
+            </CardHeader>
+
+            <CardContent className="flex-1 overflow-auto p-0 px-1">
+                <div className="flex flex-col h-full">
+                    <div className="flex-1 overflow-y-auto px-4 space-y-4 pb-4">
+                        <AnimatePresence>
+                            {validProducts.map((item: any) => {
+                                const product: any = (item as any).product || item;
+                                const imageUrl = product.images?.[0] || "/placeholder.jpg";
+                                return (
+                                    <motion.div
+                                        key={item.id}
+                                        className="flex rounded-lg border bg-card p-2 shadow-sm"
+                                    >
+                                        <img
+                                            src={imageUrl}
+                                            alt={product?.name ?? "Product"}
+                                            className="h-20 w-20 rounded object-cover bg-muted"
+                                        />
+                                        <div className="ml-4 flex flex-1 flex-col justify-between">
+                                            <div className="flex justify-between items-start gap-2">
+                                                <Link href={`/store/${product?.id}`} className="text-sm font-medium line-clamp-2 hover:underline">
+                                                    {product?.name ?? "Unnamed product"}
+                                                </Link>
+                                            </div>
+
+                                            <div className="mt-2 flex justify-between items-center">
+                                                <div className="flex items-center text-sm text-muted-foreground bg-secondary/50 px-2 py-1 rounded">
+                                                    <span>Qty: {item.quantity}</span>
+                                                </div>
+                                                <span className="text-sm font-medium">
+                                                    ₦{((product?.price || 0) * item.quantity).toFixed(2)}
+                                                </span>
+                                            </div>
+                                        </div>
+                                    </motion.div>
+                                );
+                            })}
+                        </AnimatePresence>
+                    </div>
+
+                    <div className="bg-muted/10 p-6 space-y-3 border-t mt-auto">
+                        {!isLocked && user?.id !== 'nil' && (
+                            <div className="space-y-1 mb-4 p-3 bg-background border rounded-lg">
+                                <label className="text-sm font-medium flex items-center gap-2">
+                                    Delivery Address
+                                </label>
+                                {user?.addresses && user?.addresses.length > 0 ? (
+                                    <div className="space-y-2">
+                                        <select
+                                            className="w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
+                                            value={selectedAddressId ?? ""}
+                                            onChange={(e) => setSelectedAddressId(e.target.value)}
+                                        >
+                                            {user.addresses.map((address: Address) => (
+                                                <option key={address.id} value={address.id}>
+                                                    {[address.address, address.city, address.state].filter(Boolean).join(", ")}
+                                                </option>
+                                            ))}
+                                        </select>
+                                    </div>
+                                ) : (
+                                    <div className="space-y-2">
+                                        <p className="text-sm text-destructive">No addresses found in profile.</p>
+                                    </div>
+                                )}
+                            </div>
+                        )}
+
+                        <div className="flex justify-between text-sm">
+                            <span>Subtotal</span>
+                            <span>₦{subtotal.toFixed(2)}</span>
+                        </div>
+
+                        <div className="flex justify-between text-sm">
+                            <span className="flex items-center gap-2">
+                                Delivery Fee
+                                {!isLocked && <span className="text-xs text-muted-foreground">({selectedAddress?.state || "Standard"})</span>}
+                            </span>
+                            <span>₦{deliveryFee.toFixed(2)}</span>
+                        </div>
+
+                        <Separator />
+
+                        <div className="flex justify-between font-semibold text-lg">
+                            <span>Total</span>
+                            <span>₦{totalAmount.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
+                        </div>
+
+                        {!isLocked && user && selectedAddressId && (
+                             <Button className="w-full mt-4" size="lg" onClick={markAsPaid}>
+                                Pay & Confirm Order
+                             </Button>
+                        )}
+                        {!isLocked && user && !selectedAddressId && (
+                             <p className="text-sm text-destructive mt-2 text-center font-bold">Please add an address in your account settings.</p>
+                        )}
+                    </div>
+                </div>
+            </CardContent>
+        </Card>
+    );
+}
+
+
+
+================================================================================
 LOCATION: components\myComponents\subs\cartitem.tsx
 ================================================================================
 
@@ -8099,7 +9055,7 @@ import {
 
 
 
-export function DataTableDemo(props : {data : any, columns: any}) {
+export function DataTableDemo(props : {data : any, columns: any, onRowClick?: (row: any) => void}) {
   const [sorting, setSorting] = React.useState<SortingState>([])
   const [columnFilters, setColumnFilters] = React.useState<ColumnFiltersState>(
     []
@@ -8191,6 +9147,8 @@ export function DataTableDemo(props : {data : any, columns: any}) {
                 <TableRow
                   key={row.id}
                   data-state={row.getIsSelected() && "selected"}
+                  onClick={() => props.onRowClick && props.onRowClick(row.original)}
+                  className={props.onRowClick ? "cursor-pointer" : ""}
                 >
                   {row.getVisibleCells().map((cell) => (
                     <TableCell key={cell.id}>
@@ -9698,29 +10656,68 @@ interface GlobalSearchProps {
 export const GlobalSearch = ({ placeholder = "Search for medications, brands or ingredients...", className = "" }: GlobalSearchProps) => {
   const [searchValue, setSearchValue] = useState("");
   const [searchResults, setSearchResults] = useState([]);
+  const [allProducts, setAllProducts] = useState<any[]>([]);
   const [isSearchOpen, setIsSearchOpen] = useState(false);
+  
+  // Filters
+  const [filterCategory, setFilterCategory] = useState("All");
+  const [filterBrand, setFilterBrand] = useState("All");
+  const [filterPrice, setFilterPrice] = useState("All");
+
   const { user } = useAppContext();
   const searchRef = useRef<HTMLDivElement>(null);
 
-  const handleSearch = async (value: string) => {
+  useEffect(() => {
+    // Pre-fetch all products for quick local filtering
+    axios.get(`/api/dbhandler?model=product&include=category`).then(res => {
+      setAllProducts(res.data);
+    }).catch(console.error);
+  }, []);
+
+  const uniqueCategories = Array.from(new Set(allProducts.map(p => p.category?.name || "Uncategorized")));
+  const uniqueBrands = Array.from(new Set(allProducts.map(p => p.brand).filter(Boolean)));
+
+
+  const handleSearch = (value: string, cat = filterCategory, br = filterBrand, pr = filterPrice) => {
     setSearchValue(value);
-    if (value.length < 2) {
+    
+    // Always open if we type or if we choose a filter
+    if (value.length < 2 && cat === "All" && br === "All" && pr === "All") {
       setSearchResults([]);
       setIsSearchOpen(false);
       return;
     }
 
-    try {
-      const response = await axios.get(`/api/dbhandler?model=product`);
-      const products = response.data;
-      const filtered = products.filter((p: any) =>
-        p.name.toLowerCase().includes(value.toLowerCase())
-      ).slice(0, 8);
-      setSearchResults(filtered);
-      setIsSearchOpen(true);
-    } catch (error) {
-      console.error(error);
+    let filtered = allProducts;
+    
+    if (value.length >= 2) {
+      filtered = filtered.filter((p: any) =>
+        p.name?.toLowerCase().includes(value.toLowerCase()) ||
+        p.description?.toLowerCase().includes(value.toLowerCase()) ||
+        p.activeIngredients?.some((ing: string) => ing.toLowerCase().includes(value.toLowerCase()))
+      );
     }
+
+    if (cat !== "All") {
+      filtered = filtered.filter((p: any) => p.category?.name === cat || (!p.category && cat === "Uncategorized"));
+    }
+    
+    if (br !== "All") {
+      filtered = filtered.filter((p: any) => p.brand === br);
+    }
+
+    if (pr !== "All") {
+      filtered = filtered.filter((p: any) => {
+        const price = getProductPrice(p, user?.role) || 0;
+        if (pr === "under-5000") return price < 5000;
+        if (pr === "5000-20000") return price >= 5000 && price <= 20000;
+        if (pr === "over-20000") return price > 20000;
+        return true;
+      });
+    }
+
+    setSearchResults(filtered.slice(0, 8));
+    setIsSearchOpen(true);
   };
 
   // Close search results when clicking outside
@@ -9746,15 +10743,62 @@ export const GlobalSearch = ({ placeholder = "Search for medications, brands or 
           className="h-12 pl-12 pr-4 text-base border-2 border-muted hover:border-primary/50 focus:border-primary transition-all rounded-xl shadow-sm"
           value={searchValue}
           onChange={(e) => handleSearch(e.target.value)}
-          onFocus={() => searchValue.length >= 2 && setIsSearchOpen(true)}
+          onFocus={() => {
+            setIsSearchOpen(true);
+            handleSearch(searchValue);
+          }}
         />
       </div>
 
-      {isSearchOpen && searchResults.length > 0 && (
+      {isSearchOpen && (
         <div className="absolute top-full left-0 right-0 mt-2 bg-card border rounded-xl shadow-2xl z-50 overflow-hidden animate-in fade-in zoom-in-95 duration-200">
-          <div className="p-2 border-b bg-muted/30 text-xs font-semibold uppercase tracking-wider text-muted-foreground">
-            Matching Products
+          
+          {/* Quick Filters */}
+          <div className="p-3 border-b bg-muted/10 grid grid-cols-3 gap-2">
+             <select 
+                className="w-full text-xs p-1.5 rounded border bg-background"
+                value={filterCategory}
+                onChange={(e) => {
+                  setFilterCategory(e.target.value);
+                  handleSearch(searchValue, e.target.value, filterBrand, filterPrice);
+                }}
+             >
+                <option value="All">All Categories</option>
+                {uniqueCategories.map(c => <option key={c as string} value={c as string}>{c as string}</option>)}
+             </select>
+             
+             <select 
+                className="w-full text-xs p-1.5 rounded border bg-background"
+                value={filterBrand}
+                onChange={(e) => {
+                  setFilterBrand(e.target.value);
+                  handleSearch(searchValue, filterCategory, e.target.value, filterPrice);
+                }}
+             >
+                <option value="All">All Brands</option>
+                {uniqueBrands.map(b => <option key={b as string} value={b as string}>{b as string}</option>)}
+             </select>
+
+             <select 
+                className="w-full text-xs p-1.5 rounded border bg-background"
+                value={filterPrice}
+                onChange={(e) => {
+                  setFilterPrice(e.target.value);
+                  handleSearch(searchValue, filterCategory, filterBrand, e.target.value);
+                }}
+             >
+                <option value="All">All Prices</option>
+                <option value="under-5000">Under ₦5,000</option>
+                <option value="5000-20000">₦5,000 - ₦20,000</option>
+                <option value="over-20000">Over ₦20,000</option>
+             </select>
           </div>
+
+          {searchResults.length > 0 ? (
+            <>
+              <div className="p-2 border-b bg-muted/30 text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+                Matching Products
+              </div>
           <div className="max-h-[300px] overflow-y-auto">
             {searchResults.map((product: any) => (
               <Link 
@@ -9777,9 +10821,15 @@ export const GlobalSearch = ({ placeholder = "Search for medications, brands or 
               </Link>
             ))}
           </div>
-          <Link href="/store" onClick={() => setIsSearchOpen(false)} className="block p-3 text-center text-sm font-medium text-primary hover:bg-primary/5 border-t">
-            View all results
-          </Link>
+              <Link href="/store" onClick={() => setIsSearchOpen(false)} className="block p-3 text-center text-sm font-medium text-primary hover:bg-primary/5 border-t">
+                View all results
+              </Link>
+            </>
+          ) : (
+            <div className="p-8 text-center text-muted-foreground text-sm">
+              No products found matching your search.
+            </div>
+          )}
         </div>
       )}
     </div>
@@ -25522,6 +26572,7 @@ export default function ProductForm({ initialProduct, hideList = false }: { init
   });
   const [file, setFile] = useState(null);
   const [categories, setCategories] = useState([]);
+  const [allBrands, setAllBrands] = useState<string[]>([]);
   const [preview, setPreview] = useState(null);
   const [uploadStatus , setUploadStatus] = useState("");
 
@@ -25577,6 +26628,10 @@ export default function ProductForm({ initialProduct, hideList = false }: { init
   useEffect(() => {
     if (!hideList) fetchProducts();
     fetchCategories();
+    axios.get('/api/dbhandler?model=product').then(res => {
+      const brands = Array.from(new Set(res.data.map((p: any) => p.brand).filter(Boolean))) as string[];
+      setAllBrands(brands);
+    });
   }, [hideList, fetchProducts, fetchCategories]);
 
   const resetForm = () => {
@@ -25795,11 +26850,15 @@ export default function ProductForm({ initialProduct, hideList = false }: { init
           <Label htmlFor="product-brand">Brand</Label>
           <Input
             id="product-brand"
-            placeholder="Brand name"
+            placeholder="Brand / Company name"
+            list="brand-options"
             value={formData.brand}
             onChange={(e) => setFormData({ ...formData, brand: e.target.value })}
             className="border-primary/20 focus:border-primary"
           />
+          <datalist id="brand-options">
+            {allBrands.map((b) => <option key={b} value={b} />)}
+          </datalist>
         </div>
 
         <div className="w-full space-y-1">
@@ -27680,6 +28739,14 @@ model Brand {
   order     Int      @default(0)
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
+}
+
+model Visit {
+  id        String   @id @default(auto()) @map("_id") @db.ObjectId
+  path      String?
+  userAgent String?
+  ip        String?
+  createdAt DateTime @default(now())
 }
 
 // model Comment {
@@ -33765,5 +34832,5 @@ export const normalizeDateTime = (dateTime?: string): string => {
 
 
 ================================================================================
-TOTAL FILES CONSOLIDATED: 303
+TOTAL FILES CONSOLIDATED: 316
 ================================================================================

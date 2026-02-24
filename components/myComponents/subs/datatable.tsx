@@ -175,7 +175,7 @@ import {
 
 
 
-export function DataTableDemo(props : {data : any, columns: any}) {
+export function DataTableDemo(props : {data : any, columns: any, onRowClick?: (row: any) => void}) {
   const [sorting, setSorting] = React.useState<SortingState>([])
   const [columnFilters, setColumnFilters] = React.useState<ColumnFiltersState>(
     []
@@ -267,6 +267,8 @@ export function DataTableDemo(props : {data : any, columns: any}) {
                 <TableRow
                   key={row.id}
                   data-state={row.getIsSelected() && "selected"}
+                  onClick={() => props.onRowClick && props.onRowClick(row.original)}
+                  className={props.onRowClick ? "cursor-pointer" : ""}
                 >
                   {row.getVisibleCells().map((cell) => (
                     <TableCell key={cell.id}>

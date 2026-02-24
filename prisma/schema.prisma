@@ -253,6 +253,14 @@ model Brand {
   updatedAt DateTime @updatedAt
 }
 
+model Visit {
+  id        String   @id @default(auto()) @map("_id") @db.ObjectId
+  path      String?
+  userAgent String?
+  ip        String?
+  createdAt DateTime @default(now())
+}
+
 // model Comment {
 //   id         String   @id @default(auto()) @map("_id") @db.ObjectId
 //   ministryId String?   @db.ObjectId @default("684f74ca135dd6d0efeab37d")
