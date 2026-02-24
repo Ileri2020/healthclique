@@ -35,44 +35,21 @@ const Stocks = () => {
   const fetchProducts = useCallback(async () => {
     setLoading(true);
     try {
-      const res = await axios.get('/api/dbhandler?model=product&include=category,brand,stock');
-      let data = res.data;
-      
-      if (categoryFilter) {
-        data = data.filter((p: any) => {
-          const filterLower = categoryFilter.toLowerCase();
-          const catName = p.category?.name?.toLowerCase();
-          const pCatName = p.categoryName?.toLowerCase();
-          return catName === filterLower || pCatName === filterLower;
-        });
-      }
+      let url = '/api/dbhandler?model=product&include=category,brand,stock';
+      if (brandFilter) url += `&brand=${encodeURIComponent(brandFilter)}`;
+      if (categoryFilter) url += `&categoryName=${encodeURIComponent(categoryFilter)}`;
+      if (concernFilter) url += `&concern=${encodeURIComponent(concernFilter)}`;
 
-      // Filter by health concern if ?concern= param is present
-      if (concernFilter) {
-        data = data.filter((p: any) =>
-          Array.isArray(p.healthConcerns) &&
-          p.healthConcerns.some((c: string) =>
-            c.toLowerCase() === concernFilter.toLowerCase()
-          )
-        );
-      }
-      
-      // Filter by brand if ?brand= param is present
-      if (brandFilter) {
-        data = data.filter((p: any) => 
-           p.brand?.name?.toLowerCase() === brandFilter.toLowerCase() ||
-           p.brandId === brandFilter
-        );
-      }
-      
-      setProducts(data);
-      setCurrentPage(1); // Reset to first page on filter change
+      const res = await axios.get(url);
+      setProducts(res.data);
+      setCurrentPage(1); // Reset pagination on filter change
     } catch (err) {
-      setError("Failed to fetch products, please check your network connection");
+      console.error("Failed to fetch products", err);
+      setError("Failed to load products. Please try again later.");
     } finally {
       setLoading(false);
     }
-  }, [categoryFilter, concernFilter, brandFilter]);
+  }, [categoryFilter, brandFilter, concernFilter]);
 
   useEffect(() => {
     fetchProducts();

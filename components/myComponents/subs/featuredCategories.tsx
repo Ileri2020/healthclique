@@ -95,7 +95,7 @@ const CategoryCard = ({ category, isAdmin, onRefresh }: { category: any, isAdmin
         </div>
       )}
       <Link
-        href={`/store?category=${category.name.toLowerCase()}`}
+        href={`/store?category=${encodeURIComponent(category.name)}`}
         className="flex flex-col h-full"
       >
         <div className="relative aspect-square overflow-hidden bg-muted/20">

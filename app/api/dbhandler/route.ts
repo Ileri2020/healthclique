@@ -113,11 +113,15 @@ export async function GET(req: NextRequest) {
       if (model === "product") {
         const brand = searchParams.get("brand");
         const categoryId = searchParams.get("categoryId");
+        const categoryName = searchParams.get("categoryName");
+        const concern = searchParams.get("concern");
         const includeParams = searchParams.get("include")?.split(",");
         
         const where: any = {};
-        if (brand) where.brand = { name: { contains: brand, mode: 'insensitive' } };
+        if (brand) where.brand = { name: { equals: brand.trim(), mode: 'insensitive' } };
         if (categoryId) where.categoryId = categoryId;
+        if (categoryName) where.category = { name: { equals: categoryName.trim(), mode: 'insensitive' } };
+        if (concern) where.healthConcerns = { some: { name: { equals: concern.trim(), mode: 'insensitive' } } };
 
         const include: any = {};
         if (includeParams) {
@@ -135,7 +139,7 @@ export async function GET(req: NextRequest) {
         return NextResponse.json(await prisma.product.findMany({
           where,
           include: Object.keys(include).length > 0 ? include : undefined,
-          take: limit,
+          take: 2000,
           orderBy: { createdAt: 'desc' }
         }));
       }
