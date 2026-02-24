@@ -110,7 +110,7 @@ const Description = () => {
         <div className="flex flex-col space-y-6">
             <div className="flex flex-wrap items-center gap-2">
               <div className="text-sm font-bold uppercase tracking-widest text-primary">
-                {product.brand || "General"}
+                {product.brand?.name || product.brand || "General"}
               </div>
               <Badge variant={isPrescription || isControlled ? "destructive" : "outline"} className="uppercase font-bold text-[10px]">
                 {regClass}
@@ -165,9 +165,9 @@ const Description = () => {
             <div className="space-y-3">
               <h3 className="font-bold text-foreground">Active Ingredients:</h3>
               <div className="flex flex-wrap gap-2">
-                {product.activeIngredients.map((ing: string) => (
-                  <span key={ing} className="rounded-full bg-accent/10 px-3 py-1 text-xs font-medium text-accent">
-                    {ing}
+                {product.activeIngredients.map((ing: any) => (
+                  <span key={ing.id || ing} className="rounded-full bg-accent/10 px-3 py-1 text-xs font-medium text-accent">
+                    {ing.name || ing}
                   </span>
                 ))}
               </div>

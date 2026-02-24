@@ -23,7 +23,13 @@ interface Brand {
   id: string;
   name: string;
   order: number;
+  _count?: {
+    products: number;
+  };
 }
+
+import useEmblaCarousel from "embla-carousel-react";
+import Autoplay from "embla-carousel-autoplay";
 
 const PartnerBrands = () => {
   const { user } = useAppContext();
@@ -153,27 +159,93 @@ const PartnerBrands = () => {
 
   const [showAll, setShowAll] = useState(false);
 
+  // Divide brands into 3 rows for carousels
+  const row1 = brands.filter((_, i) => i % 3 === 0);
+  const row2 = brands.filter((_, i) => i % 3 === 1);
+  const row3 = brands.filter((_, i) => i % 3 === 2);
+
+  const CarouselRow = ({ items, speed = 3000, direction = "ltr" }: { items: Brand[], speed?: number, direction?: "ltr" | "rtl" }) => {
+    const [emblaRef] = useEmblaCarousel({ 
+        loop: true, 
+        dragFree: true,
+        direction: direction as any
+    }, [
+      Autoplay({ delay: speed, stopOnInteraction: false, stopOnMouseEnter: true })
+    ] as any);
+
+    return (
+      <div className="overflow-hidden w-full py-4" ref={emblaRef}>
+        <div className="flex gap-8 md:gap-12">
+          {items.map((brand) => (
+            <div 
+              key={brand.id} 
+              className="flex-[0_0_auto] min-w-[200px]"
+            >
+              <div className="relative group/card bg-white/50 dark:bg-white/5 backdrop-blur-sm border border-primary/5 rounded-2xl p-6 hover:border-primary/20 hover:shadow-xl hover:shadow-primary/5 transition-all duration-500">
+                <div className="flex flex-col items-center gap-2">
+                  {isAdmin && (
+                    <div className="absolute -top-3 left-1/2 -translate-x-1/2 flex items-center gap-1 bg-background border shadow-sm rounded-full px-2 py-1 opacity-0 group-hover/card:opacity-100 transition-opacity z-10 scale-90 group-hover/card:scale-100 duration-200">
+                      <button 
+                        onClick={() => openEditDialog(brand)}
+                        className="p-1 hover:text-primary transition-colors"
+                        title="Edit"
+                      >
+                        <Pencil className="h-3 w-3" />
+                      </button>
+                      <div className="w-[1px] h-3 bg-muted"></div>
+                      <button 
+                        onClick={() => handleDelete(brand.id)}
+                        className="p-1 hover:text-destructive transition-colors"
+                        title="Delete"
+                      >
+                        <Trash2 className="h-3 w-3" />
+                      </button>
+                      <div className="w-[1px] h-3 bg-muted"></div>
+                      <span className="text-[10px] font-bold px-1 text-muted-foreground flex items-center gap-1">
+                        <Hash className="h-2 w-2" />{brand.order}
+                      </span>
+                    </div>
+                  )}
+                  <Link 
+                    href={`/store?brand=${encodeURIComponent(brand.name)}`}
+                    className="group flex flex-col items-center gap-1"
+                  >
+                    <span className="text-xl font-black text-foreground/40 group-hover:text-primary transition-all duration-300">
+                      {brand.name}
+                    </span>
+                    <span className="text-[10px] font-bold text-muted-foreground/60 tracking-widest uppercase">
+                      {brand._count?.products || 0} Products
+                    </span>
+                  </Link>
+                </div>
+              </div>
+            </div>
+          ))}
+        </div>
+      </div>
+    );
+  };
+
   if (loading) return null;
 
-  const displayedBrands = showAll ? brands : brands.slice(0, 10);
-
   return (
-    <section className="py-16 bg-muted/20 relative group">
-      <div className="container mx-auto max-w-7xl px-4">
-        <div className="flex flex-col items-center mb-12">
-          <h3 className="text-sm font-bold uppercase tracking-widest text-primary/60 mb-2">Our Trusted Partners</h3>
-          <h2 className="text-3xl font-black text-foreground">Leading Pharmaceutical Brands</h2>
-          <div className="w-20 h-1 bg-primary rounded-full mt-4"></div>
+    <section className="py-20 bg-muted/20 relative group overflow-hidden">
+      <div className="container mx-auto max-w-7xl px-4 relative z-10">
+        <div className="flex flex-col items-center mb-16">
+          <h3 className="text-sm font-bold uppercase tracking-widest text-primary/60 mb-2">Our Global Network</h3>
+          <h2 className="text-4xl font-black text-foreground text-center">Elite Pharmaceutical Partners</h2>
+          <div className="w-24 h-1.5 bg-primary rounded-full mt-6 shadow-sm shadow-primary/20"></div>
         </div>
 
         {isAdmin && (
-          <div className="flex justify-end mb-8 gap-4">
+          <div className="flex justify-center mb-12 gap-4">
+             {/* ... Admin Dialogs stay same ... */}
             <Dialog open={isBulkOrderOpen} onOpenChange={(open) => {
               if (open) setBulkBrands([...brands]);
               setIsBulkOrderOpen(open);
             }}>
               <DialogTrigger asChild>
-                <Button variant="outline" className="gap-2 rounded-full border-primary/20 hover:border-primary">
+                <Button variant="outline" className="gap-2 rounded-full border-primary/20 hover:border-primary shadow-sm">
                   <ArrowUpDown className="h-4 w-4" /> Bulk Reorder
                 </Button>
               </DialogTrigger>
@@ -189,7 +261,7 @@ const PartnerBrands = () => {
                   <Search className="absolute left-9 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
                   <Input 
                     placeholder="Search brands to reorder..." 
-                    className="pl-10"
+                    className="pl-10 h-11 rounded-xl"
                     value={bulkSearch}
                     onChange={(e) => setBulkSearch(e.target.value)}
                   />
@@ -200,15 +272,15 @@ const PartnerBrands = () => {
                     {bulkBrands
                       .filter(b => b.name.toLowerCase().includes(bulkSearch.toLowerCase()))
                       .map((brand) => (
-                      <div key={brand.id} className="flex items-center justify-between p-3 rounded-lg bg-muted/30 border border-transparent hover:border-primary/20 transition-all">
+                      <div key={brand.id} className="flex items-center justify-between p-4 rounded-xl bg-muted/30 border border-transparent hover:border-primary/20 transition-all">
                         <span className="font-semibold text-sm">{brand.name}</span>
                         <div className="flex items-center gap-3">
-                          <Label className="text-xs text-muted-foreground">Order:</Label>
+                          <Label className="text-xs text-muted-foreground font-bold">POS:</Label>
                           <Input 
                             type="number" 
                             value={brand.order}
                             onChange={(e) => swapOrder(brand.id, parseInt(e.target.value))}
-                            className="w-20 h-8 text-center font-bold"
+                            className="w-20 h-9 text-center font-bold rounded-lg"
                           />
                         </div>
                       </div>
@@ -216,9 +288,9 @@ const PartnerBrands = () => {
                   </div>
                 </ScrollArea>
 
-                <DialogFooter className="p-6 pt-2 border-t mt-auto">
-                  <Button variant="ghost" onClick={() => setIsBulkOrderOpen(false)}>Cancel</Button>
-                  <Button onClick={handleBulkUpdate}>Save All Changes</Button>
+                <DialogFooter className="p-6 pt-4 border-t mt-auto bg-muted/10">
+                  <Button variant="ghost" className="rounded-xl" onClick={() => setIsBulkOrderOpen(false)}>Cancel</Button>
+                  <Button className="rounded-xl h-11 px-8" onClick={handleBulkUpdate}>Save Changes</Button>
                 </DialogFooter>
               </DialogContent>
             </Dialog>
@@ -273,61 +345,18 @@ const PartnerBrands = () => {
             </Dialog>
           </div>
         )}
-        
-        <div className="flex flex-wrap justify-center items-center gap-8 md:gap-16">
-          {displayedBrands.map((brand) => (
-            <div 
-              key={brand.id} 
-              className="relative group/card flex items-center justify-center p-4 min-w-[120px]"
-            >
-              <div className="flex flex-col items-center gap-1 group">
-                {isAdmin && (
-                  <div className="absolute -top-4 left-1/2 -translate-x-1/2 flex items-center gap-1 bg-background border shadow-md rounded-full px-2 py-1 opacity-0 group-hover/card:opacity-100 transition-opacity z-10 scale-90 group-hover/card:scale-100 duration-200">
-                    <button 
-                      onClick={() => openEditDialog(brand)}
-                      className="p-1 hover:text-primary transition-colors"
-                      title="Edit"
-                    >
-                      <Pencil className="h-3 w-3" />
-                    </button>
-                    <div className="w-[1px] h-3 bg-muted"></div>
-                    <button 
-                      onClick={() => handleDelete(brand.id)}
-                      className="p-1 hover:text-destructive transition-colors"
-                      title="Delete"
-                    >
-                      <Trash2 className="h-3 w-3" />
-                    </button>
-                    <div className="w-[1px] h-3 bg-muted"></div>
-                    <span className="text-[10px] font-bold px-1 text-muted-foreground flex items-center gap-1">
-                      <Hash className="h-2 w-2" />{brand.order}
-                    </span>
-                  </div>
-                )}
-                <Link 
-                  href={`/store?brand=${encodeURIComponent(brand.name)}`}
-                  className="text-2xl font-black text-foreground/40 hover:text-primary transition-all duration-300 transform hover:scale-110 cursor-pointer text-center"
-                >
-                  {brand.name}
-                </Link>
-              </div>
-            </div>
-          ))}
+      </div>
 
-          {brands.length === 0 && !loading && (
-            <div className="text-muted-foreground italic text-sm">No pharmaceutical companies added yet.</div>
-          )}
-        </div>
-
-        {brands.length > 10 && (
-          <div className="flex justify-center mt-12">
-            <Button 
-              variant="outline" 
-              onClick={() => setShowAll(!showAll)}
-              className="rounded-full px-8 hover:bg-primary hover:text-primary-foreground transition-all"
-            >
-              {showAll ? "Show Less" : `Show All Brands (${brands.length})`}
-            </Button>
+      <div className="w-full space-y-4">
+        {brands.length > 0 ? (
+          <>
+            <CarouselRow items={row1} speed={3000} />
+            <CarouselRow items={row2} speed={4000} direction="ltr" />
+            <CarouselRow items={row3} speed={3500} />
+          </>
+        ) : (
+          <div className="container mx-auto flex justify-center py-10">
+            <p className="text-muted-foreground italic text-sm">No pharmaceutical companies added yet.</p>
           </div>
         )}
       </div>

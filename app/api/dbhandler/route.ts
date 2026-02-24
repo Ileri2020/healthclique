@@ -140,6 +140,14 @@ export async function GET(req: NextRequest) {
         }));
       }
 
+      if (model === "brand") {
+        return NextResponse.json(await prisma.brand.findMany({
+          take: limit,
+          include: { _count: { select: { products: true } } },
+          orderBy: { order: 'asc' }
+        }));
+      }
+
       return NextResponse.json(await prismaModel.findMany({ take: limit }));
     } else {
       // Single item fetch
