@@ -8,9 +8,10 @@ import { usePathname } from 'next/navigation';
 import { GlobalSearch } from "../myComponents/subs/GlobalSearch"
 import { useEffect, useState } from "react"
 import axios from "axios"
-import { ChevronRight, LayoutGrid, Stethoscope, Tag, ShoppingCart, MessageSquare } from "lucide-react"
+import { ChevronRight, LayoutGrid, Stethoscope, Tag, ShoppingCart, MessageSquare, Camera } from "lucide-react"
 import { Cart } from "../myComponents/subs/cart"
 import { Button } from "../ui/button";
+import { SnapPrescription } from "../myComponents/subs/SnapPrescription";
 
 const Sidenav = () => {
     const pathname = usePathname();
@@ -161,6 +162,15 @@ const Sidenav = () => {
                             )}
                         </div>
                     )}
+                </div>
+
+                <div className="p-4 border-t bg-muted/20">
+                    <SnapPrescription>
+                        <Button className="w-full flex items-center gap-3 h-12 rounded-2xl bg-accent hover:bg-accent/90 shadow-lg shadow-accent/20 font-bold">
+                            <Camera className="w-5 h-5" />
+                            Snap Prescription
+                        </Button>
+                    </SnapPrescription>
                 </div>
 
                 <div className="p-6 border-t bg-muted/30 flex items-center justify-between">

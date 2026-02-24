@@ -2,7 +2,7 @@
 
 import { useIsAdmin } from "@/hooks/useIsAdmin";
 import { Button } from "@/components/ui/button";
-import { Phone, MessageCircle, Clock, ShieldCheck, HeartPulse, Search } from "lucide-react";
+import { Phone, MessageCircle, Clock, ShieldCheck, HeartPulse, Search, Camera } from "lucide-react";
 import Link from "next/link";
 import React, { useState, useEffect, useRef } from "react";
 import axios from "axios";
@@ -15,6 +15,7 @@ import {
 import landingimg from '@/public/pharmacist.png'
 import { RiseAndFadeText } from "./textctrl";
 import { GlobalSearch } from "./index";
+import { SnapPrescription } from "./SnapPrescription";
 import { useAppContext } from "@/hooks/useAppContext";
 import {
   Dialog,
@@ -86,6 +87,13 @@ const Hero = () => {
                   Shop All Meds
                 </Button>
               </Link>
+
+              <SnapPrescription>
+                <Button size="lg" variant="outline" className="h-14 px-8 rounded-xl text-lg gap-2 border-2 border-accent text-accent hover:bg-accent hover:text-white transition-all">
+                  <Camera className="w-5 h-5" />
+                  Snap Prescription
+                </Button>
+              </SnapPrescription>
               {user?.email !== "nil" ? (
                 <Link href="/contact">
                   <Button size="lg" variant="outline" className="h-14 px-8 rounded-xl text-lg gap-2 border-2">
