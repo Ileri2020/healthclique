@@ -42,16 +42,18 @@ export const SnapPrescription = ({ children }: { children: React.ReactNode }) =>
       const { data: { apiKey } } = await axios.get("/api/keys/gemini");
       
       const genAI = new GoogleGenerativeAI(apiKey);
-      const model = genAI.getGenerativeModel({ model: "gemini-1.5-flash" });
+      const model = genAI.getGenerativeModel({ model: "gemini-1.5-pro-latest" });
 
       setStatus("Analyzing image with AI...");
       
-      // Convert base64 to parts for Gemini
+      // Extract MIME type and base64 data correctly from the Data URL
+      const mimeType = image.match(/data:(.*?);base64/)?.[1] || "image/jpeg";
       const base64Data = image.split(",")[1];
+      
       const part = {
         inlineData: {
           data: base64Data,
-          mimeType: "image/jpeg",
+          mimeType: mimeType,
         },
       };
 
