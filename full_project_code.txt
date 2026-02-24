@@ -1,6 +1,6 @@
 ================================================================================
 LOIS SPICE PROJECT - SOURCE CODE CONSOLIDATION
-Generated: 2026-02-24 00:28:50
+Generated: 2026-02-24 10:21:10
 ================================================================================
 
 
@@ -594,6 +594,8 @@ import { TopProductsChart } from "@/components/analytics/charts/TopProductsChart
 import { ProfitChart } from "@/components/analytics/charts/ProfitChart";
 import { VisitAnalysisChart } from "@/components/analytics/charts/VisitAnalysisChart";
 import { RefundReasonChart } from "@/components/analytics/charts/RefundReasonChart";
+import { UserRoleChart } from "@/components/analytics/charts/UserRoleChart";
+import { PostCategoryChart } from "@/components/analytics/charts/PostCategoryChart";
 import { Button } from "@/components/ui/button";
 import { Download, Calendar as CalendarIcon } from "lucide-react";
 import { useState } from "react";
@@ -705,6 +707,15 @@ export default function AnalyticsDashboard() {
                         </ChartCard>
                         <ChartCard title="Refund Reasons" className="col-span-3">
                             <RefundReasonChart data={data?.refunds} isLoading={isLoading} />
+                        </ChartCard>
+                    </div>
+
+                    <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-7">
+                        <ChartCard title="Posts by Category" className="col-span-4">
+                            <PostCategoryChart data={data?.postsByCategory} isLoading={isLoading} />
+                        </ChartCard>
+                        <ChartCard title="User Roles Distribution" className="col-span-3">
+                            <UserRoleChart data={data?.userRoles} isLoading={isLoading} />
                         </ChartCard>
                     </div>
                 </>
@@ -1038,8 +1049,44 @@ export async function GET(req: Request) {
     const newUsers = await prisma.user.count({
       where: { createdAt: { gte: from, lte: to } }
     });
-
+    
     const totalUsers = await prisma.user.count();
+
+    /* ================= MISC DB COUNTS ================= */
+    const totalProducts = await prisma.product.count();
+    const newProducts = await prisma.product.count({
+      where: { createdAt: { gte: from, lte: to } }
+    });
+
+    const totalBrands = await prisma.brand.count();
+
+    const totalPosts = await prisma.post.count();
+    const newPosts = await prisma.post.count({
+      where: { createdAt: { gte: from, lte: to } }
+    });
+
+    /* ================= POSTS BY CATEGORY ================= */
+    const postsByCategoryRaw = await prisma.post.groupBy({
+      by: ["category"],
+      where: { createdAt: { gte: from, lte: to } },
+      _count: { category: true }
+    });
+    
+    const postsByCategory = postsByCategoryRaw.map(p => ({
+      name: p.category || "Uncategorized",
+      value: p._count.category
+    }));
+
+    /* ================= USER ROLES OVERVIEW ================= */
+    const userRolesRaw = await prisma.user.groupBy({
+      by: ["role"],
+      _count: { role: true },
+    });
+
+    const userRoles = userRolesRaw.map(u => ({
+      name: u.role || "customer",
+      value: u._count.role
+    }));
 
     return NextResponse.json({
       revenue: totalRevenue,
@@ -1050,12 +1097,19 @@ export async function GET(req: Request) {
       topProducts,
       visits,
       refunds,
+      postsByCategory,
+      userRoles,
       kpis: {
         totalRevenue,
         totalOrders: ordersCount,
         totalRefunds: refundAgg._sum.amount || 0,
         newUsers,
-        totalUsers
+        totalUsers,
+        totalProducts,
+        newProducts,
+        totalPosts,
+        newPosts,
+        totalBrands
       }
     });
   } catch (error) {
@@ -1952,11 +2006,15 @@ export async function GET(req: NextRequest) {
       if (model === "product") {
         const brand = searchParams.get("brand");
         const categoryId = searchParams.get("categoryId");
+        const categoryName = searchParams.get("categoryName");
+        const concern = searchParams.get("concern");
         const includeParams = searchParams.get("include")?.split(",");
         
         const where: any = {};
-        if (brand) where.brand = { contains: brand, mode: 'insensitive' };
+        if (brand) where.brand = { name: { equals: brand.trim(), mode: 'insensitive' } };
         if (categoryId) where.categoryId = categoryId;
+        if (categoryName) where.category = { name: { equals: categoryName.trim(), mode: 'insensitive' } };
+        if (concern) where.healthConcerns = { some: { name: { equals: concern.trim(), mode: 'insensitive' } } };
 
         const include: any = {};
         if (includeParams) {
@@ -1964,6 +2022,9 @@ export async function GET(req: NextRequest) {
         } else if (!minimal) {
           include.category = true;
           include.stock = true;
+          include.brand = true;
+          include.activeIngredients = true;
+          include.healthConcerns = true;
         } else {
           include.category = true;
         }
@@ -1971,8 +2032,24 @@ export async function GET(req: NextRequest) {
         return NextResponse.json(await prisma.product.findMany({
           where,
           include: Object.keys(include).length > 0 ? include : undefined,
-          take: limit,
+          take: 2000,
           orderBy: { createdAt: 'desc' }
+        }));
+      }
+
+      if (model === "category") {
+        return NextResponse.json(await prisma.category.findMany({
+          take: limit,
+          include: { _count: { select: { products: true } } },
+          orderBy: { name: 'asc' }
+        }));
+      }
+
+      if (model === "brand") {
+        return NextResponse.json(await prisma.brand.findMany({
+          take: limit,
+          include: { _count: { select: { products: true } } },
+          orderBy: { order: 'asc' }
         }));
       }
 
@@ -1983,6 +2060,9 @@ export async function GET(req: NextRequest) {
       if (model === "product") {
         include.category = true;
         include.stock = true;
+        include.brand = true;
+        include.activeIngredients = true;
+        include.healthConcerns = true;
         include.reviews = { include: { user: { select: { name: true, avatarUrl: true } } } };
       }
       
@@ -2079,6 +2159,20 @@ export async function POST(req: NextRequest) {
        if (body[field] === "false") body[field] = false;
     });
 
+    if (model === "product") {
+      if (body.brand) {
+        body.brand = { connectOrCreate: { where: { name: body.brand }, create: { name: body.brand } } };
+      } else {
+        delete body.brand;
+      }
+      if (Array.isArray(body.activeIngredients)) {
+        body.activeIngredients = { connectOrCreate: body.activeIngredients.map((name: string) => ({ where: { name }, create: { name } })) };
+      }
+      if (Array.isArray(body.healthConcerns)) {
+        body.healthConcerns = { connectOrCreate: body.healthConcerns.map((name: string) => ({ where: { name }, create: { name } })) };
+      }
+    }
+
     return NextResponse.json(await prismaModel.create({ data: body }));
   } catch (error) {
     console.error("Database POST error:", error);
@@ -2117,10 +2211,43 @@ export async function PUT(req: NextRequest) {
     body = await req.json();
   }
 
+  // Support for bulk brand reordering
+  if (model === "brand" && Array.isArray(body)) {
+    try {
+      const updates = body.map((item: any) => 
+        prisma.brand.update({
+          where: { id: item.id },
+          data: { order: parseInt(item.order) || 0 }
+        })
+      );
+      await prisma.$transaction(updates);
+      return NextResponse.json({ success: true, count: updates.length });
+    } catch (error) {
+      console.error("Bulk update error:", error);
+      return NextResponse.json({ error: "Bulk update failed" }, { status: 500 });
+    }
+  }
+
   const id = parseId(body.id, model);
   if (!id) return NextResponse.json({ error: "Missing ID" }, { status: 400 });
 
   const { id: _, ...updatedData } = body;
+  
+  if (model === "product") {
+    if (updatedData.brand !== undefined) {
+      if (updatedData.brand) {
+        updatedData.brand = { connectOrCreate: { where: { name: updatedData.brand }, create: { name: updatedData.brand } } };
+      } else {
+        updatedData.brand = { disconnect: true };
+      }
+    }
+    if (Array.isArray(updatedData.activeIngredients)) {
+      updatedData.activeIngredients = { set: [], connectOrCreate: updatedData.activeIngredients.map((name: string) => ({ where: { name }, create: { name } })) };
+    }
+    if (Array.isArray(updatedData.healthConcerns)) {
+      updatedData.healthConcerns = { set: [], connectOrCreate: updatedData.healthConcerns.map((name: string) => ({ where: { name }, create: { name } })) };
+    }
+  }
   try {
     return NextResponse.json(await prismaModel.update({
       where: { id: String(id) },
@@ -2579,19 +2706,29 @@ async function dbHandler({
       case 'POST':
         // const data = body;  Spicy, pepperish and groundnut yaji spice blend
         console.log('post product body:', body)
-        const newItem = await prismaModel.create({
+         const newItem = await prismaModel.create({
             data: {
               description: body.description,
               name: body.name,
               categoryId: body.categoryId,
               price: parseFloat(body.price),
-              brand: body.brand,
               scarce: body.scarce,
-              activeIngredients: Array.isArray(body.activeIngredients) ? body.activeIngredients : [],
-              healthConcerns: Array.isArray(body.healthConcerns) ? body.healthConcerns : [],
               regulatoryClassification: body.regulatoryClassification || "OTC",
               requiresPrescription: body.requiresPrescription === true || body.requiresPrescription === "true",
               images: [body.url],
+              brand: body.brand ? {
+                connectOrCreate: { where: { name: body.brand }, create: { name: body.brand } }
+              } : undefined,
+              activeIngredients: {
+                connectOrCreate: (Array.isArray(body.activeIngredients) ? body.activeIngredients : []).map((name: string) => ({
+                  where: { name }, create: { name }
+                }))
+              },
+              healthConcerns: {
+                connectOrCreate: (Array.isArray(body.healthConcerns) ? body.healthConcerns : []).map((name: string) => ({
+                  where: { name }, create: { name }
+                }))
+              },
             },
           }
         );
@@ -4383,6 +4520,8 @@ import { FileText, AlertCircle, Star } from "lucide-react"
 import { ProductReviews } from "@/components/myComponents/subs/productReviews"
 import { PriceFeedback } from "@/components/myComponents/subs/priceFeedback"
 import Similar from "@/components/myComponents/subs/similar"
+import useEmblaCarousel from "embla-carousel-react";
+import Autoplay from "embla-carousel-autoplay";
 
 const Description = () => {
   const [product, setProduct] = useState<any>(null);
@@ -4392,6 +4531,8 @@ const Description = () => {
   const { id } = useParams();
   const { addItem } = useCart();
   const { user } = useAppContext();
+  
+  const [emblaRef] = useEmblaCarousel({ loop: true }, [Autoplay({ delay: 3000, stopOnInteraction: false })] as any);
 
   const regClass = product?.regulatoryClassification || "OTC";
   const isPrescription = regClass === "Prescription Medicine";
@@ -4410,8 +4551,11 @@ const Description = () => {
         const data = await res.json();
         setProduct(data);
 
-        // Fetch similar products (same category or just random for now)
-        const simRes = await fetch(`/api/dbhandler?model=product`);
+        // Fetch similar products (same category or brand)
+        let simUrl = `/api/dbhandler?model=product`;
+        if (data.categoryId) simUrl += `&categoryId=${data.categoryId}`;
+        
+        const simRes = await fetch(simUrl);
         const allProds = await simRes.json();
         const filtered = allProds
           .filter((p: any) => p.id !== id)
@@ -4478,7 +4622,7 @@ const Description = () => {
         <div className="flex flex-col space-y-6">
             <div className="flex flex-wrap items-center gap-2">
               <div className="text-sm font-bold uppercase tracking-widest text-primary">
-                {product.brand || "General"}
+                {product.brand?.name || product.brand || "General"}
               </div>
               <Badge variant={isPrescription || isControlled ? "destructive" : "outline"} className="uppercase font-bold text-[10px]">
                 {regClass}
@@ -4533,9 +4677,9 @@ const Description = () => {
             <div className="space-y-3">
               <h3 className="font-bold text-foreground">Active Ingredients:</h3>
               <div className="flex flex-wrap gap-2">
-                {product.activeIngredients.map((ing: string) => (
-                  <span key={ing} className="rounded-full bg-accent/10 px-3 py-1 text-xs font-medium text-accent">
-                    {ing}
+                {product.activeIngredients.map((ing: any) => (
+                  <span key={ing.id || ing} className="rounded-full bg-accent/10 px-3 py-1 text-xs font-medium text-accent">
+                    {ing.name || ing}
                   </span>
                 ))}
               </div>
@@ -4575,10 +4719,40 @@ const Description = () => {
         </div>
       </div>
 
-      {/* Review Section */}
       <div className="mt-12 bg-muted/10 p-4 md:p-8 rounded-3xl border shadow-sm">
          <ProductReviews productId={product.id} />
       </div>
+
+      {/* Closely Similar Carousel */}
+      {similarProducts.length > 0 && (
+        <div className="mt-16 overflow-hidden" ref={emblaRef}>
+          <div className="mb-6 px-2">
+            <h2 className="text-xl font-bold text-primary flex items-center gap-2">
+              <HeartPulse className="h-5 w-5" /> Recommended for You
+            </h2>
+          </div>
+          <div className="flex gap-4 p-2">
+            {similarProducts.map((simProd) => (
+              <div key={`carousel-${simProd.id}`} className="flex-[0_0_auto] w-[260px]">
+                <ProductCard
+                  className="w-full"
+                  variant="compact"
+                  orientation="vertical"
+                  product={{
+                    ...simProd,
+                    inStock: true,
+                    categoryName: simProd.category?.name || "General"
+                  }}
+                  onAddToCart={() => {
+                    addItem(simProd, 1);
+                    toast.success(`${simProd.name} added to cart`);
+                  }}
+                />
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
 
       {/* Similar Products */}
       <div className="mt-20">
@@ -5486,6 +5660,34 @@ export function CartStatusChart({ data, isLoading }: ChartProps) {
 
 
 ================================================================================
+LOCATION: components\analytics\charts\PostCategoryChart.tsx
+================================================================================
+
+import { Bar, BarChart, CartesianGrid, ResponsiveContainer, XAxis, YAxis, Tooltip } from "recharts";
+import { ChartContainer, ChartTooltipContent } from "@/components/ui/chart";
+
+export function PostCategoryChart({ data, isLoading }: { data: any[], isLoading: boolean }) {
+  if (isLoading) return <div className="h-[300px] flex items-center justify-center">Loading...</div>;
+  if (!data?.length) return <div className="h-[300px] flex items-center justify-center text-muted-foreground">No posts data</div>;
+
+  return (
+    <ChartContainer config={{}} className="h-[300px] w-full">
+      <ResponsiveContainer width="100%" height="100%">
+        <BarChart data={data}>
+          <CartesianGrid strokeDasharray="3 3" vertical={false} />
+          <XAxis dataKey="name" />
+          <YAxis />
+          <Tooltip content={<ChartTooltipContent />} />
+          <Bar dataKey="value" fill="hsl(var(--primary))" radius={[4, 4, 0, 0]} />
+        </BarChart>
+      </ResponsiveContainer>
+    </ChartContainer>
+  );
+}
+
+
+
+================================================================================
 LOCATION: components\analytics\charts\ProfitChart.tsx
 ================================================================================
 
@@ -5718,6 +5920,45 @@ export function TopProductsChart({ data, isLoading }: ChartProps) {
 
 
 ================================================================================
+LOCATION: components\analytics\charts\UserRoleChart.tsx
+================================================================================
+
+import { Pie, PieChart, ResponsiveContainer, Tooltip, Cell } from "recharts";
+import { ChartContainer, ChartTooltipContent } from "@/components/ui/chart";
+
+const COLORS = ['#8884d8', '#82ca9d', '#ffc658', '#ff8042', '#a4de6c'];
+
+export function UserRoleChart({ data, isLoading }: { data: any[], isLoading: boolean }) {
+  if (isLoading) return <div className="h-[300px] flex items-center justify-center">Loading...</div>;
+  if (!data?.length) return <div className="h-[300px] flex items-center justify-center text-muted-foreground">No roles data</div>;
+
+  return (
+    <ChartContainer config={{}} className="h-[300px] w-full">
+      <ResponsiveContainer width="100%" height="100%">
+        <PieChart>
+          <Pie
+            data={data}
+            cx="50%"
+            cy="50%"
+            innerRadius={60}
+            outerRadius={80}
+            paddingAngle={5}
+            dataKey="value"
+          >
+            {data.map((entry, index) => (
+              <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
+            ))}
+          </Pie>
+          <Tooltip content={<ChartTooltipContent />} />
+        </PieChart>
+      </ResponsiveContainer>
+    </ChartContainer>
+  );
+}
+
+
+
+================================================================================
 LOCATION: components\analytics\charts\VisitAnalysisChart.tsx
 ================================================================================
 
@@ -5807,28 +6048,50 @@ export function KpiSection({ data, isLoading }: KpiSectionProps) {
     if (!data) return null;
 
     return (
-        <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
-            <KpiCard
-                title="Total Revenue"
-                value={`₦${data.totalRevenue.toLocaleString()}`}
-                icon={<DollarSign className="h-4 w-4 text-muted-foreground" />}
-            />
-            <KpiCard
-                title="Total Orders"
-                value={data.totalOrders.toLocaleString()}
-                icon={<ShoppingCart className="h-4 w-4 text-muted-foreground" />}
-            />
-            <KpiCard
-                title="Refunds"
-                value={`₦${data.totalRefunds.toLocaleString()}`}
-                icon={<ArrowDownRight className="h-4 w-4 text-red-500" />}
-            />
-            <KpiCard
-                title="New Users"
-                value={data.newUsers.toLocaleString()}
-                description={`of ${data.totalUsers.toLocaleString()} total`}
-                icon={<Users className="h-4 w-4 text-muted-foreground" />}
-            />
+        <div className="space-y-4">
+            <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
+                <KpiCard
+                    title="Total Revenue"
+                    value={`₦${data.totalRevenue?.toLocaleString() || 0}`}
+                    icon={<DollarSign className="h-4 w-4 text-muted-foreground" />}
+                />
+                <KpiCard
+                    title="Total Orders"
+                    value={(data.totalOrders || 0).toLocaleString()}
+                    icon={<ShoppingCart className="h-4 w-4 text-muted-foreground" />}
+                />
+                <KpiCard
+                    title="Refunds"
+                    value={`₦${data.totalRefunds?.toLocaleString() || 0}`}
+                    icon={<ArrowDownRight className="h-4 w-4 text-red-500" />}
+                />
+                <KpiCard
+                    title="New Users"
+                    value={(data.newUsers || 0).toLocaleString()}
+                    description={`of ${(data.totalUsers || 0).toLocaleString()} total`}
+                    icon={<Users className="h-4 w-4 text-muted-foreground" />}
+                />
+            </div>
+            
+            <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
+                <KpiCard
+                    title="New Products"
+                    value={(data.newProducts || 0).toLocaleString()}
+                    description={`of ${(data.totalProducts || 0).toLocaleString()} total`}
+                    icon={<ShoppingCart className="h-4 w-4 text-muted-foreground" />}
+                />
+                <KpiCard
+                    title="Total Brands"
+                    value={(data.totalBrands || 0).toLocaleString()}
+                    icon={<ShoppingCart className="h-4 w-4 text-muted-foreground" />}
+                />
+                <KpiCard
+                    title="New Posts"
+                    value={(data.newPosts || 0).toLocaleString()}
+                    description={`of ${(data.totalPosts || 0).toLocaleString()} total`}
+                    icon={<ShoppingCart className="h-4 w-4 text-muted-foreground" />}
+                />
+            </div>
         </div>
     );
 }
@@ -9305,7 +9568,7 @@ const CategoryCard = ({ category, isAdmin, onRefresh }: { category: any, isAdmin
         </div>
       )}
       <Link
-        href={`/store?category=${category.name.toLowerCase()}`}
+        href={`/store?category=${encodeURIComponent(category.name)}`}
         className="flex flex-col h-full"
       >
         <div className="relative aspect-square overflow-hidden bg-muted/20">
@@ -9333,15 +9596,20 @@ const CategoryCard = ({ category, isAdmin, onRefresh }: { category: any, isAdmin
   );
 };
 
+import { useAppContext } from "@/hooks/useAppContext";
+
 const FeaturedCategories = () => {
+  const { user } = useAppContext();
   const [categories, setCategories] = useState<any[]>([]);
-  const isAdmin = useIsAdmin();
+  const isAdmin = user?.role === "admin" || user?.role === "staff";
   const autoplay1 = useRef(Autoplay({ delay: 3000, stopOnInteraction: false }));
   const autoplay2 = useRef(Autoplay({ delay: 3000, stopOnInteraction: false }));
 
   const fetchCategories = async () => {
     const cats = await getCategories();
-    setCategories(cats);
+    // Filter out categories with 0 products if not admin/staff
+    const activeCats = isAdmin ? cats : cats.filter(c => c.productCount > 0);
+    setCategories(activeCats);
   };
 
   useEffect(() => {
@@ -9647,8 +9915,8 @@ const FeaturedProducts = () => {
 
       // 2. Fetch Subset Sections via Server-side filtering
       // Fetch Brands (Server-side filtered)
-      const brandsPromises = ["emzor", "vitabiotics"].map(brand => 
-        fetch(`/api/dbhandler?model=product&brand=${brand}&minimal=true&limit=8`).then(res => res.json())
+      const brandsPromises = ["Emzor", "Vitabiotics", "Pfizer", "GSK", "Shalina", "Fidson"].map(brand => 
+        fetch(`/api/dbhandler?model=product&brand=${brand}&minimal=true&limit=6`).then(res => res.json())
       );
       
       // Fetch Oral Care (Search by name on server)
@@ -11487,7 +11755,9 @@ LOCATION: components\myComponents\subs\partner-brands.tsx
 
 import React, { useEffect, useState } from "react";
 import { useAppContext } from "@/hooks/useAppContext";
-import { Plus, Pencil, Trash2, Hash } from "lucide-react";
+import Link from "next/link";
+import { ScrollArea } from "@/components/ui/scroll-area";
+import { Plus, Pencil, Trash2, Hash, ArrowUpDown, Search } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import {
   Dialog,
@@ -11506,17 +11776,27 @@ interface Brand {
   id: string;
   name: string;
   order: number;
+  _count?: {
+    products: number;
+  };
 }
+
+import useEmblaCarousel from "embla-carousel-react";
+import Autoplay from "embla-carousel-autoplay";
 
 const PartnerBrands = () => {
   const { user } = useAppContext();
-  const isAdmin = user?.role === "admin";
+  const isAdmin = user?.role === "admin" || user?.role === "staff";
   const [brands, setBrands] = useState<Brand[]>([]);
   const [loading, setLoading] = useState(true);
   
   const [isDialogOpen, setIsDialogOpen] = useState(false);
   const [editingBrand, setEditingBrand] = useState<Brand | null>(null);
   const [formData, setFormData] = useState({ name: "", order: 0 });
+
+  const [isBulkOrderOpen, setIsBulkOrderOpen] = useState(false);
+  const [bulkBrands, setBulkBrands] = useState<Brand[]>([]);
+  const [bulkSearch, setBulkSearch] = useState("");
 
   const fetchBrands = async () => {
     try {
@@ -11591,19 +11871,186 @@ const PartnerBrands = () => {
     setIsDialogOpen(true);
   };
 
+  const handleBulkUpdate = async () => {
+    try {
+      const res = await fetch("/api/dbhandler?model=brand", {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(bulkBrands),
+      });
+
+      if (res.ok) {
+        toast.success("All rankings updated");
+        setIsBulkOrderOpen(false);
+        fetchBrands();
+      } else {
+        toast.error("Failed to update rankings");
+      }
+    } catch (error) {
+      toast.error("Something went wrong");
+    }
+  };
+
+  const swapOrder = (brandId: string, newOrder: number) => {
+    if (isNaN(newOrder)) return;
+    setBulkBrands(prev => {
+      const currentBrand = prev.find(b => b.id === brandId);
+      if (!currentBrand) return prev;
+      
+      const oldOrder = currentBrand.order;
+      const brandToSwap = prev.find(b => b.order === newOrder);
+      
+      const updated = prev.map(b => {
+        if (b.id === brandId) return { ...b, order: newOrder };
+        if (brandToSwap && b.id === brandToSwap.id) return { ...b, order: oldOrder };
+        return b;
+      });
+      
+      return updated.sort((a,b) => (a.order - b.order) || a.name.localeCompare(b.name));
+    });
+  };
+
+  const [showAll, setShowAll] = useState(false);
+
+  // Filter out brands with 0 products if not admin/staff
+  const activeBrands = isAdmin ? brands : brands.filter(b => (b._count?.products || 0) > 0);
+
+  // Divide brands into 3 rows for carousels
+  const row1 = activeBrands.filter((_, i) => i % 3 === 0);
+  const row2 = activeBrands.filter((_, i) => i % 3 === 1);
+  const row3 = activeBrands.filter((_, i) => i % 3 === 2);
+
+  const CarouselRow = ({ items, speed = 3000, direction = "ltr" }: { items: Brand[], speed?: number, direction?: "ltr" | "rtl" }) => {
+    const [emblaRef] = useEmblaCarousel({ 
+        loop: true, 
+        dragFree: true,
+        direction: direction as any
+    }, [
+      Autoplay({ delay: speed, stopOnInteraction: false, stopOnMouseEnter: true })
+    ] as any);
+
+    return (
+      <div className="overflow-hidden w-full py-4" ref={emblaRef}>
+        <div className="flex gap-8 md:gap-12">
+          {items.map((brand) => (
+            <div 
+              key={brand.id} 
+              className="flex-[0_0_auto] min-w-[200px]"
+            >
+              <div className="relative group/card bg-white/50 dark:bg-white/5 backdrop-blur-sm border border-primary/5 rounded-2xl p-6 hover:border-primary/20 hover:shadow-xl hover:shadow-primary/5 transition-all duration-500">
+                <div className="flex flex-col items-center gap-2">
+                  {isAdmin && (
+                    <div className="absolute -top-3 left-1/2 -translate-x-1/2 flex items-center gap-1 bg-background border shadow-sm rounded-full px-2 py-1 opacity-0 group-hover/card:opacity-100 transition-opacity z-10 scale-90 group-hover/card:scale-100 duration-200">
+                      <button 
+                        onClick={() => openEditDialog(brand)}
+                        className="p-1 hover:text-primary transition-colors"
+                        title="Edit"
+                      >
+                        <Pencil className="h-3 w-3" />
+                      </button>
+                      <div className="w-[1px] h-3 bg-muted"></div>
+                      <button 
+                        onClick={() => handleDelete(brand.id)}
+                        className="p-1 hover:text-destructive transition-colors"
+                        title="Delete"
+                      >
+                        <Trash2 className="h-3 w-3" />
+                      </button>
+                      <div className="w-[1px] h-3 bg-muted"></div>
+                      <span className="text-[10px] font-bold px-1 text-muted-foreground flex items-center gap-1">
+                        <Hash className="h-2 w-2" />{brand.order}
+                      </span>
+                    </div>
+                  )}
+                  <Link 
+                    href={`/store?brand=${encodeURIComponent(brand.name)}`}
+                    className="group flex flex-col items-center gap-1"
+                  >
+                    <span className="text-xl font-black text-foreground/40 group-hover:text-primary transition-all duration-300">
+                      {brand.name}
+                    </span>
+                    <span className="text-[10px] font-bold text-muted-foreground/60 tracking-widest uppercase">
+                      {brand._count?.products || 0} Products
+                    </span>
+                  </Link>
+                </div>
+              </div>
+            </div>
+          ))}
+        </div>
+      </div>
+    );
+  };
+
   if (loading) return null;
 
   return (
-    <section className="py-16 bg-muted/20 relative group">
-      <div className="container mx-auto max-w-7xl px-4">
-        <div className="flex flex-col items-center mb-12">
-          <h3 className="text-sm font-bold uppercase tracking-widest text-primary/60 mb-2">Our Trusted Partners</h3>
-          <h2 className="text-3xl font-black text-foreground">Leading Pharmaceutical Brands</h2>
-          <div className="w-20 h-1 bg-primary rounded-full mt-4"></div>
+    <section className="py-20 bg-muted/20 relative group overflow-hidden">
+      <div className="container mx-auto max-w-7xl px-4 relative z-10">
+        <div className="flex flex-col items-center mb-16">
+          <h3 className="text-sm font-bold uppercase tracking-widest text-primary/60 mb-2">Our Global Network</h3>
+          <h2 className="text-4xl font-black text-foreground text-center">Elite Pharmaceutical Partners</h2>
+          <div className="w-24 h-1.5 bg-primary rounded-full mt-6 shadow-sm shadow-primary/20"></div>
         </div>
 
         {isAdmin && (
-          <div className="flex justify-end mb-8">
+          <div className="flex justify-center mb-12 gap-4">
+             {/* ... Admin Dialogs stay same ... */}
+            <Dialog open={isBulkOrderOpen} onOpenChange={(open) => {
+              if (open) setBulkBrands([...brands]);
+              setIsBulkOrderOpen(open);
+            }}>
+              <DialogTrigger asChild>
+                <Button variant="outline" className="gap-2 rounded-full border-primary/20 hover:border-primary shadow-sm">
+                  <ArrowUpDown className="h-4 w-4" /> Bulk Reorder
+                </Button>
+              </DialogTrigger>
+              <DialogContent className="sm:max-w-[600px] h-[80vh] flex flex-col p-0 overflow-hidden">
+                <DialogHeader className="p-6 pb-2">
+                  <DialogTitle>Management: Global Brand Ranking</DialogTitle>
+                  <DialogDescription>
+                    Update brand display order. Changing an index will swap it with the existing brand at that position.
+                  </DialogDescription>
+                </DialogHeader>
+                
+                <div className="px-6 py-2 relative">
+                  <Search className="absolute left-9 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+                  <Input 
+                    placeholder="Search brands to reorder..." 
+                    className="pl-10 h-11 rounded-xl"
+                    value={bulkSearch}
+                    onChange={(e) => setBulkSearch(e.target.value)}
+                  />
+                </div>
+
+                <ScrollArea className="flex-1 px-6">
+                  <div className="space-y-2 py-4">
+                    {bulkBrands
+                      .filter(b => b.name.toLowerCase().includes(bulkSearch.toLowerCase()))
+                      .map((brand) => (
+                      <div key={brand.id} className="flex items-center justify-between p-4 rounded-xl bg-muted/30 border border-transparent hover:border-primary/20 transition-all">
+                        <span className="font-semibold text-sm">{brand.name}</span>
+                        <div className="flex items-center gap-3">
+                          <Label className="text-xs text-muted-foreground font-bold">POS:</Label>
+                          <Input 
+                            type="number" 
+                            value={brand.order}
+                            onChange={(e) => swapOrder(brand.id, parseInt(e.target.value))}
+                            className="w-20 h-9 text-center font-bold rounded-lg"
+                          />
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </ScrollArea>
+
+                <DialogFooter className="p-6 pt-4 border-t mt-auto bg-muted/10">
+                  <Button variant="ghost" className="rounded-xl" onClick={() => setIsBulkOrderOpen(false)}>Cancel</Button>
+                  <Button className="rounded-xl h-11 px-8" onClick={handleBulkUpdate}>Save Changes</Button>
+                </DialogFooter>
+              </DialogContent>
+            </Dialog>
+
             <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
               <DialogTrigger asChild>
                 <Button 
@@ -11654,48 +12101,20 @@ const PartnerBrands = () => {
             </Dialog>
           </div>
         )}
-        
-        <div className="flex flex-wrap justify-center items-center gap-8 md:gap-16">
-          {brands.map((brand) => (
-            <div 
-              key={brand.id} 
-              className="relative group/card flex items-center justify-center p-4 min-w-[120px]"
-            >
-              <div className="flex flex-col items-center gap-1 group">
-                {isAdmin && (
-                  <div className="absolute -top-4 left-1/2 -translate-x-1/2 flex items-center gap-1 bg-background border shadow-md rounded-full px-2 py-1 opacity-0 group-hover/card:opacity-100 transition-opacity z-10 scale-90 group-hover/card:scale-100 duration-200">
-                    <button 
-                      onClick={() => openEditDialog(brand)}
-                      className="p-1 hover:text-primary transition-colors"
-                      title="Edit"
-                    >
-                      <Pencil className="h-3 w-3" />
-                    </button>
-                    <div className="w-[1px] h-3 bg-muted"></div>
-                    <button 
-                      onClick={() => handleDelete(brand.id)}
-                      className="p-1 hover:text-destructive transition-colors"
-                      title="Delete"
-                    >
-                      <Trash2 className="h-3 w-3" />
-                    </button>
-                    <div className="w-[1px] h-3 bg-muted"></div>
-                    <span className="text-[10px] font-bold px-1 text-muted-foreground flex items-center gap-1">
-                      <Hash className="h-2 w-2" />{brand.order}
-                    </span>
-                  </div>
-                )}
-                <div className="text-2xl font-black text-foreground/40 group-hover:text-primary transition-all duration-300 transform group-hover:scale-110 cursor-default">
-                  {brand.name}
-                </div>
-              </div>
-            </div>
-          ))}
+      </div>
 
-          {brands.length === 0 && !loading && (
-            <div className="text-muted-foreground italic text-sm">No pharmaceutical companies added yet.</div>
-          )}
-        </div>
+      <div className="w-full space-y-4">
+        {brands.length > 0 ? (
+          <>
+            <CarouselRow items={row1} speed={3000} />
+            <CarouselRow items={row2} speed={4000} direction="ltr" />
+            <CarouselRow items={row3} speed={3500} />
+          </>
+        ) : (
+          <div className="container mx-auto flex justify-center py-10">
+            <p className="text-muted-foreground italic text-sm">No pharmaceutical companies added yet.</p>
+          </div>
+        )}
       </div>
     </section>
   );
@@ -13412,6 +13831,7 @@ const Stocks = () => {
   const searchParams = useSearchParams();
   const categoryFilter = searchParams.get("category");
   const concernFilter = searchParams.get("concern"); // ✅ NEW: health concern filter
+  const brandFilter = searchParams.get("brand");
   
   const { addItem } = useCart();
   const [products, setProducts] = useState<any[]>([]);
@@ -13423,36 +13843,21 @@ const Stocks = () => {
   const fetchProducts = useCallback(async () => {
     setLoading(true);
     try {
-      const res = await axios.get('/api/dbhandler?model=product&include=category');
-      let data = res.data;
-      
-      if (categoryFilter) {
-        data = data.filter((p: any) => {
-          const filterLower = categoryFilter.toLowerCase();
-          const catName = p.category?.name?.toLowerCase();
-          const pCatName = p.categoryName?.toLowerCase();
-          return catName === filterLower || pCatName === filterLower;
-        });
-      }
+      let url = '/api/dbhandler?model=product&include=category,brand,stock';
+      if (brandFilter) url += `&brand=${encodeURIComponent(brandFilter)}`;
+      if (categoryFilter) url += `&categoryName=${encodeURIComponent(categoryFilter)}`;
+      if (concernFilter) url += `&concern=${encodeURIComponent(concernFilter)}`;
 
-      // Filter by health concern if ?concern= param is present
-      if (concernFilter) {
-        data = data.filter((p: any) =>
-          Array.isArray(p.healthConcerns) &&
-          p.healthConcerns.some((c: string) =>
-            c.toLowerCase() === concernFilter.toLowerCase()
-          )
-        );
-      }
-      
-      setProducts(data);
-      setCurrentPage(1); // Reset to first page on filter change
+      const res = await axios.get(url);
+      setProducts(res.data);
+      setCurrentPage(1); // Reset pagination on filter change
     } catch (err) {
-      setError("Failed to fetch products, please check your network connection");
+      console.error("Failed to fetch products", err);
+      setError("Failed to load products. Please try again later.");
     } finally {
       setLoading(false);
     }
-  }, [categoryFilter, concernFilter]);
+  }, [categoryFilter, brandFilter, concernFilter]);
 
   useEffect(() => {
     fetchProducts();
@@ -26538,7 +26943,8 @@ import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Checkbox } from '@/components/ui/checkbox';
 import { toast } from 'sonner';
-import { Search, ChevronLeft, ChevronRight, ArrowUpDown } from 'lucide-react';
+import { Search, ChevronLeft, ChevronRight, ArrowUpDown, X } from 'lucide-react';
+import { Badge } from '@/components/ui/badge';
 
 const ITEMS_PER_PAGE = 10;
 
@@ -26584,6 +26990,43 @@ export default function ProductForm({ initialProduct, hideList = false }: { init
   const [sortOrder, setSortOrder] = useState<"asc" | "desc" | "none">("none");
   const [sortBy, setSortBy] = useState<"name" | "price">("name");
 
+  // Name suggestions state
+  const [showNameSuggestions, setShowNameSuggestions] = useState(false);
+  
+  // Ingredients tags state
+  const [ingredientInput, setIngredientInput] = useState("");
+
+  const nameSuggestions = useMemo(() => {
+    if (formData.name.length < 2) return [];
+    return products.filter((p: any) => p.name.toLowerCase().includes(formData.name.toLowerCase())).slice(0, 5);
+  }, [formData.name, products]);
+
+  const allIngredients = useMemo(() => {
+    const set = new Set<string>();
+    products.forEach((p: any) => {
+      if (Array.isArray(p.activeIngredients)) {
+        p.activeIngredients.forEach((ing: any) => set.add(ing?.name || ing));
+      } else if (typeof p.activeIngredients === "string") {
+        p.activeIngredients.split(",").map((i: string) => i.trim()).filter(Boolean).forEach((ing: string) => set.add(ing));
+      }
+    });
+    return Array.from(set);
+  }, [products]);
+
+  // Health Concerns
+  const allHealthConcerns = useMemo(() => {
+    const set = new Set<string>(HEALTH_CONCERNS);
+    products.forEach((p: any) => {
+      if (Array.isArray(p.healthConcerns)) {
+        p.healthConcerns.forEach((hc: any) => set.add(hc?.name || hc));
+      }
+    });
+    return Array.from(set);
+  }, [products]);
+
+  const [healthConcernInput, setHealthConcernInput] = useState("");
+
+
   const fetchProducts = useCallback(async () => {
     try {
       const res = await axios.get('/api/dbhandler?model=product&include=category');
@@ -26614,9 +27057,9 @@ export default function ProductForm({ initialProduct, hideList = false }: { init
         price: initialProduct.price || 0,
         costPrice: initialProduct.costPrice || 0,
         images: initialProduct.images || null,
-        healthConcerns: initialProduct.healthConcerns || [],
-        activeIngredients: initialProduct.activeIngredients?.join(", ") || '',
-        brand: initialProduct.brand || '',
+        healthConcerns: Array.isArray(initialProduct.healthConcerns) ? initialProduct.healthConcerns.map((hc: any) => hc?.name || hc) : [],
+        activeIngredients: Array.isArray(initialProduct.activeIngredients) ? initialProduct.activeIngredients.map((i: any) => i?.name || i).join(", ") : '',
+        brand: initialProduct.brand?.name || initialProduct.brand || '',
         scarce: initialProduct.scarce || false,
         regulatoryClassification: initialProduct.regulatoryClassification || 'OTC',
         requiresPrescription: initialProduct.requiresPrescription || false,
@@ -26629,7 +27072,7 @@ export default function ProductForm({ initialProduct, hideList = false }: { init
     if (!hideList) fetchProducts();
     fetchCategories();
     axios.get('/api/dbhandler?model=product').then(res => {
-      const brands = Array.from(new Set(res.data.map((p: any) => p.brand).filter(Boolean))) as string[];
+      const brands = Array.from(new Set(res.data.map((p: any) => p.brand?.name || p.brand).filter(Boolean))) as string[];
       setAllBrands(brands);
     });
   }, [hideList, fetchProducts, fetchCategories]);
@@ -26663,6 +27106,23 @@ export default function ProductForm({ initialProduct, hideList = false }: { init
         : [...prev.healthConcerns, concern],
     }));
   };
+
+  const addIngredient = (ingredient: string) => {
+    if (!ingredient.trim()) return;
+    const current = formData.activeIngredients ? formData.activeIngredients.split(",").map(i => i.trim()).filter(Boolean) : [];
+    if (!current.includes(ingredient.trim())) {
+      current.push(ingredient.trim());
+      setFormData({ ...formData, activeIngredients: current.join(", ") });
+    }
+    setIngredientInput("");
+  };
+
+  const removeIngredient = (ingredient: string) => {
+    const current = formData.activeIngredients.split(",").map(i => i.trim()).filter(Boolean);
+    const updated = current.filter(i => i !== ingredient);
+    setFormData({ ...formData, activeIngredients: updated.join(", ") });
+  };
+
 
   const handleSubmit = async (e) => {
     e.preventDefault();
@@ -26754,9 +27214,9 @@ export default function ProductForm({ initialProduct, hideList = false }: { init
       price: product.price ?? 0,
       costPrice: product.costPrice ?? 0,
       images: product.images ?? [],
-      healthConcerns: product.healthConcerns ?? [],
-      activeIngredients: product.activeIngredients?.join(", ") || '',
-      brand: product.brand || '',
+      healthConcerns: Array.isArray(product.healthConcerns) ? product.healthConcerns.map((hc: any) => hc?.name || hc) : [],
+      activeIngredients: Array.isArray(product.activeIngredients) ? product.activeIngredients.map((i: any) => i?.name || i).join(", ") : '',
+      brand: product.brand?.name || product.brand || '',
       scarce: product.scarce || false,
       regulatoryClassification: product.regulatoryClassification || 'OTC',
       requiresPrescription: product.requiresPrescription || false,
@@ -26767,13 +27227,15 @@ export default function ProductForm({ initialProduct, hideList = false }: { init
 
   // ✅ Search and Filter Logic
   const filteredProducts = useMemo(() => {
-    let result = products.filter((p: any) => 
-      p.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      p.description?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      HEALTH_CONCERNS.some(c => p.healthConcerns?.includes(c) && c.toLowerCase().includes(searchTerm.toLowerCase())) ||
-      (p.category?.name?.toLowerCase().includes(searchTerm.toLowerCase())) ||
-      (p.brand?.toLowerCase().includes(searchTerm.toLowerCase()))
-    );
+    let result = products.filter((p: any) => {
+      const pHealthConcerns = Array.isArray(p.healthConcerns) ? p.healthConcerns.map((hc: any) => hc?.name || hc) : [];
+      const brandName = p.brand?.name || p.brand || "";
+      return p.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
+        p.description?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+        HEALTH_CONCERNS.some(c => pHealthConcerns.includes(c) && c.toLowerCase().includes(searchTerm.toLowerCase())) ||
+        (p.category?.name?.toLowerCase().includes(searchTerm.toLowerCase())) ||
+        (brandName.toLowerCase().includes(searchTerm.toLowerCase()))
+    });
 
     if (sortOrder !== "none") {
       result = [...result].sort((a, b) => {
@@ -26824,15 +27286,37 @@ export default function ProductForm({ initialProduct, hideList = false }: { init
       <form onSubmit={handleSubmit} className='flex flex-col w-full max-w-sm gap-2 justify-center items-center p-3 border-2 border-secondary-foreground rounded-sm m-2 shadow-md bg-card'>
         <h2 className='font-bold text-xl mb-2 text-primary'>Product Management</h2>
 
-        <div className="w-full space-y-1">
+        <div className="w-full space-y-1 relative">
           <Label htmlFor="product-name">Product Name</Label>
           <Input
             id="product-name"
             placeholder="Name of product"
             value={formData.name}
-            onChange={(e) => setFormData({ ...formData, name: e.target.value })}
+            onChange={(e) => {
+              setFormData({ ...formData, name: e.target.value });
+              setShowNameSuggestions(true);
+            }}
+            onFocus={() => setShowNameSuggestions(true)}
+            onBlur={() => setTimeout(() => setShowNameSuggestions(false), 200)}
             className="border-primary/20 focus:border-primary"
           />
+          {showNameSuggestions && nameSuggestions.length > 0 && (
+            <div className="absolute top-full left-0 z-10 w-full bg-card border rounded-md shadow-lg p-2 max-h-40 overflow-y-auto">
+              <p className="text-[10px] text-muted-foreground mb-1 uppercase tracking-wider">Existing Products (Avoid Duplicates)</p>
+              {nameSuggestions.map((s: any) => (
+                <div 
+                  key={s.id} 
+                  className="text-sm p-2 hover:bg-muted cursor-pointer rounded" 
+                  onClick={() => {
+                    setFormData({ ...formData, name: s.name });
+                    setShowNameSuggestions(false);
+                  }}
+                >
+                  {s.name}
+                </div>
+              ))}
+            </div>
+          )}
         </div>
 
         <div className="w-full space-y-1">
@@ -26861,16 +27345,55 @@ export default function ProductForm({ initialProduct, hideList = false }: { init
           </datalist>
         </div>
 
-        <div className="w-full space-y-1">
-          <Label htmlFor="product-ingredients">Active Ingredients</Label>
-          <Input
-            id="product-ingredients"
-            placeholder="Ingredient 1, Ingredient 2..."
-            value={formData.activeIngredients}
-            onChange={(e) => setFormData({ ...formData, activeIngredients: e.target.value })}
-            className="border-primary/20 focus:border-primary"
-          />
-          <p className="text-[10px] text-muted-foreground">Separate with commas</p>
+        <div className="w-full space-y-2">
+          <Label>Active Ingredients</Label>
+          {formData.activeIngredients && (
+            <div className="flex gap-2 flex-wrap bg-muted/20 p-2 rounded border">
+              {formData.activeIngredients.split(",").map(i => i.trim()).filter(Boolean).map(ing => (
+                <Badge key={ing} variant="secondary" className="flex items-center gap-1">
+                  {ing}
+                  <X className="w-3 h-3 cursor-pointer hover:text-destructive" onClick={() => removeIngredient(ing)} />
+                </Badge>
+              ))}
+            </div>
+          )}
+          <div className="flex gap-2">
+            <Input
+              placeholder="Add new ingredient & press Enter"
+              value={ingredientInput}
+              onChange={(e) => setIngredientInput(e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key === "Enter") {
+                  e.preventDefault();
+                  addIngredient(ingredientInput);
+                }
+              }}
+              className="border-primary/20 focus:border-primary"
+            />
+            <Button type="button" onClick={() => addIngredient(ingredientInput)}>Add</Button>
+          </div>
+          
+          {allIngredients.length > 0 && (
+            <div className="space-y-1 mt-2">
+              <p className="text-[10px] text-muted-foreground uppercase tracking-wider">Saved Ingredients (Click to add)</p>
+              <div className="flex flex-wrap gap-1 max-h-24 overflow-y-auto p-2 border rounded bg-card">
+                {allIngredients.map(ing => {
+                  const current = formData.activeIngredients ? formData.activeIngredients.split(",").map(i => i.trim()) : [];
+                  if (current.includes(ing)) return null;
+                  return (
+                    <Badge 
+                      key={ing} 
+                      variant="outline" 
+                      className="cursor-pointer hover:bg-primary/10 transition-colors" 
+                      onClick={() => addIngredient(ing)}
+                    >
+                      {ing}
+                    </Badge>
+                  );
+                })}
+              </div>
+            </div>
+          )}
         </div>
 
         <div className="w-full space-y-1 text-center flex flex-col items-center">
@@ -26902,24 +27425,47 @@ export default function ProductForm({ initialProduct, hideList = false }: { init
         {/* ✅ Health Concerns Multi-Select Checkboxes */}
         <div className="w-full space-y-2">
           <Label className="text-sm font-semibold">
-            Health Concerns
+            Health Concerns / Uses
             <span className="ml-1 text-xs font-normal text-muted-foreground">
               ({formData.healthConcerns.length} selected)
             </span>
           </Label>
-          <div className="grid grid-cols-2 gap-2 p-3 border rounded-md bg-muted/30">
-            {HEALTH_CONCERNS.map((concern) => (
+          <div className="grid grid-cols-2 gap-2 p-3 border rounded-md bg-muted/30 max-h-48 overflow-y-auto">
+            {allHealthConcerns.map((concern) => (
               <div key={concern} className="flex items-center gap-2">
                 <Checkbox
                   id={`concern-${concern}`}
                   checked={formData.healthConcerns.includes(concern)}
                   onCheckedChange={() => toggleConcern(concern)}
                 />
-                <Label htmlFor={`concern-${concern}`} className="text-xs font-normal cursor-pointer">
+                <Label htmlFor={`concern-${concern}`} className="text-xs font-normal cursor-pointer line-clamp-1 py-1">
                   {concern}
                 </Label>
               </div>
             ))}
+          </div>
+          <div className="flex gap-2">
+            <Input
+              placeholder="Add new health concern..."
+              value={healthConcernInput}
+              onChange={(e) => setHealthConcernInput(e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key === "Enter") {
+                  e.preventDefault();
+                  if (healthConcernInput.trim() && !allHealthConcerns.includes(healthConcernInput.trim())) {
+                      toggleConcern(healthConcernInput.trim());
+                      setHealthConcernInput("");
+                  }
+                }
+              }}
+              className="border-primary/20 focus:border-primary h-8 text-xs"
+            />
+            <Button size="sm" type="button" onClick={() => {
+                 if (healthConcernInput.trim() && !allHealthConcerns.includes(healthConcernInput.trim())) {
+                      toggleConcern(healthConcernInput.trim());
+                      setHealthConcernInput("");
+                 }
+            }}>New</Button>
           </div>
         </div>
 
@@ -28565,18 +29111,21 @@ model Category {
 }
 
 model Product {
-  id                       String           @id @default(auto()) @map("_id") @db.ObjectId
+  id                       String             @id @default(auto()) @map("_id") @db.ObjectId
   name                     String
   description              String?
-  category                 Category         @relation(fields: [categoryId], references: [id])
-  categoryId               String           @db.ObjectId
-  activeIngredients        String[]
+  category                 Category           @relation(fields: [categoryId], references: [id])
+  categoryId               String             @db.ObjectId
+  activeIngredientIds      String[]           @db.ObjectId
+  activeIngredients        ActiveIngredient[] @relation(fields: [activeIngredientIds], references: [id])
   scarce                   Boolean?
   for                      String[] //patients like oncology/cancer, hiv, etc
-  brand                    String?
+  brandId                  String?            @db.ObjectId
+  brand                    Brand?             @relation(fields: [brandId], references: [id])
   price                    Float
   /// Health concerns this product addresses e.g. ["Pain Relief", "Gut Health"]
-  healthConcerns           String[]         @default([])
+  healthConcernIds         String[]           @db.ObjectId
+  healthConcerns           HealthConcern[]    @relation(fields: [healthConcernIds], references: [id])
   stock                    Stock[] //@relation(fields: [stockId], references: [id])
   //stockId  String?   @db.ObjectId
   reviews                  Review[]
@@ -28585,10 +29134,10 @@ model Product {
   Featured                 FeaturedProduct?
   images                   String[]
   //orderItems OrderItem[]
-  regulatoryClassification String?          @default("OTC") // "Prescription Medicine", "OTC", "Pharmacy Only Medicine", "Controlled Medicine"
-  requiresPrescription     Boolean          @default(false)
-  createdAt                DateTime         @default(now())
-  updatedAt                DateTime         @updatedAt
+  regulatoryClassification String?            @default("OTC") // "Prescription Medicine", "OTC", "Pharmacy Only Medicine", "Controlled Medicine"
+  requiresPrescription     Boolean            @default(false)
+  createdAt                DateTime           @default(now())
+  updatedAt                DateTime           @updatedAt
   wishlist                 Wishlist[]
 }
 
@@ -28734,11 +29283,30 @@ model Message {
 }
 
 model Brand {
-  id        String   @id @default(auto()) @map("_id") @db.ObjectId
-  name      String
-  order     Int      @default(0)
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
+  id        String    @id @default(auto()) @map("_id") @db.ObjectId
+  name      String    @unique
+  order     Int       @default(0)
+  products  Product[]
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+}
+
+model ActiveIngredient {
+  id         String    @id @default(auto()) @map("_id") @db.ObjectId
+  name       String    @unique
+  productIds String[]  @db.ObjectId
+  products   Product[] @relation(fields: [productIds], references: [id])
+  createdAt  DateTime  @default(now())
+  updatedAt  DateTime  @updatedAt
+}
+
+model HealthConcern {
+  id         String    @id @default(auto()) @map("_id") @db.ObjectId
+  name       String    @unique
+  productIds String[]  @db.ObjectId
+  products   Product[] @relation(fields: [productIds], references: [id])
+  createdAt  DateTime  @default(now())
+  updatedAt  DateTime  @updatedAt
 }
 
 model Visit {
@@ -28929,53 +29497,33 @@ export { auth as proxy } from "@/auth";
 
 
 ================================================================================
-LOCATION: scripts\fix_brands_db.ts
+LOCATION: scripts\check_brand_counts.js
 ================================================================================
 
-import { PrismaClient } from '@prisma/client'
-import fs from 'fs'
-import path from 'path'
-
-const prisma = new PrismaClient()
+const { PrismaClient } = require('@prisma/client');
+const prisma = new PrismaClient();
 
 async function main() {
-    const mapPath = path.join(process.cwd(), 'prisma/brand_map.json')
-    if (!fs.existsSync(mapPath)) {
-        console.error("Map file not found! Run scrape_brands.ts first.");
-        return;
+    const brand = await prisma.brand.findUnique({
+        where: { name: "Brand" },
+        include: { _count: { select: { products: true } } }
+    });
+    
+    if (brand) {
+        console.log(`Brand "Brand" has ${brand._count.products} products.`);
+    } else {
+        console.log(`Brand "Brand" does not exist.`);
     }
 
-    const brandMap = JSON.parse(fs.readFileSync(mapPath, 'utf-8'));
-    console.log(`Loaded brand map with ${Object.keys(brandMap).length} entries.`);
-
-    // Find all products that have brands like "Brand_"
-    const products = await prisma.product.findMany({
-        where: {
-            brand: {
-                startsWith: 'Brand_'
-            }
-        }
+    const brands = await prisma.brand.findMany({
+        include: { _count: { select: { products: true } } },
+        orderBy: { products: { _count: 'desc' } }
     });
 
-    console.log(`Found ${products.length} products to update.`);
-
-    let totalUpdated = 0;
-    for (const product of products) {
-        if (product.brand && brandMap[product.brand]) {
-            const newBrand = brandMap[product.brand];
-            
-            await prisma.product.update({
-                where: { id: product.id },
-                data: {
-                    brand: newBrand
-                }
-            });
-            totalUpdated++;
-            if (totalUpdated % 50 === 0) console.log(`  Updated ${totalUpdated} products...`);
-        }
-    }
-
-    console.log(`Update complete. Total products modified: ${totalUpdated}`);
+    console.log("Top 10 Brands by product count:");
+    brands.slice(0, 10).forEach(b => {
+        console.log(`${b.name}: ${b._count.products}`);
+    });
 }
 
 main().catch(e => console.error(e)).finally(() => prisma.$disconnect());
@@ -28983,61 +29531,328 @@ main().catch(e => console.error(e)).finally(() => prisma.$disconnect());
 
 
 ================================================================================
-LOCATION: scripts\fix_ingredients_db.ts
+LOCATION: scripts\check_brand_coverage.js
 ================================================================================
 
-import { PrismaClient } from '@prisma/client'
-import fs from 'fs'
-import path from 'path'
+const fs = require('fs');
+const path = require('path');
+
+const batches = [
+    'onehealth_batch_a.json',
+    'onehealth_batch_e.json',
+    'onehealth_batch_i.json',
+    'onehealth_batch_o.json',
+    'onehealth_batch_u.json'
+];
+
+const uniqueBrandIds = new Set();
+for (const file of batches) {
+    const data = JSON.parse(fs.readFileSync(path.join(__dirname, file), 'utf-8'));
+    const items = data.value || [];
+    for (const item of items) {
+        if (item.searchable && item.searchable.brand_id) {
+            uniqueBrandIds.add(item.searchable.brand_id);
+        }
+    }
+}
+
+console.log(`Unique Brand IDs found in batches: ${uniqueBrandIds.size}`);
+console.log(`Sample IDs:`, Array.from(uniqueBrandIds).slice(0, 10));
+
+const brandMap = JSON.parse(fs.readFileSync(path.join(__dirname, 'brand_map.json'), 'utf-8'));
+console.log(`Brand IDs already mapped: ${Object.keys(brandMap).length}`);
+
+
+
+================================================================================
+LOCATION: scripts\check_db_status.js
+================================================================================
+
+const { PrismaClient } = require('@prisma/client')
 
 const prisma = new PrismaClient()
 
 async function main() {
-    const mapPath = path.join(process.cwd(), 'prisma/ingredient_map.json')
-    if (!fs.existsSync(mapPath)) {
-        console.error("Map file not found! Run scrape_ingredients.ts first.");
-        return;
-    }
-
-    const ingredientMap = JSON.parse(fs.readFileSync(mapPath, 'utf-8'));
-    console.log(`Loaded map with ${Object.keys(ingredientMap).length} entries.`);
-
-    // Find all products that have active ingredients containing "Ingredient_"
     const products = await prisma.product.findMany({
-        where: {
-            activeIngredients: {
-                hasSome: Object.keys(ingredientMap)
-            }
-        }
+        include: { brand: true }
     });
 
-    console.log(`Found ${products.length} products to update.`);
+    const total = products.length;
+    const withBrand = products.filter(p => p.brandId).length;
+    const brandIds = new Set(products.map(p => p.brandId).filter(Boolean));
+    const brandNames = new Set(products.map(p => p.brand?.name).filter(Boolean));
 
-    let totalUpdated = 0;
-    for (const product of products) {
-        const newIngredients = product.activeIngredients.map((ing: string) => {
-            if (ing.startsWith('Ingredient_') && ingredientMap[ing]) {
-                return ingredientMap[ing];
-            }
-            return ing;
-        });
+    console.log(`Total products: ${total}`);
+    console.log(`Products with brandId: ${withBrand}`);
+    console.log(`Unique brand IDs in use: ${brandIds.size}`);
+    console.log(`Unique brand names in use: ${brandNames.size}`);
+    
+    const brands = await prisma.brand.findMany();
+    console.log(`Total Brands in database: ${brands.length}`);
+    
+    if (brands.length > 0) {
+        console.log("Sample brands:", brands.slice(0, 5).map(b => b.name));
+    }
+}
 
-        // Ensure we only have unique names
-        const uniqueIngredients = [...new Set(newIngredients)];
+main().catch(e => console.error(e)).finally(() => prisma.$disconnect());
 
-        if (JSON.stringify(product.activeIngredients) !== JSON.stringify(uniqueIngredients)) {
-            await prisma.product.update({
-                where: { id: product.id },
-                data: {
-                    activeIngredients: uniqueIngredients
+
+
+================================================================================
+LOCATION: scripts\check_missing_products.js
+================================================================================
+
+const fs = require('fs');
+const path = require('path');
+const { PrismaClient } = require('@prisma/client');
+
+const prisma = new PrismaClient();
+
+async function main() {
+    const batches = [
+        'onehealth_batch_a.json',
+        'onehealth_batch_e.json',
+        'onehealth_batch_i.json',
+        'onehealth_batch_o.json',
+        'onehealth_batch_u.json'
+    ];
+
+    let totalInBatches = 0;
+    const batchProducts = new Set();
+
+    for (const file of batches) {
+        const filePath = path.join(__dirname, file);
+        if (fs.existsSync(filePath)) {
+            const data = JSON.parse(fs.readFileSync(filePath, 'utf-8'));
+            const items = data.value || [];
+            totalInBatches += items.length;
+            items.forEach(item => {
+                if (item.searchable && item.searchable.name) {
+                    batchProducts.add(item.searchable.name.toLowerCase().trim());
                 }
             });
-            totalUpdated++;
-            if (totalUpdated % 50 === 0) console.log(`  Updated ${totalUpdated} products...`);
         }
     }
 
-    console.log(`Update complete. Total products modified: ${totalUpdated}`);
+    const dbProducts = await prisma.product.findMany({
+        select: { name: true }
+    });
+    
+    const dbProductNames = new Set(dbProducts.map(p => p.name.toLowerCase().trim()));
+
+    console.log(`Total products in local JSON batches: ${totalInBatches}`);
+    console.log(`Unique products in local JSON batches: ${batchProducts.size}`);
+    console.log(`Total products in your database: ${dbProducts.length}`);
+
+    let missingCount = 0;
+    const missingSample = [];
+
+    for (const name of batchProducts) {
+        if (!dbProductNames.has(name)) {
+            missingCount++;
+            if (missingSample.length < 10) missingSample.push(name);
+        }
+    }
+
+    console.log(`Products in JSON batches but NOT in your database: ${missingCount}`);
+    if (missingSample.length > 0) {
+        console.log("Sample missing products:", missingSample);
+    }
+}
+
+main().catch(e => console.error(e)).finally(() => prisma.$disconnect());
+
+
+
+================================================================================
+LOCATION: scripts\link_brands_bulk.js
+================================================================================
+
+const { PrismaClient } = require('@prisma/client');
+const fs = require('fs');
+const path = require('path');
+
+const prisma = new PrismaClient();
+
+async function main() {
+    // 1. Load User Brands and Map Brands and Upsert them
+    const userBrandsPath = path.join(__dirname, 'user_brands.json');
+    const userBrands = JSON.parse(fs.readFileSync(userBrandsPath, 'utf-8'));
+    
+    const brandMapPath = path.join(__dirname, 'brand_map.json');
+    const brandIdToName = JSON.parse(fs.readFileSync(brandMapPath, 'utf-8'));
+
+    const allBrandsToCreate = new Set(userBrands);
+    Object.values(brandIdToName).forEach(name => allBrandsToCreate.add(name));
+
+    console.log(`Upserting ${allBrandsToCreate.size} unique brands...`);
+    for (const name of allBrandsToCreate) {
+        if (!name || name === "Brand" || name === "General") continue;
+        await prisma.brand.upsert({
+            where: { name: name },
+            update: {},
+            create: { name: name }
+        });
+    }
+    
+    // 2. Load existing Brand records to map names to IDs
+    const dbBrands = await prisma.brand.findMany();
+    const brandNameToId = new Map(dbBrands.map(b => [b.name.toLowerCase(), b.id]));
+
+    // 3. Load Brand Map (ID -> Name) - already loaded above
+    // const brandMapPath = path.join(__dirname, 'brand_map.json');
+    // const brandIdToName = JSON.parse(fs.readFileSync(brandMapPath, 'utf-8'));
+    // Normalize keys: Brand_161 -> 161
+    const normalizedIdMap = {};
+    for (const [key, name] of Object.entries(brandIdToName)) {
+        const id = key.replace('Brand_', '');
+        normalizedIdMap[id] = name;
+    }
+
+    // 4. Gather Product mappings from JSON batches
+    const batches = [
+        'onehealth_batch_a.json',
+        'onehealth_batch_e.json',
+        'onehealth_batch_i.json',
+        'onehealth_batch_o.json',
+        'onehealth_batch_u.json'
+    ];
+
+    const productNameToBrandId = new Map();
+    console.log("Reading data batches...");
+    for (const batchFile of batches) {
+        const batchPath = path.join(__dirname, batchFile);
+        if (!fs.existsSync(batchPath)) continue;
+        
+        const data = JSON.parse(fs.readFileSync(batchPath, 'utf-8'));
+        const items = data.value || [];
+        for (const item of items) {
+            const p = item.searchable;
+            if (p && p.name && p.brand_id) {
+                productNameToBrandId.set(p.name.toLowerCase().trim(), p.brand_id);
+            }
+        }
+    }
+    console.log(`Gathered ${productNameToBrandId.size} product-brand mappings from JSON.`);
+
+    // 5. Update Products in DB
+    const dbProducts = await prisma.product.findMany();
+    console.log(`Linking brands for ${dbProducts.length} products...`);
+
+    let linkedCount = 0;
+    let manualMatchCount = 0;
+
+    for (const product of dbProducts) {
+        const normalizedName = product.name.toLowerCase().trim();
+        let brandName = null;
+
+        // Try exact match from JSON batches
+        const ohBrandId = productNameToBrandId.get(normalizedName);
+        if (ohBrandId && normalizedIdMap[ohBrandId]) {
+            brandName = normalizedIdMap[ohBrandId];
+        }
+
+        // If no match from batches, try fuzzy match with user list if it's a "General" or "Brand" product
+        if (!brandName) {
+            // Check if product name *starts with* one of the brand names
+            for (const bName of userBrands) {
+                if (bName.length > 3 && normalizedName.startsWith(bName.toLowerCase())) {
+                    brandName = bName;
+                    manualMatchCount++;
+                    break;
+                }
+            }
+        }
+
+        if (brandName) {
+            const bId = brandNameToId.get(brandName.toLowerCase());
+            if (bId) {
+                await prisma.product.update({
+                    where: { id: product.id },
+                    data: { brandId: bId }
+                });
+                linkedCount++;
+                if (linkedCount % 100 === 0) console.log(`  Linked ${linkedCount} products...`);
+            }
+        }
+    }
+
+    console.log(`Task Complete!`);
+    console.log(`Total products updated with Brand: ${linkedCount}`);
+    console.log(`(Of which ${manualMatchCount} were matched via name Prefix)`);
+}
+
+main().catch(e => console.error(e)).finally(() => prisma.$disconnect());
+
+
+
+================================================================================
+LOCATION: scripts\link_brands_fuzzy.js
+================================================================================
+
+const { PrismaClient } = require('@prisma/client');
+const fs = require('fs');
+const path = require('path');
+
+const prisma = new PrismaClient();
+
+async function main() {
+    const userBrandsPath = path.join(__dirname, 'user_brands.json');
+    const userBrands = JSON.parse(fs.readFileSync(userBrandsPath, 'utf-8'));
+    
+    // Sort brands by length descending to match longest brand names first (e.g., "Pfizer Ltd" before "Pfizer")
+    const sortedBrands = [...userBrands].sort((a, b) => b.length - a.length);
+
+    const dbBrands = await prisma.brand.findMany();
+    const brandNameToId = new Map(dbBrands.map(b => [b.name.toLowerCase(), b.id]));
+
+    const allDbProducts = await prisma.product.findMany();
+    const dbProducts = allDbProducts.filter(p => !p.brandId);
+
+    console.log(`Attempting to link ${dbProducts.length} unlinked products via name matching...`);
+
+    let linkedCount = 0;
+    const failures = [];
+
+    for (const product of dbProducts) {
+        const normalizedName = product.name.toLowerCase();
+        let foundBrand = null;
+
+        for (const bName of sortedBrands) {
+            if (bName.length < 3) continue;
+            // Check if name contains brand name (often brands are at the start or end)
+            if (normalizedName.includes(bName.toLowerCase())) {
+                foundBrand = bName;
+                break;
+            }
+        }
+
+        if (foundBrand) {
+            const bId = brandNameToId.get(foundBrand.toLowerCase());
+            if (bId) {
+                await prisma.product.update({
+                    where: { id: product.id },
+                    data: { brandId: bId }
+                });
+                linkedCount++;
+            }
+        } else {
+            failures.push(product.name);
+        }
+        
+        if ((linkedCount + failures.length) % 100 === 0) {
+            console.log(`  Processed ${linkedCount + failures.length} products...`);
+        }
+    }
+
+    console.log(`Fuzzy Link Complete!`);
+    console.log(`Newly linked: ${linkedCount}`);
+    console.log(`Still unlinked: ${failures.length}`);
+    
+    if (failures.length > 0) {
+        console.log("Sample failures:", failures.slice(0, 10));
+    }
 }
 
 main().catch(e => console.error(e)).finally(() => prisma.$disconnect());
@@ -29102,741 +29917,188 @@ main();
 
 
 ================================================================================
-LOCATION: scripts\normalize_data.ts
+LOCATION: scripts\relink_generic_brands.js
 ================================================================================
 
-import { PrismaClient } from '@prisma/client'
-import fs from 'fs'
-import path from 'path'
+const { PrismaClient } = require('@prisma/client');
+const fs = require('fs');
+const path = require('path');
 
-const prisma = new PrismaClient()
-
-const CATEGORY_KEYWORDS: Record<string, string[]> = {
-    "Gut Health": ["Dulcolax", "Laxative", "Constipation", "Indigestion", "Gas", "Antacid", "Gaviscon", "Omeprazole", "Digestive", "Diarrhea", "Probiotic", "Stomach", "Worm", "Albendazole", "Zentel", "Ketoconazole"],
-    "Cough, Cold & Flu": ["Cough", "Cold", "Flu", "Catarrh", "Sinus", "Bronchitis", "Mucous", "Strepsils", "Lozenges", "Throat", "Panadol Multi-Symptom", "Beecham", "DayQuil", "NyQuil", "Decongestion", "Expectorant"],
-    "Pain Relief": ["Pain", "Headache", "Ache", "Fever", "Paracetamol", "Ibuprofen", "Diclofenac", "Aspirin", "Naproxen", "Panadol", "Analgesic", "Joint Pain", "Muscle Pain", "Tramadol", "Codeine", "Felvin"],
-    "Eye Care": ["Eye", "Ophthalmic", "Drops", "Visine", "Contact Lens", "Vision", "Redness", "Itchy Eye", "Optrex"],
-    "First Aid": ["Antiseptic", "Plaster", "Bandage", "Dettol", "Wound", "Savlon", "Iodine", "Cotton Wool", "Surgical", "First Aid", "Alcohol Swabs", "Gauze", "Methylated Spirit"],
-    "Skin Treatment": ["Cream", "Ointment", "Eczema", "Fungal", "Acne", "Rash", "Itch", "Hydrocortisone", "Clotrimazole", "Ketoconazole", "Skineal", "Funbact", "Calamine", "Lotion"],
-    "Malaria Medications": ["Malaria", "Artemether", "Lumefantrine", "Amatem", "Lonart", "Coartem", "P-Alaxin", "Quinine", "Mosquito", "Malareich"],
-    "Allergy & Hayfever": ["Allergy", "Antihistamine", "Hayfever", "Loratadine", "Cetirizine", "Itching", "Sneezing", "Clarityn", "Piriton", "Chlorpheniramine"],
-    "Vitamins": ["Vitamin", "Supplement", "Multivitamin", "Mineral", "Zinc", "Magnesium", "Calcium", "Omega", "Fish Oil", "Centrum", "Nature's Bounty", "Reload", "Wellman", "Wellwoman", "Cod Liver", "A-Z", "B-Complex"],
-    "Sexual Health": ["Condom", "Pregnancy Test", "Contraceptive", "Postinor", "Lubricant", "Durex", "Rough Rider", "HIV Test", "Emergency Pill", "Levonorgestrel", "Postpill"],
-    "Her Health": ["Women", "Female", "Menstrual", "Period", "Vaginal", "Maternity", "Pregnancy", "Tampon", "Sanitary", "Eve's Desire", "Feminine"],
-    "His Health": ["Men", "Male", "Prostate", "Erectile", "Performance", "Wellman", "Vigor", "Tadalafil", "Sildenafil", "Manix"],
-    "Dental": ["Toothpaste", "Toothbrush", "Mouthwash", "Dental", "Gum", "Oral-B", "Colgate", "Sensodyne", "Close-Up", "Oral Care"],
-    "Deodorants": ["Deodorant", "Antiperspirant", "Roll-on", "Spray", "Nivea", "Sure", "Rexona", "Old Spice"],
-    "Baby & Child Health": ["Baby", "Kid", "Child", "Infant", "Teething", "Nappy", "Wipe", "Pampers", "Huggies", "Cerelac", "SMA", "Nan", "Baby Lotion"],
-    "Hair Health": ["Shampoo", "Conditioner", "Hair", "Scalp", "Dandruff", "Wig", "Braids", "Relaxer"]
-};
+const prisma = new PrismaClient();
 
 async function main() {
-    const categories = await prisma.category.findMany();
-    const categoryMap = new Map(categories.map(c => [c.name, c.id]));
+    const userBrandsPath = path.join(__dirname, 'user_brands.json');
+    const userBrands = JSON.parse(fs.readFileSync(userBrandsPath, 'utf-8'));
+    
+    // Sort brands by length descending
+    const sortedBrands = [...userBrands].sort((a, b) => b.length - a.length);
 
-    const products = await prisma.product.findMany({
-        where: {
-            OR: [
-                { category: { name: 'Pharmacy' } },
-                { category: { name: 'Pharmacy Medication' } },
-                { category: { name: 'Health & Pharmacy' } }
-            ]
-        },
-        include: { category: true }
-    });
+    const dbBrands = await prisma.brand.findMany();
+    const brandNameToId = new Map(dbBrands.map(b => [b.name.toLowerCase(), b.id]));
 
-    console.log(`Analyzing ${products.length} products for better categorization...`);
-
-    let totalUpdated = 0;
-    for (const product of products) {
-        try {
-            let matchedCategory = null;
-            const searchStr = `${product.name} ${product.description} ${product.activeIngredients.join(' ')}`.toLowerCase();
-
-            for (const [catName, keywords] of Object.entries(CATEGORY_KEYWORDS)) {
-                if (keywords.some(k => searchStr.includes(k.toLowerCase()))) {
-                    matchedCategory = catName;
-                    break;
-                }
-            }
-
-            if (matchedCategory) {
-                let catId = categoryMap.get(matchedCategory);
-                if (!catId) {
-                    const newCat = await prisma.category.create({ data: { name: matchedCategory } });
-                    catId = newCat.id;
-                    categoryMap.set(matchedCategory, catId);
-                }
-                await prisma.product.update({ where: { id: product.id }, data: { categoryId: catId } });
-                totalUpdated++;
-            }
-        } catch (e) {
-            console.error(`Error updating product category ${product.name}:`, e);
-        }
+    const catchAllBrand = await prisma.brand.findUnique({ where: { name: "Brand" } });
+    if (!catchAllBrand) {
+        console.log('No brand named "Brand" found. Nothing to re-link.');
+        return;
     }
-    console.log(`Recategorization complete. Updated ${totalUpdated} products.`);
 
-    const refData = JSON.parse(fs.readFileSync(path.join(process.cwd(), 'onehealth_ref.json'), 'utf-8'));
-    const allProducts = await prisma.product.findMany({
-        where: {
-            OR: [
-                { brand: "Brand" },
-                { brand: "General" },
-                { brand: { startsWith: "Brand_" } },
-                { brand: null }
-            ]
-        }
+    const productsToRelink = await prisma.product.findMany({
+        where: { brandId: catchAllBrand.id }
     });
 
-    console.log(`Analyzing brands for ${allProducts.length} products...`);
-    let brandUpdated = 0;
-    for (const p of allProducts) {
-        try {
-            const searchStr = `${p.name} ${p.description}`.toLowerCase();
-            let foundBrand = refData.brands.find((b: string) => searchStr.includes(b.toLowerCase()));
+    console.log(`Attempting to re-link ${productsToRelink.length} products from "Brand" to specific brands...`);
+
+    let relinkedCount = 0;
+    
+    // Helper to normalize string for comparison (remove dots, dashes, spaces)
+    const normalize = (s) => s.toLowerCase().replace(/[^a-z0-9]/g, '');
+
+    for (const product of productsToRelink) {
+        const pName = product.name;
+        const normPName = normalize(pName);
+        let match = null;
+
+        for (const bName of sortedBrands) {
+            if (bName.length < 3 || bName === "Brand") continue;
             
-            if (!foundBrand) {
-                const firstWord = p.name.split(' ')[0];
-                if (firstWord.length > 3 && !['THE', 'FOR', 'AND', 'WITH', 'MADE'].includes(firstWord.toUpperCase())) {
-                    foundBrand = firstWord;
-                }
+            const normBName = normalize(bName);
+            if (normPName.includes(normBName)) {
+                match = bName;
+                break;
             }
+        }
 
-            if (foundBrand) {
-                await prisma.product.update({ where: { id: p.id }, data: { brand: foundBrand } });
-                brandUpdated++;
+        if (match) {
+            const bId = brandNameToId.get(match.toLowerCase());
+            if (bId) {
+                await prisma.product.update({
+                    where: { id: product.id },
+                    data: { brandId: bId }
+                });
+                relinkedCount++;
             }
-        } catch (e) {
-            console.error(`Error updating brand for ${p.name}:`, e);
         }
     }
-    console.log(`Brand normalization complete. Updated ${brandUpdated} products.`);
+
+    console.log(`Re-linking Complete!`);
+    console.log(`Products moved from "Brand" to specific manufacturers: ${relinkedCount}`);
 }
 
 main().catch(e => console.error(e)).finally(() => prisma.$disconnect());
 
 
 
+================================================================================
+LOCATION: scripts\sample_db_products.js
+================================================================================
+
+const { PrismaClient } = require('@prisma/client');
+const prisma = new PrismaClient();
+
+async function main() {
+    const products = await prisma.product.findMany({
+        select: { name: true, category: { select: { name: true } } },
+        take: 20
+    });
+    console.log("Sample products in DB:");
+    products.forEach(p => console.log(`- ${p.name} (${p.category?.name})`));
+}
+
+main().catch(console.error).finally(() => prisma.$disconnect());
+
+
 
 ================================================================================
-LOCATION: scripts\recategorize_bulk.ts
+LOCATION: scripts\scrape_individual_brands.js
 ================================================================================
 
-import { PrismaClient } from '@prisma/client'
-import fs from 'fs'
-import path from 'path'
-import axios from 'axios'
-import * as cheerio from 'cheerio'
-import dotenv from 'dotenv'
+const { PrismaClient } = require('@prisma/client');
+const fs = require('fs');
+const path = require('path');
+const axios = require('axios');
+const cheerio = require('cheerio');
 
-dotenv.config({ path: '.env.local' })
-dotenv.config({ path: '.env' })
+const prisma = new PrismaClient();
 
-const prisma = new PrismaClient()
+async function main() {
+    const batches = [
+        'onehealth_batch_a.json',
+        'onehealth_batch_e.json',
+        'onehealth_batch_i.json',
+        'onehealth_batch_o.json',
+        'onehealth_batch_u.json'
+    ];
 
-async function scrapeCategory(url: string) {
-    const productsInCat: string[] = [];
-    let currentPage = 1;
-    let hasNext = true;
+    const productNameToUrl = new Map();
+    for (const file of batches) {
+        const dataPath = path.join(__dirname, file);
+        if (!fs.existsSync(dataPath)) continue;
+        const data = JSON.parse(fs.readFileSync(dataPath, 'utf-8'));
+        const items = data.value || [];
+        for (const item of items) {
+            if (item.searchable && item.searchable.name && item.searchable.url) {
+                productNameToUrl.set(item.searchable.name.toLowerCase().trim(), item.searchable.url);
+            }
+        }
+    }
 
-    while (hasNext && currentPage <= 5) { // Limit to 5 pages per category to avoid timeout
-        let retries = 2;
-        let success = false;
-        
-        while (retries > 0 && !success) {
+    const dbProducts = await prisma.product.findMany();
+    const unlinkedProducts = dbProducts.filter(p => !p.brandId);
+
+    console.log(`Found ${unlinkedProducts.length} unlinked products.`);
+    
+    const dbBrands = await prisma.brand.findMany();
+    const brandNameToId = new Map(dbBrands.map(b => [b.name.toLowerCase(), b.id]));
+
+    let successCount = 0;
+    for (let i = 0; i < unlinkedProducts.length; i++) {
+        const product = unlinkedProducts[i];
+        const url = productNameToUrl.get(product.name.toLowerCase().trim());
+
+        if (url) {
+            console.log(`[${i+1}/${unlinkedProducts.length}] Scraping ${product.name} at ${url}...`);
             try {
-                const pageUrl = currentPage === 1 ? url : `${url}?page=${currentPage}`;
-                console.log(`  Scraping page ${currentPage}: ${pageUrl} (Retries left: ${retries-1})`);
-                const { data } = await axios.get(pageUrl, { 
-                    timeout: 30000,
-                    headers: {
-                        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/121.0.0.0 Safari/537.36',
-                        'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8',
-                        'Accept-Language': 'en-US,en;q=0.9',
-                    }
+                const { data } = await axios.get(url, { 
+                    timeout: 10000,
+                    headers: { 'User-Agent': 'Mozilla/5.0' }
                 });
                 const $ = cheerio.load(data);
                 
-                const items: string[] = [];
-                
-                $('.product-card').each((i, el) => {
-                    const card = $(el);
-                    
-                    // 1. Try to find the full name in the button's productdata attribute
-                    const productData = card.find('button.add_to_cart').attr('productdata');
-                    if (productData) {
-                        try {
-                            const parsed = JSON.parse(productData);
-                            if (parsed.name) {
-                                items.push(parsed.name.trim());
-                                return; // Move to next card
-                            }
-                        } catch (e) {}
-                    }
-                    
-                    // 2. Try the image alt attribute (usually contains full name)
-                    const altName = card.find('img').attr('alt');
-                    if (altName && altName.length > 5) {
-                        items.push(altName.trim());
-                        return;
-                    }
-                    
-                    // 3. Fallback selectors for text
-                    const textName = card.find('.text-dark-blue p, .product-title, h4').first().text().trim();
-                    if (textName) {
-                        items.push(textName);
-                    }
-                });
-                
-                if (items.length > 0) {
-                    productsInCat.push(...items);
-                    console.log(`    Extracted ${items.length} products`);
-                }
+                // Selector for brand link on OneHealth
+                const brandName = $('a[href^="/brand/"]').first().text().trim() || 
+                                 $('a[href*="brand_id"]').first().text().trim();
 
-                const nextBtn = $('a.next, .pagination .next, a:contains("Next")');
-                const hasNextLink = nextBtn.length > 0;
-                if (!hasNextLink) hasNext = false;
-                
-                currentPage++;
-                if (items.length < 5 && currentPage > 1) hasNext = false; 
-                success = true;
-
-                // Small delay between pages
-                await new Promise(resolve => setTimeout(resolve, 1000));
-            } catch (e: any) {
-                console.error(`    Attempt failed: ${e.message}`);
-                retries--;
-                if (retries === 0) {
-                    hasNext = false;
+                if (brandName) {
+                    console.log(`  Found brand: ${brandName}`);
+                    let bId = brandNameToId.get(brandName.toLowerCase());
+                    if (!bId) {
+                        const newBrand = await prisma.brand.create({ data: { name: brandName } });
+                        bId = newBrand.id;
+                        brandNameToId.set(brandName.toLowerCase(), bId);
+                    }
+                    await prisma.product.update({
+                        where: { id: product.id },
+                        data: { brandId: bId }
+                    });
+                    successCount++;
                 } else {
-                    await new Promise(resolve => setTimeout(resolve, 2000));
+                    console.log(`  No brand found on page.`);
                 }
+            } catch (err) {
+                console.error(`  Error: ${err.message}`);
             }
-        }
-    }
-    return [...new Set(productsInCat)];
-}
-
-async function main() {
-    const categoryMap = JSON.parse(fs.readFileSync(path.join(process.cwd(), 'onehealth_category_map.json'), 'utf-8'));
-    
-    console.log(`Starting bulk recategorization for ${categoryMap.length} categories...`);
-
-    for (const cat of categoryMap) {
-        // Skip if category already has products to save time
-        const existingCount = await prisma.product.count({
-            where: { category: { name: cat.name } }
-        });
-        
-        if (existingCount > 0) {
-            console.log(`Skipping Category: ${cat.name} (already has ${existingCount} products)`);
-            continue;
-        }
-
-        console.log(`Processing Category: ${cat.name}`);
-        
-        // Ensure category exists in our DB
-        const dbCat = await prisma.category.upsert({
-            where: { name: cat.name },
-            update: {},
-            create: { name: cat.name }
-        });
-
-        const productNames = await scrapeCategory(cat.url);
-        console.log(`  Found ${productNames.length} products on OneHealth`);
-
-        let updatedCount = 0;
-        for (const name of productNames) {
-            if (!name) continue;
-            // Escape special regex characters to avoid Prisma P2010 / MongoDB Invalid Regex error
-            const escapedName = name.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-
-            // Find products in our DB that match this name
-            const matches = await prisma.product.findMany({
-                where: {
-                    name: { contains: escapedName, mode: 'insensitive' }
-                }
-            });
-
-            for (const p of matches) {
-                await prisma.product.update({
-                    where: { id: p.id },
-                    data: { categoryId: dbCat.id }
-                });
-                updatedCount++;
-            }
-        }
-        console.log(`  Mapped ${updatedCount} products to ${cat.name}`);
-    }
-
-    console.log("Recategorization complete!");
-}
-
-main().catch(e => console.error(e)).finally(() => prisma.$disconnect());
-
-
-
-================================================================================
-LOCATION: scripts\scrape_brands.ts
-================================================================================
-
-import { PrismaClient } from '@prisma/client'
-import fs from 'fs'
-import path from 'path'
-import axios from 'axios'
-import * as cheerio from 'cheerio'
-
-const prisma = new PrismaClient()
-
-async function main() {
-    const files = [
-        'onehealth_batch_a.json',
-        'onehealth_batch_e.json',
-        'onehealth_batch_i.json',
-        'onehealth_batch_o.json',
-        'onehealth_batch_u.json'
-    ]
-
-    const idToSampleUrl: Record<number, string> = {}
-    
-    console.log("Gathering brand IDs and sample URLs...");
-    for (const fileName of files) {
-        const dataPath = path.join(process.cwd(), fileName)
-        if (!fs.existsSync(dataPath)) continue
-
-        const rawData = fs.readFileSync(dataPath, 'utf-8')
-        const json = JSON.parse(rawData)
-        const products = json.value || []
-
-        for (const item of products) {
-            const p = item.searchable
-            if (p?.brand_id && !idToSampleUrl[p.brand_id]) {
-                idToSampleUrl[p.brand_id] = p.url || `https://onehealthng.com/product/${p.slug}`
-            }
-        }
-    }
-
-    const brandMap: Record<string, string> = {}
-    const ids = Object.keys(idToSampleUrl)
-    console.log(`Found ${ids.length} unique brand IDs. Starting scrape...`);
-
-    for (let i = 0; i < ids.length; i++) {
-        const id = ids[i]
-        const url = idToSampleUrl[parseInt(id)]
-        console.log(`[${i + 1}/${ids.length}] Scraping ID ${id} from ${url}...`);
-
-        try {
-            const { data } = await axios.get(url, { 
-                timeout: 30000,
-                headers: {
-                    'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/121.0.0.0 Safari/537.36'
-                }
-            });
-            const $ = cheerio.load(data);
-            
-            // On OneHealth, the brand link usually has href containing "/brand/"
-            const brandName = $('a[href^="/brand/"]').first().text().trim();
-            
-            if (brandName) {
-                brandMap[`Brand_${id}`] = brandName;
-                console.log(`  Mapped Brand_${id} -> ${brandName}`);
-            } else {
-                // Sometimes it's just text or in breadcrumbs
-                const text = $('body').text();
-                // We'll fallback to Ingredient map if we can't find brand? No, let's keep it empty or try another selector
-                console.warn(`  Could not find brand name for ID ${id}`);
-            }
-        } catch (e: any) {
-            console.error(`  Error scraping ID ${id}: ${e.message}`);
-        }
-
-        // Small delay
-        await new Promise(resolve => setTimeout(resolve, 1000));
-    }
-
-    fs.writeFileSync(path.join(process.cwd(), 'prisma/brand_map.json'), JSON.stringify(brandMap, null, 2));
-    console.log("Scrape complete. Map saved to prisma/brand_map.json");
-}
-
-main().catch(e => console.error(e)).finally(() => prisma.$disconnect());
-
-
-
-================================================================================
-LOCATION: scripts\scrape_ingredients.ts
-================================================================================
-
-import { PrismaClient } from '@prisma/client'
-import fs from 'fs'
-import path from 'path'
-import axios from 'axios'
-import * as cheerio from 'cheerio'
-
-const prisma = new PrismaClient()
-
-async function main() {
-    const files = [
-        'onehealth_batch_a.json',
-        'onehealth_batch_e.json',
-        'onehealth_batch_i.json',
-        'onehealth_batch_o.json',
-        'onehealth_batch_u.json'
-    ]
-
-    const idToSampleUrl: Record<number, string> = {}
-    
-    console.log("Gathering ingredient IDs and sample URLs...");
-    for (const fileName of files) {
-        const dataPath = path.join(process.cwd(), fileName)
-        if (!fs.existsSync(dataPath)) continue
-
-        const rawData = fs.readFileSync(dataPath, 'utf-8')
-        const json = JSON.parse(rawData)
-        const products = json.value || []
-
-        for (const item of products) {
-            const p = item.searchable
-            if (p?.ingredient_id && !idToSampleUrl[p.ingredient_id]) {
-                idToSampleUrl[p.ingredient_id] = p.url || `https://onehealthng.com/product/${p.slug}`
-            }
-        }
-    }
-
-    const ingredientMap: Record<string, string> = {}
-    const ids = Object.keys(idToSampleUrl)
-    console.log(`Found ${ids.length} unique ingredient IDs. Starting scrape...`);
-
-    for (let i = 0; i < ids.length; i++) {
-        const id = ids[i]
-        const url = idToSampleUrl[parseInt(id)]
-        console.log(`[${i + 1}/${ids.length}] Scraping ID ${id} from ${url}...`);
-
-        try {
-            const { data } = await axios.get(url, { 
-                timeout: 30000,
-                headers: {
-                    'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/121.0.0.0 Safari/537.36'
-                }
-            });
-            const $ = cheerio.load(data);
-            
-            // Selector identified by browser subagent
-            const ingredientName = $('a[href^="/ingredient/"]').first().text().trim();
-            
-            if (ingredientName) {
-                ingredientMap[`Ingredient_${id}`] = ingredientName;
-                console.log(`  Mapped Ingredient_${id} -> ${ingredientName}`);
-            } else {
-                console.warn(`  Could not find ingredient name for ID ${id}`);
-            }
-        } catch (e: any) {
-            console.error(`  Error scraping ID ${id}: ${e.message}`);
-        }
-
-        // Small delay
-        await new Promise(resolve => setTimeout(resolve, 1000));
-    }
-
-    fs.writeFileSync(path.join(process.cwd(), 'prisma/ingredient_map.json'), JSON.stringify(ingredientMap, null, 2));
-    console.log("Scrape complete. Map saved to prisma/ingredient_map.json");
-}
-
-main().catch(e => console.error(e)).finally(() => prisma.$disconnect());
-
-
-
-================================================================================
-LOCATION: scripts\seed_onehealth.ts
-================================================================================
-
-import { PrismaClient } from '@prisma/client'
-import fs from 'fs'
-import path from 'path'
-
-const prisma = new PrismaClient()
-
-async function main() {
-  const files = [
-    'onehealth_batch_a.json',
-    'onehealth_batch_e.json',
-    'onehealth_batch_i.json',
-    'onehealth_batch_o.json',
-    'onehealth_batch_u.json'
-  ]
-
-  const category = await prisma.category.upsert({
-    where: { name: 'Pharmacy' },
-    update: {},
-    create: {
-      name: 'Pharmacy',
-      description: 'Imported products from OneHealth Search API',
-    },
-  })
-
-  console.log(`Using Category: ${category.name} (${category.id})`)
-
-  const seenIds = new Set<string>()
-
-  for (const fileName of files) {
-    const dataPath = path.join(process.cwd(), fileName)
-    if (!fs.existsSync(dataPath)) continue
-
-    console.log(`Processing ${fileName}...`)
-    const rawData = fs.readFileSync(dataPath, 'utf-8')
-    let json
-    try {
-        json = JSON.parse(rawData)
-    } catch (e) {
-        console.error(`Failed to parse ${fileName}`)
-        continue
-    }
-    
-    const products = json.value || []
-
-    for (const item of products) {
-      const p = item.searchable
-      if (!p || !p.name) continue
-      
-      // Use name as a unique check for this session to avoid duplicates from overlapping searches
-      if (seenIds.has(p.name)) continue
-      seenIds.add(p.name)
-
-      const price = typeof p.amount === 'number' ? p.amount : 0
-
-      try {
-        const product = await prisma.product.create({
-          data: {
-            name: p.name,
-            description: p.brief_info || p.description || '',
-            price: price,
-            categoryId: category.id,
-            brand: p.brand_id ? `Brand_${p.brand_id}` : 'General',
-            images: p.image ? [p.image] : [],
-            activeIngredients: p.ingredient_id ? [`Ingredient_${p.ingredient_id}`] : [],
-          },
-        })
-        console.log(`Imported: ${product.name}`)
-      } catch (error) {
-        // If it fails (e.g. unique constraint if name was unique, though it isn't in schema), just skip
-        console.log(`Skipped (likely exists): ${p.name}`)
-      }
-    }
-  }
-}
-
-main()
-  .catch((e) => {
-    console.error(e)
-    process.exit(1)
-  })
-  .finally(async () => {
-    await prisma.$disconnect()
-  })
-
-
-
-================================================================================
-LOCATION: scripts\seed_onehealth_v2.ts
-================================================================================
-
-import { PrismaClient } from '@prisma/client'
-import fs from 'fs'
-import path from 'path'
-import axios from 'axios'
-import * as cheerio from 'cheerio'
-import { v2 as cloudinary } from 'cloudinary'
-import dotenv from 'dotenv'
-
-dotenv.config({ path: '.env.local' })
-dotenv.config({ path: '.env' })
-
-const prisma = new PrismaClient()
-
-// Configure Cloudinary
-cloudinary.config({
-  cloud_name: process.env.CLOUDINARY_CLOUD_NAME,
-  api_key: process.env.CLOUDINARY_API_KEY,
-  api_secret: process.env.CLOUDINARY_API_SECRET
-})
-
-const REF_DATA = JSON.parse(fs.readFileSync(path.join(process.cwd(), 'onehealth_ref.json'), 'utf-8'));
-
-async function uploadToCloudinary(url: string, publicId: string) {
-  try {
-    const result = await cloudinary.uploader.upload(url, {
-      public_id: publicId,
-      folder: 'healthclique/products',
-      overwrite: true
-    })
-    return result.secure_url
-  } catch (e) {
-    console.error(`Cloudinary upload failed for ${url}:`, e)
-    return url // fallback to original
-  }
-}
-
-async function scrapeDetailPage(url: string) {
-  try {
-    const { data } = await axios.get(url, { timeout: 10000 });
-    const $ = cheerio.load(data);
-    
-    // 1. Description
-    const description = $('#overview').nextUntil('h6, h5, h4, h3').text().trim() || 
-                        $('meta[name="description"]').attr('content') || '';
-
-    // 2. Active Ingredients
-    const pageText = $('body').text();
-    const ingredientMatch = pageText.match(/Active Ingredients \(.*?\): (.*)/i) || 
-                          pageText.match(/Ingredient: (.*)/i) ||
-                          pageText.match(/Active Ingredient: (.*)/i);
-    
-    let activeIngredients: string[] = [];
-    if (ingredientMatch) {
-        const rawIng = ingredientMatch[1].split(/[,\n]/);
-        activeIngredients = rawIng.map(i => i.trim()).filter(i => i.length > 0);
-    }
-
-    // Attempt to match against our reference list
-    const matchedIngredients = REF_DATA.ingredients.filter((ing: string) => 
-        pageText.toLowerCase().includes(ing.toLowerCase())
-    );
-    activeIngredients = [...new Set([...activeIngredients, ...matchedIngredients])];
-
-    // 3. Category from Breadcrumbs
-    const breadcrumbs = $('.breadcrumb-item').map((i, el) => $(el).text().trim()).get();
-    let categoryName = breadcrumbs.find(b => REF_DATA.categories.includes(b)) || 'Pharmacy Medication';
-
-    // 4. Brand from text
-    const brandName = REF_DATA.brands.find((b: string) => pageText.toLowerCase().includes(b.toLowerCase())) || 'General';
-
-    return {
-      description,
-      activeIngredients,
-      categoryName,
-      brandName
-    };
-  } catch (e) {
-    console.error(`Failed to scrape ${url}`);
-    return null;
-  }
-}
-
-async function main() {
-  const batchFiles = [
-    'onehealth_batch_a.json',
-    'onehealth_batch_e.json',
-    'onehealth_batch_i.json',
-    'onehealth_batch_o.json',
-    'onehealth_batch_u.json'
-  ];
-
-  const allProducts: any[] = [];
-  const seenSlugs = new Set<string>();
-
-  for (const file of batchFiles) {
-    const filePath = path.join(process.cwd(), file);
-    if (!fs.existsSync(filePath)) continue;
-    const json = JSON.parse(fs.readFileSync(filePath, 'utf-8'));
-    const items = json.value || [];
-    for (const item of items) {
-      if (!seenSlugs.has(item.searchable.slug)) {
-        allProducts.push(item.searchable);
-        seenSlugs.add(item.searchable.slug);
-      }
-    }
-  }
-
-  console.log(`Unique products to process: ${allProducts.length}`);
-
-  // Get all categories from DB for reference
-  const dbCategories = await prisma.category.findMany();
-  const categoryMap = new Map(dbCategories.map(c => [c.name, c.id]));
-
-  for (let i = 0; i < allProducts.length; i++) {
-    const p = allProducts[i];
-    console.log(`[${i+1}/${allProducts.length}] Processing: ${p.name}`);
-
-    // Scrape details
-    const details = await scrapeDetailPage(p.url || `https://onehealthng.com/product/${p.slug}`);
-    
-    // Cloudinary Upload
-    let imageUrl = p.image;
-    if (p.image) {
-        imageUrl = await uploadToCloudinary(p.image, p.slug);
-    }
-
-    const catName = details?.categoryName || 'Pharmacy Medication';
-    let catId = categoryMap.get(catName);
-    
-    // If category not found, ensure it exists
-    if (!catId) {
-        const newCat = await prisma.category.upsert({
-            where: { name: catName },
-            update: {},
-            create: { name: catName }
-        });
-        catId = newCat.id;
-        categoryMap.set(catName, catId);
-    }
-
-    try {
-        await prisma.product.upsert({
-            where: { id: p.id.toString().padEnd(24, '0') }, // Ensure valid ObjectID format if needed, but we'll let Prisma handle auto-id if possible
-            // Actually, we'll use name as unique check or just update if exists
-            //@ts-ignore
-            create: {
-                name: p.name,
-                description: details?.description || p.brief_info || '',
-                price: p.amount || 0,
-                categoryId: catId,
-                brand: details?.brandName || 'General',
-                images: [imageUrl],
-                activeIngredients: details?.activeIngredients || []
-            },
-            update: {
-                description: details?.description || p.brief_info || '',
-                price: p.amount || 0,
-                categoryId: catId,
-                brand: details?.brandName || 'General',
-                images: [imageUrl],
-                activeIngredients: details?.activeIngredients || []
-            }
-        });
-    } catch (err) {
-        // Fallback to searching by name if ID strategy fails
-        const existing = await prisma.product.findFirst({ where: { name: p.name } });
-        if (existing) {
-            await prisma.product.update({
-                where: { id: existing.id },
-                data: {
-                    description: details?.description || p.brief_info || '',
-                    price: p.amount || 0,
-                    categoryId: catId,
-                    brand: details?.brandName || 'General',
-                    images: [imageUrl],
-                    activeIngredients: details?.activeIngredients || []
-                }
-            });
+            // Small delay to avoid being blocked
+            await new Promise(r => setTimeout(r, 500));
         } else {
-             await prisma.product.create({
-                data: {
-                    name: p.name,
-                    description: details?.description || p.brief_info || '',
-                    price: p.amount || 0,
-                    categoryId: catId,
-                    brand: details?.brandName || 'General',
-                    images: [imageUrl],
-                    activeIngredients: details?.activeIngredients || []
-                }
-            });
+            // console.log(`[${i+1}/${unlinkedProducts.length}] No URL found for ${product.name}`);
+        }
+        
+        if (successCount > 0 && successCount % 20 === 0) {
+            console.log(`--- Status: ${successCount} products newly linked ---`);
         }
     }
-    
-    // Small delay to avoid blockage
-    await new Promise(resolve => setTimeout(resolve, 500));
-  }
 
-  console.log("Seeding complete!");
+    console.log(`Scrape Complete. Newly linked: ${successCount}`);
 }
 
 main().catch(e => console.error(e)).finally(() => prisma.$disconnect());
@@ -34832,5 +35094,5 @@ export const normalizeDateTime = (dateTime?: string): string => {
 
 
 ================================================================================
-TOTAL FILES CONSOLIDATED: 316
+TOTAL FILES CONSOLIDATED: 319
 ================================================================================
