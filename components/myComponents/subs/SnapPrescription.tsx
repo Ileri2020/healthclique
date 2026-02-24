@@ -17,6 +17,7 @@ export const SnapPrescription = ({ children }: { children: React.ReactNode }) =>
   const [results, setResults] = useState<any[]>([]);
   const { addItem } = useCart();
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const cameraInputRef = useRef<HTMLInputElement>(null);
 
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -149,25 +150,46 @@ export const SnapPrescription = ({ children }: { children: React.ReactNode }) =>
                   <Upload className="w-6 h-6" />
                 </div>
                 <div className="text-center">
-                  <p className="font-bold">Upload an image</p>
+                  <p className="font-bold">Upload / Drop Image</p>
                   <p className="text-sm text-muted-foreground">Prescription or product list</p>
                 </div>
               </div>
+              
+              {/* Separate Hidden Inputs */}
               <input 
                 type="file" 
                 accept="image/*" 
                 className="hidden" 
                 ref={fileInputRef} 
                 onChange={handleFileChange}
+              />
+              <input 
+                type="file" 
+                accept="image/*" 
+                className="hidden" 
+                ref={cameraInputRef} 
+                onChange={handleFileChange}
                 capture="environment"
               />
-              <Button 
-                variant="outline" 
-                className="w-full h-12 rounded-xl"
-                onClick={() => fileInputRef.current?.click()}
-              >
-                Use Camera / Upload
-              </Button>
+
+              <div className="grid grid-cols-2 gap-3 w-full">
+                <Button 
+                    variant="outline" 
+                    className="h-12 rounded-xl gap-2 font-bold border-2"
+                    onClick={() => cameraInputRef.current?.click()}
+                >
+                    <Camera className="w-5 h-5" />
+                    Use Camera
+                </Button>
+                <Button 
+                    variant="outline" 
+                    className="h-12 rounded-xl gap-2 font-bold border-2"
+                    onClick={() => fileInputRef.current?.click()}
+                >
+                    <Upload className="w-5 h-5" />
+                    Upload Image
+                </Button>
+              </div>
             </div>
           ) : (
             <div className="w-full space-y-4">
