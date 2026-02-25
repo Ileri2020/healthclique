@@ -59,7 +59,7 @@ export const SnapPrescription = ({
     if (!image) return;
 
     setLoading(true);
-    setStatus("Fetching API key...");
+    setStatus("Uploading image..."); //Fetching API key
     setResults([]);
     setSelectedItems({});
 
@@ -103,7 +103,7 @@ export const SnapPrescription = ({
 
       if (!parsed.products?.length) throw new Error("No products identified.");
 
-      setStatus("Finding matches in Health Clique store...");
+      setStatus("Finding your drugs and products in Health Clique store...");
       const {
         data: { results: searchResults },
       } = await axios.post("/api/products/search-batch", {
