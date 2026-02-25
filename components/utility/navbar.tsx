@@ -20,6 +20,7 @@ import greenlogo from "@/public/greenlogo.png";
 import Image from "next/image";
 import { Cart } from "../myComponents/subs/cart";
 import { GlobalSearch } from "../myComponents/subs/GlobalSearch";
+import { NotificationBell } from "../myComponents/subs/NotificationUI";
 import { useSession } from "next-auth/react";
 import { useAppContext } from "@/hooks/useAppContext";
 import { useEffect } from "react";
@@ -73,6 +74,7 @@ const Navbar = (): JSX.Element => {
               </DialogContent>
             </Dialog>
             <Cart />
+            <NotificationBell />
           </div>
 
           <div className="hidden lg:block flex-1 max-w-md mx-4">
@@ -90,6 +92,7 @@ const Navbar = (): JSX.Element => {
                 </Link>
               */}
             <Cart />
+            <NotificationBell />
             <ModeToggle />
           </div>
         </div>

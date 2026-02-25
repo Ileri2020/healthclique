@@ -2,7 +2,7 @@
 
 import { useAnalytics } from "./hooks/useAnalytics";
 import { KpiCard } from "./cards/KpiCard";
-import { DollarSign, ShoppingCart, Users, ArrowUpRight, ArrowDownRight } from "lucide-react";
+import { DollarSign, ShoppingCart, Users, ArrowDownRight, Eye } from "lucide-react";
 
 interface KpiSectionProps {
     data?: any;
@@ -56,6 +56,12 @@ export function KpiSection({ data, isLoading }: KpiSectionProps) {
                     value={(data.newPosts || 0).toLocaleString()}
                     description={`of ${(data.totalPosts || 0).toLocaleString()} total`}
                     icon={<ShoppingCart className="h-4 w-4 text-muted-foreground" />}
+                />
+                <KpiCard
+                    title="Total Visits"
+                    value={(data.totalVisits || 0).toLocaleString()}
+                    description="All users incl. guests"
+                    icon={<Eye className="h-4 w-4 text-primary" />}
                 />
             </div>
         </div>

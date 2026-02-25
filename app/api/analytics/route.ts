@@ -119,24 +119,23 @@ export async function GET(req: Request) {
       };
     });
 
-    /* ================= VISITS OVER TIME ================= */
+    /* ================= VISITS OVER TIME (from Visit model) ================= */
     const visitsRaw = await prisma.visit.findMany({
-      where: {
-        createdAt: { gte: from, lte: to },
-      },
-      select: { createdAt: true }
+      where: { createdAt: { gte: from, lte: to } },
+      select: { createdAt: true, path: true },
     });
 
     const visitsByDay: Record<string, number> = {};
-    visitsRaw.forEach(v => {
+    visitsRaw.forEach((v) => {
       const day = v.createdAt.toISOString().split("T")[0];
       visitsByDay[day] = (visitsByDay[day] || 0) + 1;
     });
 
-    const visits = Object.entries(visitsByDay).map(([date, count]) => ({
-      date,
-      count
-    })).sort((a, b) => a.date.localeCompare(b.date));
+    const dailyVisits = Object.entries(visitsByDay)
+      .map(([date, count]) => ({ date, count }))
+      .sort((a, b) => a.date.localeCompare(b.date));
+
+    const totalVisits = visitsRaw.length;
 
     /* ================= REFUND REASONS ================= */
     const refundsRaw = await prisma.refund.groupBy({
@@ -209,7 +208,8 @@ export async function GET(req: Request) {
       profitOverTime,
       cartStatusCounts,
       topProducts,
-      visits,
+      dailyVisits,
+      totalVisits,
       refunds,
       postsByCategory,
       userRoles,
@@ -223,7 +223,8 @@ export async function GET(req: Request) {
         newProducts,
         totalPosts,
         newPosts,
-        totalBrands
+        totalBrands,
+        totalVisits
       }
     });
   } catch (error) {

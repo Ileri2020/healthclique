@@ -116,8 +116,8 @@ export default function AnalyticsDashboard() {
                     </div>
 
                     <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-7">
-                        <ChartCard title="Page Visit Analysis" className="col-span-4">
-                            <VisitAnalysisChart data={data?.visits} isLoading={isLoading} />
+                        <ChartCard title="Daily Site Visits" className="col-span-4">
+                            <VisitAnalysisChart data={data?.dailyVisits} isLoading={isLoading} />
                         </ChartCard>
                         <ChartCard title="Refund Reasons" className="col-span-3">
                             <RefundReasonChart data={data?.refunds} isLoading={isLoading} />

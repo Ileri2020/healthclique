@@ -8,6 +8,7 @@ import { AppContextProvider } from "@/context/appContext";
 import { Footer } from "@/components/myComponents/subs/footer";
 import { NotificationUI } from "@/components/myComponents/subs";
 import { CartProvider } from "@/hooks/use-cart";
+import { VisitTracker } from "@/components/utility/VisitTracker";
 import { SessionProvider } from "next-auth/react"
 import { usersession } from "@/session";
 import { Session } from "next-auth";
@@ -73,6 +74,7 @@ export default async function RootLayout({
                     disableTransitionOnChange
                   >
                     <Navbar />
+                    <VisitTracker />
                     <NotificationUI />
                     {children}
                     <Footer />

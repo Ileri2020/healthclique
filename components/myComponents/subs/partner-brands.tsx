@@ -167,52 +167,48 @@ const PartnerBrands = () => {
   const row2 = activeBrands.filter((_, i) => i % 3 === 1);
   const row3 = activeBrands.filter((_, i) => i % 3 === 2);
 
-  const CarouselRow = ({ items, speed = 3000, direction = "ltr" }: { items: Brand[], speed?: number, direction?: "ltr" | "rtl" }) => {
-    const [emblaRef] = useEmblaCarousel({ 
-        loop: true, 
-        dragFree: true,
-        direction: direction as any
-    }, [
-      Autoplay({ delay: speed, stopOnInteraction: false, stopOnMouseEnter: true })
-    ] as any);
+  const CarouselRow = ({
+    items,
+    durationSecs = 30,
+    reverse = false,
+  }: {
+    items: Brand[];
+    durationSecs?: number;
+    reverse?: boolean;
+  }) => {
+    if (items.length === 0) return null;
+    // Duplicate items so the loop looks seamless
+    const doubled = [...items, ...items];
 
     return (
-      <div className="overflow-hidden w-full py-4" ref={emblaRef}>
-        <div className="flex gap-8 md:gap-12">
-          {items.map((brand) => (
-            <div 
-              key={brand.id} 
-              className="flex-[0_0_auto] min-w-[200px]"
+      <div className="overflow-hidden w-full py-4 group/row">
+        <div
+          className={`flex gap-8 md:gap-12 ${reverse ? "animate-marquee-reverse" : "animate-marquee"}`}
+          style={{ width: `max-content` }}
+        >
+          {doubled.map((brand, idx) => (
+            <div
+              key={`${brand.id}-${idx}`}
+              className="flex-shrink-0 min-w-[180px]"
             >
               <div className="relative group/card bg-white/50 dark:bg-white/5 backdrop-blur-sm border border-primary/5 rounded-2xl p-6 hover:border-primary/20 hover:shadow-xl hover:shadow-primary/5 transition-all duration-500">
                 <div className="flex flex-col items-center gap-2">
                   {isAdmin && (
                     <div className="absolute -top-3 left-1/2 -translate-x-1/2 flex items-center gap-1 bg-background border shadow-sm rounded-full px-2 py-1 opacity-0 group-hover/card:opacity-100 transition-opacity z-10 scale-90 group-hover/card:scale-100 duration-200">
-                      <button 
-                        onClick={() => openEditDialog(brand)}
-                        className="p-1 hover:text-primary transition-colors"
-                        title="Edit"
-                      >
+                      <button onClick={() => openEditDialog(brand)} className="p-1 hover:text-primary" title="Edit">
                         <Pencil className="h-3 w-3" />
                       </button>
-                      <div className="w-[1px] h-3 bg-muted"></div>
-                      <button 
-                        onClick={() => handleDelete(brand.id)}
-                        className="p-1 hover:text-destructive transition-colors"
-                        title="Delete"
-                      >
+                      <div className="w-[1px] h-3 bg-muted" />
+                      <button onClick={() => handleDelete(brand.id)} className="p-1 hover:text-destructive" title="Delete">
                         <Trash2 className="h-3 w-3" />
                       </button>
-                      <div className="w-[1px] h-3 bg-muted"></div>
+                      <div className="w-[1px] h-3 bg-muted" />
                       <span className="text-[10px] font-bold px-1 text-muted-foreground flex items-center gap-1">
                         <Hash className="h-2 w-2" />{brand.order}
                       </span>
                     </div>
                   )}
-                  <Link 
-                    href={`/store?brand=${encodeURIComponent(brand.name)}`}
-                    className="group flex flex-col items-center gap-1"
-                  >
+                  <Link href={`/store?brand=${encodeURIComponent(brand.name)}`} className="flex flex-col items-center gap-1 group">
                     <span className="text-xl font-black text-foreground/40 group-hover:text-primary transition-all duration-300">
                       {brand.name}
                     </span>
@@ -353,9 +349,9 @@ const PartnerBrands = () => {
       <div className="w-full space-y-4">
         {brands.length > 0 ? (
           <>
-            <CarouselRow items={row1} speed={3000} />
-            <CarouselRow items={row2} speed={4000} direction="ltr" />
-            <CarouselRow items={row3} speed={3500} />
+            <CarouselRow items={row1} durationSecs={35} />
+            <CarouselRow items={row2} durationSecs={28} reverse />
+            <CarouselRow items={row3} durationSecs={32} />
           </>
         ) : (
           <div className="container mx-auto flex justify-center py-10">

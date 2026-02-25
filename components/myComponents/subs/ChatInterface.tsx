@@ -4,12 +4,13 @@ import React, { useState, useEffect, useRef } from "react";
 import Link from "next/link";
 import axios from "axios";
 import { format } from "date-fns";
-import { Send, User as UserIcon, Check, CheckCheck, Loader2, ArrowLeft, MessageSquare } from "lucide-react";
+import { Send, User as UserIcon, Check, CheckCheck, Loader2, ArrowLeft, MessageSquare, Search } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { useAppContext } from "@/hooks/useAppContext";
+import { Badge } from "@/components/ui/badge";
 
 interface Message {
   id: string;
@@ -17,6 +18,7 @@ interface Message {
   senderId: string;
   receiverId: string;
   createdAt: string;
+  isRead: boolean;
   sender: {
     name: string;
     avatarUrl: string;
@@ -24,123 +26,138 @@ interface Message {
   };
 }
 
-interface ChatPartner {
+interface UserListItem {
   id: string;
   name: string;
   avatarUrl: string;
-  lastMessage: string;
-  lastMessageTime: string;
+  role: string;
+  email: string;
+  lastMessage?: string;
+  lastMessageTime?: string;
+  unreadCount?: number;
 }
 
 export const ChatInterface = () => {
   const { user } = useAppContext();
   const [messages, setMessages] = useState<Message[]>([]);
-  const [partners, setPartners] = useState<ChatPartner[]>([]);
-  const [selectedPartnerId, setSelectedPartnerId] = useState<string | null>(null);
+  const [allUsers, setAllUsers] = useState<UserListItem[]>([]);
+  const [selectedUserId, setSelectedUserId] = useState<string | null>(null);
   const [newMessage, setNewMessage] = useState("");
   const [loading, setLoading] = useState(false);
   const [adminUser, setAdminUser] = useState<any>(null);
+  const [search, setSearch] = useState("");
   const scrollRef = useRef<HTMLDivElement>(null);
 
   const isAdmin = user.role === "admin" || user.role === "professional" || user.role === "staff";
 
-  // Fetch Admin account for customer use
+  // ── For Customers: auto-select admin ──────────────────────────────
   useEffect(() => {
     if (!isAdmin) {
-      const fetchAdmin = async () => {
-        try {
-          const res = await axios.get("/api/dbhandler?model=user");
-          const admins = res.data.filter((u: any) => u.role === "admin" || u.role === "staff");
-          if (admins.length > 0) {
-            setAdminUser(admins[0]);
-            setSelectedPartnerId(admins[0].id);
-          }
-        } catch (error) {
-          console.error("Error fetching admin:", error);
+      axios.get("/api/dbhandler?model=user").then((res) => {
+        const admins = res.data.filter((u: any) => u.role === "admin" || u.role === "staff");
+        if (admins.length > 0) {
+          setAdminUser(admins[0]);
+          setSelectedUserId(admins[0].id);
         }
-      };
-      fetchAdmin();
+      }).catch(console.error);
     }
   }, [isAdmin]);
 
-  // Fetch partners (for admin view)
-  const fetchPartners = async () => {
+  // ── For Admin: fetch ALL non-admin users + their message metadata ──
+  const fetchUsersWithMessages = async () => {
     if (!isAdmin) return;
     try {
-      const res = await axios.get("/api/dbhandler?model=message");
-      const allMessages = res.data;
-      
-      const partnerMap = new Map<string, ChatPartner>();
-      
-      allMessages.forEach((msg: any) => {
-        const senderIsAdmin = msg.sender?.role === "admin" || msg.sender?.role === "staff" || msg.sender?.role === "professional";
-        const receiverIsAdmin = msg.receiver?.role === "admin" || msg.receiver?.role === "staff" || msg.receiver?.role === "professional";
-        
-        let otherUser = null;
-        if (!senderIsAdmin) otherUser = msg.sender;
-        else if (!receiverIsAdmin) otherUser = msg.receiver;
-        
-        if (!otherUser) return;
+      const [usersRes, msgsRes] = await Promise.all([
+        axios.get("/api/dbhandler?model=user"),
+        axios.get("/api/dbhandler?model=message"),
+      ]);
 
-        if (!partnerMap.has(otherUser.id) || new Date(msg.createdAt) > new Date(partnerMap.get(otherUser.id)!.lastMessageTime)) {
-          partnerMap.set(otherUser.id, {
-            id: otherUser.id,
-            name: otherUser.name || "Anonymous",
-            avatarUrl: otherUser.avatarUrl,
-            lastMessage: msg.content,
-            lastMessageTime: msg.createdAt
-          });
-        }
+      const nonAdminUsers: UserListItem[] = usersRes.data
+        .filter((u: any) => u.role !== "admin" && u.role !== "staff" && u.role !== "professional")
+        .map((u: any) => ({ ...u, lastMessage: undefined, lastMessageTime: undefined, unreadCount: 0 }));
+
+      const allMessages = msgsRes.data as Message[];
+
+      // Attach last-message info to each user
+      const enriched = nonAdminUsers.map((u) => {
+        const convo = allMessages.filter(
+          (m) => m.senderId === u.id || m.receiverId === u.id
+        );
+        const sorted = [...convo].sort(
+          (a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
+        );
+        const last = sorted[0];
+        const unread = convo.filter((m) => m.receiverId === user.id && !m.isRead).length;
+
+        return {
+          ...u,
+          lastMessage: last?.content,
+          lastMessageTime: last?.createdAt,
+          unreadCount: unread,
+        };
       });
-      
-      const sortedPartners = Array.from(partnerMap.values()).sort((a, b) => 
-        new Date(b.lastMessageTime).getTime() - new Date(a.lastMessageTime).getTime()
-      );
-      setPartners(sortedPartners);
-    } catch (error) {
-      console.error("Error fetching partners:", error);
+
+      // Sort: users with recent messages first, then alphabetically
+      enriched.sort((a, b) => {
+        if (a.lastMessageTime && b.lastMessageTime) {
+          return new Date(b.lastMessageTime).getTime() - new Date(a.lastMessageTime).getTime();
+        }
+        if (a.lastMessageTime) return -1;
+        if (b.lastMessageTime) return 1;
+        return (a.name || "").localeCompare(b.name || "");
+      });
+
+      setAllUsers(enriched);
+    } catch (e) {
+      console.error("Error loading users/messages", e);
     }
   };
 
-  // Fetch messages for selected conversation
+  // ── Fetch messages for selected conversation ───────────────────────
   const fetchMessages = async () => {
-    if (!selectedPartnerId || !user.id) return;
+    if (!selectedUserId || !user.id) return;
     try {
       const res = await axios.get(`/api/dbhandler?model=message`);
-      const filtered = res.data.filter((msg: any) => {
-        if (isAdmin) {
-          return msg.senderId === selectedPartnerId || msg.receiverId === selectedPartnerId;
-        } else {
-          return msg.senderId === user.id || msg.receiverId === user.id;
-        }
-      }).sort((a: any, b: any) => new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime());
-      
+      const targetId = isAdmin ? selectedUserId : user.id;
+      const filtered = res.data
+        .filter((msg: any) => {
+          if (isAdmin) {
+            return msg.senderId === selectedUserId || msg.receiverId === selectedUserId;
+          } else {
+            return msg.senderId === user.id || msg.receiverId === user.id;
+          }
+        })
+        .sort((a: any, b: any) => new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime());
+
       setMessages(filtered);
 
-      // Mark unread incoming messages as read
+      // Mark unread incoming as read
       const unreadIncoming = filtered.filter((msg: any) => msg.receiverId === user.id && !msg.isRead);
       if (unreadIncoming.length > 0) {
-        await Promise.all(unreadIncoming.map((msg: any) => 
-          axios.put(`/api/dbhandler?model=message&id=${msg.id}`, { isRead: true })
-        ));
+        await Promise.all(
+          unreadIncoming.map((msg: any) =>
+            axios.put(`/api/dbhandler?model=message&id=${msg.id}`, { isRead: true })
+          )
+        );
+        fetchUsersWithMessages(); // refresh unread counts
       }
-    } catch (error) {
-      console.error("Error fetching messages:", error);
+    } catch (e) {
+      console.error("Error fetching messages", e);
     }
   };
 
-  // Polling
+  // Initial load + polling
   useEffect(() => {
-    fetchPartners();
+    fetchUsersWithMessages();
     fetchMessages();
     const interval = setInterval(() => {
-      fetchPartners();
+      fetchUsersWithMessages();
       fetchMessages();
-    }, 60000); // 1 minute
+    }, 30000);
     return () => clearInterval(interval);
-  }, [selectedPartnerId, user.id]);
+  }, [selectedUserId, user.id]);
 
-  // Scroll to bottom
+  // Auto-scroll
   useEffect(() => {
     if (scrollRef.current) {
       scrollRef.current.scrollTo({ top: scrollRef.current.scrollHeight, behavior: "smooth" });
@@ -149,28 +166,33 @@ export const ChatInterface = () => {
 
   const handleSendMessage = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!newMessage.trim() || !selectedPartnerId || !user.id) return;
-
+    if (!newMessage.trim() || !selectedUserId || !user.id) return;
     setLoading(true);
     try {
-      const payload = {
+      await axios.post("/api/dbhandler?model=message", {
         content: newMessage,
         senderId: user.id,
-        receiverId: selectedPartnerId
-      };
-      await axios.post("/api/dbhandler?model=message", payload);
+        receiverId: selectedUserId,
+      });
       setNewMessage("");
       fetchMessages();
-      fetchPartners();
-    } catch (error) {
-      console.error("Error sending message:", error);
+      fetchUsersWithMessages();
+    } catch (e) {
+      console.error("Error sending message", e);
     } finally {
       setLoading(false);
     }
   };
 
-  const selectedPartner = partners.find(p => p.id === selectedPartnerId) || (adminUser && selectedPartnerId === adminUser.id ? { name: "Pharmacist", avatarUrl: "/logo.png" } : null);
+  const selectedUser = allUsers.find((u) => u.id === selectedUserId) || adminUser;
 
+  const filteredUsers = allUsers.filter(
+    (u) =>
+      (u.name || "").toLowerCase().includes(search.toLowerCase()) ||
+      (u.email || "").toLowerCase().includes(search.toLowerCase())
+  );
+
+  // Not logged in
   if (user.email === "nil") {
     return (
       <div className="flex flex-col items-center justify-center h-[500px] w-full max-w-5xl mx-auto border-2 border-dashed rounded-3xl bg-muted/20 gap-6 p-10 text-center">
@@ -194,33 +216,63 @@ export const ChatInterface = () => {
 
   return (
     <div className="flex h-[600px] w-full max-w-5xl mx-auto border rounded-3xl overflow-hidden bg-background shadow-2xl">
-      {/* Sidebar - Only for Admin */}
+      {/* Sidebar — always visible for admin */}
       {isAdmin && (
-        <div className={`w-full md:w-80 border-r bg-muted/10 flex flex-col ${selectedPartnerId && "hidden md:flex"}`}>
-          <div className="p-6 border-b bg-background">
-            <h2 className="text-xl font-bold text-primary">Conversations</h2>
+        <div className={`w-full md:w-80 border-r bg-muted/10 flex flex-col ${selectedUserId && "hidden md:flex"}`}>
+          <div className="p-4 border-b bg-background space-y-3">
+            <h2 className="text-xl font-bold text-primary">All Users</h2>
+            <div className="relative">
+              <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+              <Input
+                placeholder="Search users..."
+                className="pl-9 h-9 rounded-full text-xs"
+                value={search}
+                onChange={(e) => setSearch(e.target.value)}
+              />
+            </div>
           </div>
           <ScrollArea className="flex-1">
             <div className="flex flex-col">
-              {partners.length === 0 ? (
-                <div className="p-10 text-center text-muted-foreground italic">No conversations yet</div>
+              {filteredUsers.length === 0 ? (
+                <div className="p-8 text-center text-muted-foreground italic text-sm">No users found</div>
               ) : (
-                partners.map(partner => (
-                  <div 
-                    key={partner.id}
-                    onClick={() => setSelectedPartnerId(partner.id)}
-                    className={`flex items-center gap-4 p-4 cursor-pointer transition-colors border-b hover:bg-accent/50 ${selectedPartnerId === partner.id ? "bg-accent/30 border-l-4 border-l-primary" : ""}`}
+                filteredUsers.map((u) => (
+                  <div
+                    key={u.id}
+                    onClick={() => setSelectedUserId(u.id)}
+                    className={`flex items-center gap-3 p-3 cursor-pointer transition-colors border-b hover:bg-accent/50 ${
+                      selectedUserId === u.id ? "bg-accent/30 border-l-4 border-l-primary" : ""
+                    }`}
                   >
-                    <Avatar className="h-12 w-12 border">
-                      <AvatarImage src={partner.avatarUrl} />
-                      <AvatarFallback><UserIcon /></AvatarFallback>
+                    <Avatar className="h-10 w-10 border shrink-0">
+                      <AvatarImage src={u.avatarUrl} />
+                      <AvatarFallback><UserIcon className="h-4 w-4" /></AvatarFallback>
                     </Avatar>
                     <div className="flex-1 overflow-hidden">
-                      <div className="flex justify-between items-center mb-1">
-                        <span className="font-bold text-sm truncate">{partner.name}</span>
-                        <span className="text-[10px] text-muted-foreground shrink-0">{format(new Date(partner.lastMessageTime), "HH:mm")}</span>
+                      <div className="flex justify-between items-center mb-0.5">
+                        <span className="font-bold text-xs truncate">{u.name || "Anonymous"}</span>
+                        {u.lastMessageTime && (
+                          <span className="text-[10px] text-muted-foreground shrink-0 ml-1">
+                            {format(new Date(u.lastMessageTime), "HH:mm")}
+                          </span>
+                        )}
                       </div>
-                      <p className="text-xs text-muted-foreground truncate italic">{partner.lastMessage}</p>
+                      <div className="flex justify-between items-center">
+                        <p className="text-[10px] text-muted-foreground truncate italic flex-1">
+                          {u.lastMessage || <span className="text-primary/60">No messages yet</span>}
+                        </p>
+                        {(u.unreadCount ?? 0) > 0 && (
+                          <Badge className="h-4 w-4 p-0 flex items-center justify-center text-[9px] font-black bg-primary ml-1 shrink-0">
+                            {u.unreadCount}
+                          </Badge>
+                        )}
+                      </div>
+                      <Badge
+                        variant="outline"
+                        className="text-[9px] h-4 px-1 mt-0.5 font-bold capitalize border-primary/20 text-primary/60"
+                      >
+                        {u.role}
+                      </Badge>
                     </div>
                   </div>
                 ))
@@ -231,26 +283,31 @@ export const ChatInterface = () => {
       )}
 
       {/* Main Chat Area */}
-      <div className={`flex-1 flex flex-col ${isAdmin && !selectedPartnerId && "hidden md:flex"}`}>
-        {selectedPartnerId ? (
+      <div className={`flex-1 flex flex-col ${isAdmin && !selectedUserId && "hidden md:flex"}`}>
+        {selectedUserId ? (
           <>
             {/* Header */}
             <div className="p-4 border-b flex items-center gap-4 bg-background">
               {isAdmin && (
-                <Button variant="ghost" size="icon" className="md:hidden" onClick={() => setSelectedPartnerId(null)}>
+                <Button variant="ghost" size="icon" className="md:hidden" onClick={() => setSelectedUserId(null)}>
                   <ArrowLeft className="h-5 w-5" />
                 </Button>
               )}
               <Avatar className="h-10 w-10 border shadow-sm">
-                <AvatarImage src={selectedPartner?.avatarUrl} />
+                <AvatarImage src={selectedUser?.avatarUrl} />
                 <AvatarFallback><UserIcon /></AvatarFallback>
               </Avatar>
               <div>
-                <h3 className="font-bold text-sm">{selectedPartner?.name || "Pharmacist"}</h3>
-                <p className="text-[10px] text-green-500 flex items-center gap-1 font-medium">
-                  <span className="w-1.5 h-1.5 rounded-full bg-green-500 animate-pulse"></span>
-                  Active now
-                </p>
+                <h3 className="font-bold text-sm">{selectedUser?.name || "Pharmacist"}</h3>
+                {isAdmin && (
+                  <p className="text-[10px] text-muted-foreground capitalize">{selectedUser?.role} · {selectedUser?.email}</p>
+                )}
+                {!isAdmin && (
+                  <p className="text-[10px] text-green-500 flex items-center gap-1 font-medium">
+                    <span className="w-1.5 h-1.5 rounded-full bg-green-500 animate-pulse" />
+                    Active now
+                  </p>
+                )}
               </div>
             </div>
 
@@ -260,16 +317,20 @@ export const ChatInterface = () => {
                 {messages.length === 0 ? (
                   <div className="flex flex-col items-center justify-center py-20 text-muted-foreground gap-4">
                     <MessageSquare size={40} className="opacity-20" />
-                    <p className="text-sm">Start your conversation with {selectedPartner?.name}</p>
+                    <p className="text-sm">
+                      {isAdmin
+                        ? `No messages with ${selectedUser?.name || "this user"} yet. Say hello!`
+                        : `Start your conversation with the pharmacist`}
+                    </p>
                   </div>
                 ) : (
                   messages.map((msg, idx) => {
-                    const isOwn = isAdmin 
-                      ? (msg.sender?.role === "admin" || msg.sender?.role === "staff" || msg.sender?.role === "professional") 
+                    const isOwn = isAdmin
+                      ? msg.sender?.role === "admin" || msg.sender?.role === "staff" || msg.sender?.role === "professional"
                       : msg.senderId === user.id;
 
                     const prevMsg = messages[idx - 1];
-                    const showTime = !prevMsg || new Date(msg.createdAt).getTime() - new Date(prevMsg.createdAt).getTime() > 300000; // 5 min gap
+                    const showTime = !prevMsg || new Date(msg.createdAt).getTime() - new Date(prevMsg.createdAt).getTime() > 300000;
 
                     return (
                       <div key={msg.id} className="flex flex-col">
@@ -298,7 +359,7 @@ export const ChatInterface = () => {
 
             {/* Input */}
             <form onSubmit={handleSendMessage} className="p-4 border-t bg-background flex items-center gap-2">
-              <Input 
+              <Input
                 value={newMessage}
                 onChange={(e) => setNewMessage(e.target.value)}
                 placeholder="Type your message..."
@@ -315,8 +376,8 @@ export const ChatInterface = () => {
               <MessageSquare size={64} className="opacity-10" />
             </div>
             <div>
-              <h3 className="text-xl font-bold text-foreground mb-2">Select a patient to start chatting</h3>
-              <p className="max-w-xs mx-auto">Click on one of the conversations on the left to view the message history and reply.</p>
+              <h3 className="text-xl font-bold text-foreground mb-2">Select a user to chat</h3>
+              <p className="max-w-xs mx-auto">Click any user on the left — even if they haven't messaged yet. You can initiate!</p>
             </div>
           </div>
         )}
@@ -324,5 +385,3 @@ export const ChatInterface = () => {
     </div>
   );
 };
-
-

@@ -24,6 +24,17 @@ export const PRICE_MARKUPS = {
     user: 1.3,
 } as const;
 
+/** Round a price UP to the nearest 5 NGN. e.g. 25472.8 → 25475 */
+export function roundUpToNearest5(price: number): number {
+    return Math.ceil(price / 5) * 5;
+}
+
+/** Format price with commas and no decimals (rounded to nearest 5). e.g. 5000000 → "5,000,000" */
+export function formatPrice(price: number): string {
+    return roundUpToNearest5(price).toLocaleString("en-NG");
+}
+
+
 export type UserRole = keyof typeof PRICE_MARKUPS | string;
 
 export interface StockItem {

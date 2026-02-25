@@ -7,7 +7,7 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardFooter } from "@/components/ui/card";
 import { cn } from "@/lib/utils";
-import { getProductPrice, isProductInStock } from "@/lib/stock-pricing";
+import { getProductPrice, isProductInStock, PRICE_MARKUPS, formatPrice } from "@/lib/stock-pricing";
 import Link from "next/link";
 import * as React from "react";
 import { MessageCircle, ShoppingCart, Heart, Star, Edit3, Trash2, Eye, FileText } from "lucide-react";
@@ -109,6 +109,13 @@ export function ProductCard({
   const isPrescription = regClass === "Prescription Medicine";
   const isControlled = regClass === "Controlled Medicine";
 
+  // For wholesalers: show first bulk price if available
+  const isWholesaler = user?.role === "wholesaler";
+  const firstBulk = isWholesaler && product.bulkPrices?.length > 0 ? product.bulkPrices[0] : null;
+  const markup = PRICE_MARKUPS[user?.role as keyof typeof PRICE_MARKUPS] || PRICE_MARKUPS.customer;
+  const displayPrice = firstBulk ? firstBulk.price * markup : currentPrice;
+  const displayLabel = firstBulk ? `/${firstBulk.name}` : "";
+
   const whatsappNumber = "2348000000000"; // Replace with real company number
   const speakToRepUrl = `https://wa.me/${whatsappNumber}?text=${encodeURIComponent(`Hello, I'm interested in the controlled medicine: ${product.name}. Please guide me on how to proceed.`)}`;
 
@@ -126,10 +133,10 @@ export function ProductCard({
 
   const hasDiscount = showDiscount && (product.discount ?? 0) > 0;
   const discountPercent = hasDiscount ? product.discount : 0;
-  const originalPrice = currentPrice;
+  const originalPrice = displayPrice;
   const discountedPrice = hasDiscount
-    ? currentPrice * (1 - discountPercent / 100)
-    : currentPrice;
+    ? displayPrice * (1 - discountPercent / 100)
+    : displayPrice;
 
   const renderStars = () => {
     return (
@@ -338,13 +345,18 @@ export function ProductCard({
                 <>
                   <div className="mt-1.5">{renderStars()}</div>
 
-                  <div className="mt-2 flex items-center gap-1.5">
+                  <div className="mt-2 flex items-center flex-wrap gap-1.5">
                     <span className="font-medium text-foreground">
-                      ₦{discountedPrice.toFixed(2)}
+                      ₦{formatPrice(discountedPrice)}{displayLabel && <span className="text-xs text-muted-foreground ml-0.5">{displayLabel}</span>}
                     </span>
                     {hasDiscount && (
                       <span className="text-sm text-muted-foreground line-through">
-                        ₦{originalPrice.toFixed(2)}
+                        ₦{formatPrice(originalPrice)}
+                      </span>
+                    )}
+                    {firstBulk && (
+                      <span className="text-[10px] text-primary font-bold bg-primary/10 px-1.5 rounded-full">
+                        Bulk Deal
                       </span>
                     )}
                   </div>
@@ -394,11 +406,11 @@ export function ProductCard({
                 <div className="flex w-full items-center justify-between">
                   <div className="flex items-center gap-1.5">
                     <span className="font-medium text-foreground">
-                      ₦{discountedPrice.toFixed(2)}
+                      ₦{formatPrice(discountedPrice)}{displayLabel && <span className="text-xs text-muted-foreground ml-0.5">{displayLabel}</span>}
                     </span>
                     {hasDiscount && (
                       <span className="text-sm text-muted-foreground line-through">
-                        ₦{originalPrice.toFixed(2)}
+                        ₦{formatPrice(originalPrice)}
                       </span>
                     )}
                   </div>
