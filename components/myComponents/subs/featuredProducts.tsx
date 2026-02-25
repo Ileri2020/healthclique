@@ -153,14 +153,7 @@ const FeaturedProducts = () => {
              </div>
         ) : (
           <>
-            {/* 1. Admin Featured Section (Legacy Styled) */}
-            {products.length > 0 && (
-               <ProductSection 
-                title="Deals & New Arrivals" 
-                subtitle="Explore our top picks and recently added premium medical supplies"
-                items={products}
-               />
-            )}
+            {/* 1. Admin Featured Section (Removed) */}
 
             {/* 2. Pharmacy Section – now in CommonMedications (below hero) */}
 

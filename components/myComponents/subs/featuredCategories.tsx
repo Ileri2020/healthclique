@@ -128,6 +128,7 @@ import { useAppContext } from "@/hooks/useAppContext";
 const FeaturedCategories = () => {
   const { user } = useAppContext();
   const [categories, setCategories] = useState<any[]>([]);
+  const [showAll, setShowAll] = useState(false);
   const isAdmin = user?.role === "admin" || user?.role === "staff";
   const autoplay1 = useRef(Autoplay({ delay: 3000, stopOnInteraction: false }));
   const autoplay2 = useRef(Autoplay({ delay: 3000, stopOnInteraction: false }));
@@ -143,10 +144,11 @@ const FeaturedCategories = () => {
     fetchCategories();
   }, []);
 
-  // Split categories into two rows
-  const midPoint = Math.ceil(categories.length / 2);
-  const topRow = categories.slice(0, midPoint);
-  const bottomRow = categories.slice(midPoint);
+  // Limit to 20 for carousel
+  const carouselCategories = categories.slice(0, 20);
+  const midPoint = Math.ceil(carouselCategories.length / 2);
+  const topRow = carouselCategories.slice(0, midPoint);
+  const bottomRow = carouselCategories.slice(midPoint);
 
   return (
     <section className="py-12 md:py-16 bg-muted/30 overflow-hidden">
@@ -174,37 +176,55 @@ const FeaturedCategories = () => {
             )}
         </div>
 
-        <div className="space-y-6">
-          {/* Top Row Carousel */}
-          <Carousel
-            opts={{ align: "start", loop: true }}
-            plugins={[autoplay1.current]}
-            className="w-full"
-          >
-            <CarouselContent className="-ml-4">
-              {topRow.map((category) => (
-                <CarouselItem key={category.id} className="pl-4 basis-1/2 sm:basis-1/3 md:basis-1/4 lg:basis-1/6">
-                  <CategoryCard category={category} isAdmin={isAdmin} onRefresh={fetchCategories} />
-                </CarouselItem>
-              ))}
-            </CarouselContent>
-          </Carousel>
+        {showAll ? (
+            <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-6 gap-4 mt-8">
+               {categories.map((category) => (
+                  <CategoryCard key={category.id} category={category} isAdmin={isAdmin} onRefresh={fetchCategories} />
+               ))}
+            </div>
+        ) : (
+            <>
+            <div className="space-y-6">
+            {/* Top Row Carousel */}
+            <Carousel
+                opts={{ align: "start", loop: true }}
+                plugins={[autoplay1.current]}
+                className="w-full"
+            >
+                <CarouselContent className="-ml-4">
+                {topRow.map((category) => (
+                    <CarouselItem key={category.id} className="pl-4 basis-1/2 sm:basis-1/3 md:basis-1/4 lg:basis-1/6">
+                    <CategoryCard category={category} isAdmin={isAdmin} onRefresh={fetchCategories} />
+                    </CarouselItem>
+                ))}
+                </CarouselContent>
+            </Carousel>
 
-          {/* Bottom Row Carousel */}
-          <Carousel
-            opts={{ align: "start", loop: true }}
-            plugins={[autoplay2.current]}
-            className="w-full"
-          >
-            <CarouselContent className="-ml-4">
-              {bottomRow.map((category) => (
-                <CarouselItem key={category.id} className="pl-4 basis-1/2 sm:basis-1/3 md:basis-1/4 lg:basis-1/6">
-                  <CategoryCard category={category} isAdmin={isAdmin} onRefresh={fetchCategories} />
-                </CarouselItem>
-              ))}
-            </CarouselContent>
-          </Carousel>
-        </div>
+            {/* Bottom Row Carousel */}
+            <Carousel
+                opts={{ align: "start", loop: true }}
+                plugins={[autoplay2.current]}
+                className="w-full"
+            >
+                <CarouselContent className="-ml-4">
+                {bottomRow.map((category) => (
+                    <CarouselItem key={category.id} className="pl-4 basis-1/2 sm:basis-1/3 md:basis-1/4 lg:basis-1/6">
+                    <CategoryCard category={category} isAdmin={isAdmin} onRefresh={fetchCategories} />
+                    </CarouselItem>
+                ))}
+                </CarouselContent>
+            </Carousel>
+            </div>
+            
+            {categories.length > 20 && (
+                <div className="flex justify-center mt-8">
+                    <Button variant="outline" onClick={() => setShowAll(true)}>
+                        See All Categories
+                    </Button>
+                </div>
+            )}
+            </>
+        )}
       </div>
     </section>
   );
