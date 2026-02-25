@@ -1,9 +1,22 @@
 "use client";
 
 import React, { useState, useRef } from "react";
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogTrigger,
+} from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
-import { Camera, Upload, Loader2, CheckCircle2, ShoppingCart, X } from "lucide-react";
+import {
+  Camera,
+  Upload,
+  Loader2,
+  CheckCircle2,
+  ShoppingCart,
+  X,
+} from "lucide-react";
 import { GoogleGenerativeAI } from "@google/generative-ai";
 import axios from "axios";
 import { useCart } from "@/hooks/use-cart";
@@ -14,13 +27,19 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { AlertCircle, Info, RotateCcw } from "lucide-react";
 
-export const SnapPrescription = ({ children }: { children: React.ReactNode }) => {
+export const SnapPrescription = ({
+  children,
+}: {
+  children: React.ReactNode;
+}) => {
   const [isOpen, setIsOpen] = useState(false);
   const [image, setImage] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
   const [status, setStatus] = useState<string>("");
   const [results, setResults] = useState<any[]>([]);
-  const [selectedItems, setSelectedItems] = useState<Record<string, string[]>>({});
+  const [selectedItems, setSelectedItems] = useState<Record<string, string[]>>(
+    {},
+  );
   const { addItem } = useCart();
   const fileInputRef = useRef<HTMLInputElement>(null);
   const cameraInputRef = useRef<HTMLInputElement>(null);
@@ -45,9 +64,14 @@ export const SnapPrescription = ({ children }: { children: React.ReactNode }) =>
     setSelectedItems({});
 
     try {
-      const { data: { apiKey } } = await axios.get("/api/keys/gemini");
+      const {
+        data: { apiKey },
+      } = await axios.get("/api/keys/gemini");
       const genAI = new GoogleGenerativeAI(apiKey);
-      const model = genAI.getGenerativeModel({ model: "gemini-2.5-flash" }, { apiVersion: "v1" });
+      const model = genAI.getGenerativeModel(
+        { model: "gemini-2.5-flash" },
+        { apiVersion: "v1" },
+      );
 
       setStatus("Analyzing prescription...");
       const mimeType = image.match(/data:(.*?);base64/)?.[1] || "image/jpeg";
@@ -59,41 +83,54 @@ export const SnapPrescription = ({ children }: { children: React.ReactNode }) =>
         Extract the items. For each, give:
         - name: Drug Name (text)
         - quantity: Quantity requested
-        - grams: Dosage/Strength (e.g., 500mg)
+        - grams: Dosage/Strength (e.g., 500mg, 100mg/5ml)
+        - form: SPECIFY if it is a Tablet, Syrup, Capsule, Injection, Suspension, Gel, Cream, or Ointment. (CRITICAL for matching)
         - activeIngredients: List of active ingredients if identifiable
-        - category: Type of drug (e.g., Antimalarial, Painkiller)
+        - category: Type of drug (e.g., Antimalarial, Antibiotic, Painkiller, Supplement)
+        - instructions: Dosage instructions if visible
         
         Return ONLY a JSON object: { "products": [...] }
       `;
 
       const result = await model.generateContent([prompt, part]);
       const response = await result.response;
-      const parsed = JSON.parse(response.text().replace(/```json|```/g, "").trim());
+      const parsed = JSON.parse(
+        response
+          .text()
+          .replace(/```json|```/g, "")
+          .trim(),
+      );
 
       if (!parsed.products?.length) throw new Error("No products identified.");
 
-      setStatus("Finding options in store...");
-      const { data: { results: searchResults } } = await axios.post("/api/products/search-batch", {
-        products: parsed.products
+      setStatus("Finding matches in Health Clique store...");
+      const {
+        data: { results: searchResults },
+      } = await axios.post("/api/products/search-batch", {
+        products: parsed.products.map((p: any) => ({
+          ...p,
+          // Include form in search query for better matching
+          name: `${p.name} ${p.form || ""}`,
+        })),
       });
 
       setResults(searchResults);
-      
+
       // Auto-select first option if only one exists for a better UX
       const initialSelection: Record<string, string[]> = {};
       searchResults.forEach((res: any, idx: number) => {
         if (res.options.length === 1) {
-            initialSelection[idx] = [res.options[0].id];
+          initialSelection[idx] = [res.options[0].id];
         } else {
-            initialSelection[idx] = [];
+          initialSelection[idx] = [];
         }
       });
       setSelectedItems(initialSelection);
-      
-      setStatus("Review your items");
+
+      setStatus("Review your selected items");
     } catch (error: any) {
       console.error("Processing error:", error);
-      setStatus("Error: " + (error.message || "Failed"));
+      setStatus("Error: " + (error.message || "Failed to process"));
       toast.error("Process failed. Please try again.");
     } finally {
       setLoading(false);
@@ -101,46 +138,52 @@ export const SnapPrescription = ({ children }: { children: React.ReactNode }) =>
   };
 
   const toggleSelection = (identifiedIdx: number, productId: string) => {
-    setSelectedItems(prev => {
-        const current = prev[identifiedIdx] || [];
-        const isSelected = current.includes(productId);
-        const next = isSelected 
-            ? current.filter(id => id !== productId)
-            : [...current, productId];
-        
-        if (next.length > 1 && !isSelected) {
-            toast.info("Note: You've selected multiple variations for one prescription item.", {
-                description: "Ensure this is what you intended."
-            });
-        }
-        return { ...prev, [identifiedIdx]: next };
+    setSelectedItems((prev) => {
+      const current = prev[identifiedIdx] || [];
+      const isSelected = current.includes(productId);
+      const next = isSelected
+        ? current.filter((id) => id !== productId)
+        : [...current, productId];
+
+      if (next.length > 1 && !isSelected) {
+        toast.info(
+          "Note: You've selected multiple variations for one prescription item.",
+          {
+            description: "Ensure this is what you intended.",
+          },
+        );
+      }
+      return { ...prev, [identifiedIdx]: next };
     });
   };
 
   const handleAddToCart = () => {
     let totalAdded = 0;
     results.forEach((res, idx) => {
-        const selectedIds = selectedItems[idx] || [];
-        selectedIds.forEach(id => {
-            const product = res.options.find((opt: any) => opt.id === id);
-            if (product) {
-                addItem({
-                    id: product.id,
-                    name: product.name,
-                    price: product.price,
-                    images: product.images,
-                    category: product.category,
-                }, product.requestedQuantity || 1);
-                totalAdded++;
-            }
-        });
+      const selectedIds = selectedItems[idx] || [];
+      selectedIds.forEach((id) => {
+        const product = res.options.find((opt: any) => opt.id === id);
+        if (product) {
+          addItem(
+            {
+              id: product.id,
+              name: product.name,
+              price: product.price,
+              images: product.images,
+              category: product.category,
+            },
+            product.requestedQuantity || 1,
+          );
+          totalAdded++;
+        }
+      });
     });
 
     if (totalAdded > 0) {
-        toast.success(`${totalAdded} items added to cart!`);
-        setIsOpen(false);
+      toast.success(`${totalAdded} items added to cart!`);
+      setIsOpen(false);
     } else {
-        toast.error("Please select at least one product.");
+      toast.error("Please select at least one product.");
     }
   };
 
@@ -153,157 +196,255 @@ export const SnapPrescription = ({ children }: { children: React.ReactNode }) =>
   };
 
   return (
-    <Dialog open={isOpen} onOpenChange={(val) => { setIsOpen(val); if (!val) reset(); }}>
+    <Dialog
+      open={isOpen}
+      onOpenChange={(val) => {
+        setIsOpen(val);
+        if (!val) reset();
+      }}
+    >
       <DialogTrigger asChild>{children}</DialogTrigger>
-      <DialogContent className="sm:max-w-2xl max-h-[90vh] flex flex-col p-0">
-        <DialogHeader className="p-6 border-b">
+      <DialogContent className="sm:max-w-2xl h-[90vh] sm:h-auto sm:max-h-[90vh] flex flex-col p-0 overflow-hidden">
+        <DialogHeader className="p-6 border-b shrink-0">
           <DialogTitle className="text-2xl font-black flex items-center justify-between">
             <div className="flex items-center gap-2">
-                <Camera className="w-6 h-6 text-primary" />
-                Snap Prescription
+              <Camera className="w-6 h-6 text-primary" />
+              Snap Prescription
             </div>
             {results.length > 0 && (
-                <Button variant="ghost" size="sm" onClick={reset} className="font-bold text-xs gap-2">
-                    <RotateCcw className="w-4 h-4" /> Reset
-                </Button>
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={reset}
+                className="font-bold text-xs gap-2"
+              >
+                <RotateCcw className="w-4 h-4" /> Reset
+              </Button>
             )}
           </DialogTitle>
         </DialogHeader>
-        
+
         <ScrollArea className="flex-1">
           <div className="p-6 space-y-6">
             {!image ? (
-                /* ... same upload UI ... */
-                <div className="flex flex-col items-center gap-4 w-full">
-                    <div className="w-full h-48 border-2 border-dashed border-muted-foreground/25 rounded-3xl flex flex-col items-center justify-center gap-3 bg-muted/5 hover:bg-muted/10 transition-all cursor-pointer group" onClick={() => fileInputRef.current?.click()}>
-                        <div className="w-16 h-16 rounded-full bg-primary/10 flex items-center justify-center text-primary group-hover:scale-110 transition-transform">
-                            <Upload className="w-8 h-8" />
-                        </div>
-                        <div className="text-center">
-                            <p className="font-black text-lg">Upload Prescription</p>
-                            <p className="text-sm text-muted-foreground font-medium">Drag and drop or click to select</p>
-                        </div>
-                    </div>
-                    <input type="file" accept="image/*" className="hidden" ref={fileInputRef} onChange={handleFileChange} />
-                    <input type="file" accept="image/*" className="hidden" ref={cameraInputRef} onChange={handleFileChange} capture="environment" />
-                    <div className="grid grid-cols-2 gap-4 w-full">
-                        <Button variant="outline" className="h-14 rounded-2xl gap-3 font-bold border-2 hover:bg-primary/5 hover:border-primary/50 transition-all" onClick={() => cameraInputRef.current?.click()}>
-                            <Camera className="w-6 h-6 text-primary" /> Use Camera
-                        </Button>
-                        <Button variant="outline" className="h-14 rounded-2xl gap-3 font-bold border-2 hover:bg-primary/5 hover:border-primary/50 transition-all" onClick={() => fileInputRef.current?.click()}>
-                            <Upload className="w-6 h-6 text-primary" /> Upload Files
-                        </Button>
-                    </div>
+              /* ... same upload UI ... */
+              <div className="flex flex-col items-center gap-4 w-full">
+                <div
+                  className="w-full h-48 border-2 border-dashed border-muted-foreground/25 rounded-3xl flex flex-col items-center justify-center gap-3 bg-muted/5 hover:bg-muted/10 transition-all cursor-pointer group"
+                  onClick={() => fileInputRef.current?.click()}
+                >
+                  <div className="w-16 h-16 rounded-full bg-primary/10 flex items-center justify-center text-primary group-hover:scale-110 transition-transform">
+                    <Upload className="w-8 h-8" />
+                  </div>
+                  <div className="text-center">
+                    <p className="font-black text-lg">Upload Prescription</p>
+                    <p className="text-sm text-muted-foreground font-medium">
+                      Drag and drop or click to select
+                    </p>
+                  </div>
                 </div>
+                <input
+                  type="file"
+                  accept="image/*"
+                  className="hidden"
+                  ref={fileInputRef}
+                  onChange={handleFileChange}
+                />
+                <input
+                  type="file"
+                  accept="image/*"
+                  className="hidden"
+                  ref={cameraInputRef}
+                  onChange={handleFileChange}
+                  capture="environment"
+                />
+                <div className="grid grid-cols-2 gap-4 w-full">
+                  <Button
+                    variant="outline"
+                    className="h-14 rounded-2xl gap-3 font-bold border-2 hover:bg-primary/5 hover:border-primary/50 transition-all"
+                    onClick={() => cameraInputRef.current?.click()}
+                  >
+                    <Camera className="w-6 h-6 text-primary" /> Use Camera
+                  </Button>
+                  <Button
+                    variant="outline"
+                    className="h-14 rounded-2xl gap-3 font-bold border-2 hover:bg-primary/5 hover:border-primary/50 transition-all"
+                    onClick={() => fileInputRef.current?.click()}
+                  >
+                    <Upload className="w-6 h-6 text-primary" /> Upload Files
+                  </Button>
+                </div>
+              </div>
             ) : results.length === 0 ? (
-                <div className="space-y-6">
-                    <div className="relative w-full aspect-video rounded-3xl overflow-hidden border-4 border-white shadow-xl bg-muted ring-1 ring-black/5">
-                        <img src={image} alt="Prescription" className="w-full h-full object-contain" />
-                        {loading && (
-                            <div className="absolute inset-0 bg-black/40 backdrop-blur-sm flex items-center justify-center flex-col gap-4 text-white">
-                                <Loader2 className="w-10 h-10 animate-spin" />
-                                <p className="font-black tracking-widest uppercase text-xs">{status}</p>
-                            </div>
-                        )}
-                        {!loading && (
-                            <Button size="icon" variant="destructive" className="absolute top-4 right-4 rounded-full h-10 w-10 shadow-lg" onClick={() => setImage(null)}>
-                                <X className="w-5 h-5" />
-                            </Button>
-                        )}
+              <div className="space-y-6">
+                <div className="relative w-full aspect-video rounded-3xl overflow-hidden border-4 border-white shadow-xl bg-muted ring-1 ring-black/5">
+                  <img
+                    src={image}
+                    alt="Prescription"
+                    className="w-full h-full object-contain"
+                  />
+                  {loading && (
+                    <div className="absolute inset-0 bg-black/40 backdrop-blur-sm flex items-center justify-center flex-col gap-4 text-white">
+                      <Loader2 className="w-10 h-10 animate-spin" />
+                      <p className="font-black tracking-widest uppercase text-xs">
+                        {status}
+                      </p>
                     </div>
-                    {!loading && !status.includes("Error") && (
-                        <Button className="w-full h-16 rounded-2xl text-xl font-black shadow-xl shadow-primary/20 hover:scale-[1.02] active:scale-[0.98] transition-all" onClick={processImage}>
-                            Identify Products
-                        </Button>
-                    )}
-                    {status.includes("Error") && (
-                        <div className="p-4 bg-destructive/10 border-2 border-destructive/20 rounded-2xl flex items-center gap-3 text-destructive font-bold">
-                            <AlertCircle className="w-6 h-6" /> {status}
-                        </div>
-                    )}
+                  )}
+                  {!loading && (
+                    <Button
+                      size="icon"
+                      variant="destructive"
+                      className="absolute top-4 right-4 rounded-full h-10 w-10 shadow-lg"
+                      onClick={() => setImage(null)}
+                    >
+                      <X className="w-5 h-5" />
+                    </Button>
+                  )}
                 </div>
+                {!loading && !status.includes("Error") && (
+                  <Button
+                    className="w-full h-16 rounded-2xl text-xl font-black shadow-xl shadow-primary/20 hover:scale-[1.02] active:scale-[0.98] transition-all"
+                    onClick={processImage}
+                  >
+                    Identify Products
+                  </Button>
+                )}
+                {status.includes("Error") && (
+                  <div className="p-4 bg-destructive/10 border-2 border-destructive/20 rounded-2xl flex items-center gap-3 text-destructive font-bold">
+                    <AlertCircle className="w-6 h-6" /> {status}
+                  </div>
+                )}
+              </div>
             ) : (
-                <div className="space-y-8">
-                    <div className="flex items-center gap-3 p-4 bg-primary/5 rounded-2xl border border-primary/10">
-                        <Info className="w-5 h-5 text-primary shrink-0" />
-                        <p className="text-sm font-bold text-primary/80 leading-tight">We've found multiple options for your prescription. Please select the specific products you'd like to add.</p>
-                    </div>
-
-                    <div className="space-y-10">
-                        {results.map((res, identifiedIdx) => (
-                            <div key={identifiedIdx} className="space-y-4">
-                                <div className="flex items-end justify-between px-2">
-                                    <div>
-                                        <h3 className="text-xl font-black text-foreground inline-flex items-center gap-2">
-                                            {res.identifiedItem.name}
-                                            <Badge variant="outline" className="text-[10px] font-black uppercase tracking-tighter">{res.identifiedItem.grams || "Generic"}</Badge>
-                                        </h3>
-                                        <p className="text-xs font-bold text-muted-foreground uppercase tracking-widest mt-1">
-                                            Req. Qty: {res.identifiedItem.quantity} • {res.identifiedItem.category || "General"}
-                                        </p>
-                                    </div>
-                                    {selectedItems[identifiedIdx]?.length > 1 && (
-                                        <Badge variant="destructive" className="animate-pulse gap-1">
-                                            <AlertCircle className="w-3 h-3" /> Multiple Selected
-                                        </Badge>
-                                    )}
-                                </div>
-
-                                <div className="grid gap-3">
-                                    {res.options.length > 0 ? (
-                                        res.options.map((opt: any) => (
-                                            <div 
-                                                key={opt.id} 
-                                                onClick={() => toggleSelection(identifiedIdx, opt.id)}
-                                                className={`flex items-center justify-between p-4 rounded-2xl border-2 transition-all cursor-pointer group hover:scale-[1.01] ${
-                                                    selectedItems[identifiedIdx]?.includes(opt.id) 
-                                                    ? "bg-primary/5 border-primary ring-1 ring-primary/20 shadow-lg shadow-primary/5" 
-                                                    : "bg-card border-border hover:border-primary/30"
-                                                }`}
-                                            >
-                                                <div className="flex items-center gap-4">
-                                                    <Checkbox 
-                                                        checked={selectedItems[identifiedIdx]?.includes(opt.id)} 
-                                                        onCheckedChange={() => toggleSelection(identifiedIdx, opt.id)}
-                                                        className="w-5 h-5 rounded-md border-2"
-                                                    />
-                                                    <div>
-                                                        <div className="font-black text-sm group-hover:text-primary transition-colors">{opt.name}</div>
-                                                        <div className="text-xs font-bold text-muted-foreground">
-                                                            {opt.brand?.name || "Premium Brand"} • {opt.activeIngredients?.map((i: any) => i.name).join(", ") || "Pure Grade"}
-                                                        </div>
-                                                    </div>
-                                                </div>
-                                                <div className="text-right">
-                                                    <div className="font-black text-primary">₦{opt.price.toLocaleString()}</div>
-                                                    <div className="text-[10px] font-bold text-muted-foreground uppercase">Price per unit</div>
-                                                </div>
-                                            </div>
-                                        ))
-                                    ) : (
-                                        <div className="p-8 rounded-3xl border-2 border-dashed border-muted-foreground/20 text-center space-y-2 grayscale opacity-50">
-                                            <X className="w-8 h-8 mx-auto text-muted-foreground" />
-                                            <p className="font-bold text-sm">No direct match found</p>
-                                            <p className="text-xs font-medium">Try searching manually for "{res.identifiedItem.name}"</p>
-                                        </div>
-                                    )}
-                                </div>
-                            </div>
-                        ))}
-                    </div>
+              <div className="space-y-8">
+                <div className="flex items-center gap-3 p-4 bg-primary/5 rounded-2xl border border-primary/10">
+                  <Info className="w-5 h-5 text-primary shrink-0" />
+                  <p className="text-sm font-bold text-primary/80 leading-tight">
+                    We've found multiple options for your prescription. Please
+                    select the specific products you'd like to add.
+                  </p>
                 </div>
+
+                <div className="space-y-10">
+                  {results.map((res, identifiedIdx) => (
+                    <div key={identifiedIdx} className="space-y-4">
+                      <div className="flex items-end justify-between px-2">
+                        <div>
+                          <h3 className="text-xl font-black text-foreground inline-flex items-center gap-2">
+                            {res.identifiedItem.name}
+                            <Badge
+                              variant="outline"
+                              className="text-[10px] font-black uppercase tracking-tighter"
+                            >
+                              {res.identifiedItem.grams || "Generic"}
+                            </Badge>
+                          </h3>
+                          <p className="text-xs font-bold text-muted-foreground uppercase tracking-widest mt-1">
+                            Req. Qty: {res.identifiedItem.quantity} •{" "}
+                            {res.identifiedItem.category || "General"}
+                          </p>
+                        </div>
+                        {selectedItems[identifiedIdx]?.length > 1 && (
+                          <Badge
+                            variant="destructive"
+                            className="animate-pulse gap-1"
+                          >
+                            <AlertCircle className="w-3 h-3" /> Multiple
+                            Selected
+                          </Badge>
+                        )}
+                      </div>
+
+                      <div className="grid gap-3">
+                        {res.options.length > 0 ? (
+                          res.options.map((opt: any) => (
+                            <div
+                              key={opt.id}
+                              onClick={() =>
+                                toggleSelection(identifiedIdx, opt.id)
+                              }
+                              className={`flex items-center justify-between p-4 rounded-2xl border-2 transition-all cursor-pointer group hover:scale-[1.01] ${
+                                selectedItems[identifiedIdx]?.includes(opt.id)
+                                  ? "bg-primary/5 border-primary ring-1 ring-primary/20 shadow-lg shadow-primary/5"
+                                  : "bg-card border-border hover:border-primary/30"
+                              }`}
+                            >
+                              <div className="flex items-center gap-4">
+                                <Checkbox
+                                  checked={selectedItems[
+                                    identifiedIdx
+                                  ]?.includes(opt.id)}
+                                  onCheckedChange={() =>
+                                    toggleSelection(identifiedIdx, opt.id)
+                                  }
+                                  className="w-5 h-5 rounded-md border-2"
+                                />
+                                <div>
+                                  <div className="font-black text-sm group-hover:text-primary transition-colors">
+                                    {opt.name}
+                                  </div>
+                                  <div className="text-xs font-bold text-muted-foreground">
+                                    {opt.brand?.name || "Premium Brand"} •{" "}
+                                    {opt.activeIngredients
+                                      ?.map((i: any) => i.name)
+                                      .join(", ") || "Pure Grade"}
+                                  </div>
+                                  {opt.description && (
+                                    <div className="text-[10px] text-muted-foreground/60 mt-1 line-clamp-1 italic">
+                                      {opt.description}
+                                    </div>
+                                  )}
+                                </div>
+                              </div>
+                              <div className="text-right">
+                                <div className="font-black text-primary">
+                                  ₦{opt.price.toLocaleString()}
+                                </div>
+                                <div className="text-[10px] font-bold text-muted-foreground uppercase">
+                                  Price per unit
+                                </div>
+                              </div>
+                            </div>
+                          ))
+                        ) : (
+                          <div className="p-8 rounded-3xl border-2 border-dashed border-muted-foreground/20 text-center space-y-2 grayscale opacity-50">
+                            <X className="w-8 h-8 mx-auto text-muted-foreground" />
+                            <p className="font-bold text-sm">
+                              No direct match found
+                            </p>
+                            <p className="text-xs font-medium">
+                              Try searching manually for "
+                              {res.identifiedItem.name}"
+                            </p>
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
             )}
           </div>
         </ScrollArea>
 
         {results.length > 0 && (
           <div className="p-6 border-t bg-muted/30 flex items-center gap-4">
-            <Button variant="outline" size="lg" className="flex-1 rounded-2xl font-black h-14 border-2" onClick={reset}>
-               Cancel
+            <Button
+              variant="outline"
+              size="lg"
+              className="flex-1 rounded-2xl font-black h-14 border-2"
+              onClick={reset}
+            >
+              Cancel
             </Button>
-            <Button size="lg" className="flex-[2] rounded-2xl font-black h-14 shadow-xl shadow-primary/20 gap-3" onClick={handleAddToCart}>
-               <ShoppingCart className="w-6 h-6" />
-               Add Selected to Cart
+            <Button
+              size="lg"
+              className="flex-[2] rounded-2xl font-black h-14 shadow-xl shadow-primary/20 gap-3"
+              onClick={handleAddToCart}
+            >
+              <ShoppingCart className="w-6 h-6" />
+              Add Selected to Cart
             </Button>
           </div>
         )}

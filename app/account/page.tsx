@@ -12,8 +12,11 @@ import { ProfileImg } from "@/components/myComponents/subs/fileupload"
 import { signOut } from "next-auth/react"
 import UserShippingAddressForm from "@/prisma/forms/userShippingAddressForm"
 import Link from "next/link"
+import axios from "axios"
+import { toast } from "sonner"
 import { AccountUpgrade } from "@/components/myComponents/subs/AccountUpgrade"
 import { AdminUserManager } from "@/components/myComponents/subs/AdminUserManager"
+import { AdminBulkManager } from "@/components/myComponents/subs/AdminBulkManager"
 import {
   User,
   Mail,
@@ -29,6 +32,8 @@ import {
   Building2,
   CheckCircle,
   AlertCircle,
+  CreditCard,
+  Plus
 } from "lucide-react"
 
 const Account = () => {
@@ -105,9 +110,69 @@ const Account = () => {
           </div>
         </div>
 
+        {/* ── My Health Wallet (Card) ── */}
+        <div className="relative overflow-hidden rounded-2xl bg-gradient-to-br from-indigo-600 to-violet-700 p-6 text-white shadow-xl">
+          <div className="absolute -right-10 -top-10 h-40 w-40 rounded-full bg-white/10 blur-3xl" />
+          <div className="absolute -bottom-10 -left-10 h-32 w-32 rounded-full bg-indigo-500/20 blur-2xl" />
+          
+          <div className="relative flex flex-col gap-6">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-2">
+                <Shield className="h-5 w-5 text-indigo-300" />
+                <span className="text-xs font-bold uppercase tracking-widest text-indigo-100">Health Clique Wallet</span>
+              </div>
+              <CheckCircle className="h-6 w-6 text-indigo-300" />
+            </div>
+
+            <div className="space-y-1">
+              <p className="text-[10px] uppercase tracking-tighter text-indigo-200 font-black">Available Balance</p>
+              <h2 className="text-4xl font-black">
+                {user.walletCurrency || "₦"}
+                {(user.walletBalance || 0).toLocaleString(undefined, { minimumFractionDigits: 2 })}
+              </h2>
+            </div>
+
+            <div className="flex items-end justify-between">
+              <div className="space-y-1">
+                <p className="text-[8px] uppercase tracking-widest text-indigo-200 font-bold">Holder</p>
+                <p className="text-xs font-black uppercase tracking-widest">{user.name}</p>
+              </div>
+              <div className="flex flex-col items-end gap-2">
+                 <Button 
+                    size="sm" 
+                    variant="outline" 
+                    className="h-8 rounded-lg bg-white/20 border-white/30 hover:bg-white/30 text-[10px] font-black uppercase gap-1"
+                    onClick={async () => {
+                        const amount = parseFloat(prompt("Enter amount to top up:", "5000") || "0");
+                        if (amount > 0) {
+                            try {
+                                const newBalance = (user.walletBalance || 0) + amount;
+                                await axios.put(`/api/dbhandler?model=user&id=${user.id}`, { walletBalance: newBalance });
+                                setUser({ ...user, walletBalance: newBalance });
+                                toast.success(`₦${amount.toLocaleString()} added to your wallet!`);
+                            } catch (err) {
+                                toast.error("Top up failed");
+                            }
+                        }
+                    }}
+                 >
+                    <Plus className="h-3 w-3" /> Top Up
+                 </Button>
+                 <div className="flex -space-x-2">
+                    <div className="h-8 w-8 rounded-full bg-white/20 backdrop-blur-md border border-white/30" />
+                    <div className="h-8 w-8 rounded-full bg-white/40 backdrop-blur-md border border-white/30" />
+                 </div>
+              </div>
+            </div>
+          </div>
+        </div>
+
         {/* Admin: full user manager. Staff: nothing. Customer/Professional/Wholesaler: upgrade prompt */}
         {user.role === "admin" ? (
-          <AdminUserManager />
+          <>
+            <AdminBulkManager />
+            <AdminUserManager />
+          </>
         ) : user.role === "customer" ? (
           <AccountUpgrade />
         ) : null}
@@ -292,6 +357,8 @@ const Account = () => {
                 avatarUrl: "https://res.cloudinary.com/dc5khnuiu/image/upload/v1752627019/uxokaq0djttd7gsslwj9.png",
                 role: "customer",
                 contact: "xxxx",
+                walletBalance: 0,
+                walletCurrency: "₦",
               })
             }}
           >

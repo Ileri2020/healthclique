@@ -2,11 +2,13 @@
 
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Separator } from "@/components/ui/separator";
+import { Input } from "@/components/ui/input";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { cn } from "@/lib/utils";
 import axios from "axios";
-import { Loader2, RefreshCcw, ShoppingCart, Plus } from "lucide-react";
+import { Loader2, RefreshCcw, ShoppingCart, Plus, Search, ArrowLeftRight, Shield } from "lucide-react";
 import React, { useEffect, useState } from "react";
 // Check if Flutterwave hook exists
 // import FlutterWaveButtonHook from "../../payment/flutterwavehook"; 
@@ -34,10 +36,12 @@ interface CartItem {
 
 interface CartData {
     id: string;
+    userId: string;
     name?: string;
     total: number;
     deliveryFee?: number;
     status: string;
+    prescriptionUrl?: string;
     pharmacistSummary?: string;
     createdAt: string;
     products: CartItem[];
@@ -70,6 +74,123 @@ export function CartDetails({ cartId, onPaymentSuccess }: CartDetailsProps) {
     const [selectedAddressId, setSelectedAddressId] = useState<string | null>(null);
     const [isEditingName, setIsEditingName] = useState(false);
     const [editedName, setEditedName] = useState("");
+
+    // Replacement State
+    const [replacingItem, setReplacingItem] = useState<CartItem | null>(null);
+    const [searchQuery, setSearchQuery] = useState("");
+    const [potentialReplacements, setPotentialReplacements] = useState<any[]>([]);
+    const [isSearching, setIsSearching] = useState(false);
+
+    useEffect(() => {
+        if (searchQuery.length > 2) {
+            const delayDebounceFn = setTimeout(async () => {
+                setIsSearching(true);
+                try {
+                    const res = await axios.get(`/api/dbhandler?model=product`);
+                    const data = Array.isArray(res.data) ? res.data : [];
+                    setPotentialReplacements(data.filter((p: any) => 
+                        p.name.toLowerCase().includes(searchQuery.toLowerCase())
+                    ).slice(0, 5));
+                } catch (err) {
+                    console.error("Search failed", err);
+                } finally {
+                    setIsSearching(false);
+                }
+            }, 300);
+            return () => clearTimeout(delayDebounceFn);
+        } else {
+            setPotentialReplacements([]);
+        }
+    }, [searchQuery]);
+
+    const handleSwapItem = async (newProduct: any) => {
+        if (!cart || !replacingItem) return;
+
+        const oldPrice = (replacingItem.product.price || 0) * replacingItem.quantity;
+        const newPrice = (newProduct.price || 0) * replacingItem.quantity;
+        const diff = oldPrice - newPrice;
+
+        try {
+            // 1. Delete old CartItem
+            await axios.delete(`/api/dbhandler?model=cartItem&id=${replacingItem.id}`);
+            
+            // 2. Add new CartItem
+            await axios.post(`/api/dbhandler?model=cartItem`, {
+                cartId: cart.id,
+                productId: newProduct.id,
+                quantity: replacingItem.quantity
+            });
+
+            // 3. Update User Wallet if surplus (diff > 0) AND order is already paid/confirmed
+            if (diff > 0 && isLocked) {
+                const userRes = await axios.get(`/api/dbhandler?model=user&id=${cart.userId}`);
+                const userData = userRes.data;
+                const newBalance = (userData.walletBalance || 0) + diff;
+                await axios.put(`/api/dbhandler?model=user&id=${cart.userId}`, {
+                    walletBalance: newBalance
+                });
+                toast.success(`₦${diff.toFixed(2)} refunded to user's wallet`);
+            }
+
+            // 4. Update cart total if NOT locked (so price change reflects in what they see to pay)
+            if (!isLocked) {
+                const newTotal = cart.total - diff;
+                await axios.put(`/api/dbhandler?model=cart&id=${cart.id}`, {
+                    total: newTotal
+                });
+            }
+
+            // 5. Send message to user
+            const messageContent = `[HEALTH CLIQUE PHARMACY] Your order (ID: ${cart.id.slice(-6)}) has been updated by a pharmacist. Replaced "${replacingItem.product.name}" with "${newProduct.name}". ${diff > 0 && isLocked ? `A surplus of ₦${diff.toFixed(2)} has been credited to your Health Wallet.` : diff < 0 ? `Please note the balance difference of ₦${Math.abs(diff).toFixed(2)} added to your total.` : `Total price adjusted.`}`;
+            
+            await axios.post(`/api/dbhandler?model=message`, {
+                content: messageContent,
+                senderId: user.id,
+                receiverId: cart.userId
+            });
+
+            toast.success("Product replaced and user notified");
+            setReplacingItem(null);
+            setSearchQuery("");
+            
+            const freshCart = await axios.get(`/api/dbhandler?model=cart&id=${cart.id}`);
+            setCart(Array.isArray(freshCart.data) ? freshCart.data[0] : freshCart.data);
+
+        } catch (err) {
+            console.error("Swap failed", err);
+            toast.error("Failed to swap product");
+        }
+    };
+
+    const handleWalletPayment = async () => {
+        if (!cart || !user) return;
+        if ((user.walletBalance || 0) < totalAmount) {
+            toast.error("Insufficient wallet balance. Please top up your Health Wallet.");
+            return;
+        }
+
+        try {
+           // 1. Deduct from wallet
+           const newBalance = user.walletBalance - totalAmount;
+           await axios.put(`/api/dbhandler?model=user&id=${user.id}`, { walletBalance: newBalance });
+           
+           // 2. Mark cart as paid
+           await axios.put(`/api/dbhandler?model=cart&id=${cart.id}`, {
+               status: "paid",
+               total: totalAmount,
+               deliveryFee: deliveryFee
+           });
+
+           // 3. Update local state
+           setCart(prev => prev ? ({ ...prev, status: "paid" }) : null);
+           toast.success("Order paid successfully via Health Wallet!");
+           
+           if (onPaymentSuccess) onPaymentSuccess();
+        } catch (err) {
+           console.error("Wallet payment failed", err);
+           toast.error("Payment failed. Please try again.");
+        }
+    };
 
     useEffect(() => {
         if (user?.addresses?.length && !selectedAddressId) {
@@ -245,6 +366,23 @@ export function CartDetails({ cartId, onPaymentSuccess }: CartDetailsProps) {
                         </Button>
                     </div>
 
+                    {/* Prescription Image View */}
+                    {cart?.prescriptionUrl && (
+                        <div className="mt-2 space-y-1">
+                            <label className="text-[10px] font-black uppercase tracking-widest text-muted-foreground px-1">Prescription Snapshot</label>
+                            <div className="relative aspect-video w-full rounded-xl overflow-hidden border shadow-sm group">
+                                <img src={cart.prescriptionUrl} alt="Prescription" className="w-full h-full object-contain bg-background" />
+                                <a 
+                                    href={cart.prescriptionUrl} 
+                                    target="_blank" 
+                                    className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 flex items-center justify-center transition-opacity text-white text-xs font-bold"
+                                >
+                                    View Full Image
+                                </a>
+                            </div>
+                        </div>
+                    )}
+
                     {/* Pharmacist Summary Row */}
                     {(cart?.pharmacistSummary || (user?.role === "admin" || user?.role === "staff")) && (
                         <div className="mt-2 p-3 bg-primary/5 rounded-xl border border-primary/20 space-y-2">
@@ -313,6 +451,16 @@ export function CartDetails({ cartId, onPaymentSuccess }: CartDetailsProps) {
                                                 <Link href={`/store/${product?.id}`} className="text-sm font-medium line-clamp-2 hover:underline">
                                                     {product?.name ?? "Unnamed product"}
                                                 </Link>
+                                                {(user?.role === "admin" || user?.role === "staff") && (
+                                                    <Button 
+                                                        variant="ghost" 
+                                                        size="icon" 
+                                                        className="h-8 w-8 text-indigo-600 hover:text-indigo-700 hover:bg-indigo-50"
+                                                        onClick={() => setReplacingItem(item)}
+                                                    >
+                                                        <ArrowLeftRight className="h-4 w-4" />
+                                                    </Button>
+                                                )}
                                             </div>
 
                                             <div className="mt-2 flex justify-between items-center">
@@ -329,6 +477,52 @@ export function CartDetails({ cartId, onPaymentSuccess }: CartDetailsProps) {
                             })}
                         </AnimatePresence>
                     </div>
+
+                    {/* Replacement Dialog */}
+                    <Dialog open={!!replacingItem} onOpenChange={(open) => !open && setReplacingItem(null)}>
+                        <DialogContent className="sm:max-w-[400px]">
+                            <DialogHeader>
+                                <DialogTitle>Replace Product</DialogTitle>
+                                <CardDescription>
+                                    Swapping: {replacingItem?.product.name}
+                                </CardDescription>
+                            </DialogHeader>
+                            <div className="space-y-4 py-4">
+                                <div className="relative">
+                                    <Search className="absolute left-3 top-3 h-4 w-4 text-muted-foreground" />
+                                    <Input 
+                                        placeholder="Search replacement..." 
+                                        className="pl-9"
+                                        value={searchQuery}
+                                        onChange={(e) => setSearchQuery(e.target.value)}
+                                    />
+                                </div>
+                                
+                                <div className="space-y-2">
+                                    {isSearching && <div className="text-center py-2"><Loader2 className="h-4 w-4 animate-spin mx-auto" /></div>}
+                                    {potentialReplacements.map(p => (
+                                        <div 
+                                            key={p.id}
+                                            className="flex items-center justify-between p-3 rounded-lg border hover:bg-accent cursor-pointer transition-colors"
+                                            onClick={() => handleSwapItem(p)}
+                                        >
+                                            <div className="flex items-center gap-3">
+                                                <img src={p.images?.[0]} className="w-10 h-10 rounded object-cover" />
+                                                <div>
+                                                    <p className="text-xs font-bold">{p.name}</p>
+                                                    <p className="text-[10px] text-muted-foreground">₦{p.price}</p>
+                                                </div>
+                                            </div>
+                                            <Button size="sm" variant="ghost">Select</Button>
+                                        </div>
+                                    ))}
+                                    {searchQuery.length > 2 && potentialReplacements.length === 0 && !isSearching && (
+                                        <p className="text-center text-xs text-muted-foreground py-2">No products found</p>
+                                    )}
+                                </div>
+                            </div>
+                        </DialogContent>
+                    </Dialog>
 
                     <div className="bg-muted/10 p-6 space-y-3 border-t mt-auto">
                         {!isLocked && user?.id !== 'nil' && (
@@ -379,9 +573,18 @@ export function CartDetails({ cartId, onPaymentSuccess }: CartDetailsProps) {
                         </div>
 
                         {!isLocked && user && selectedAddressId && (
-                             <Button className="w-full mt-4" size="lg" onClick={markAsPaid}>
-                                Pay & Confirm Order
-                             </Button>
+                             <div className="space-y-2 w-full mt-4">
+                                 <Button 
+                                     className="w-full h-12 rounded-xl font-black bg-gradient-to-r from-indigo-600 to-violet-600 hover:scale-[1.02] transition-transform shadow-lg shadow-indigo-500/20" 
+                                     onClick={handleWalletPayment}
+                                 >
+                                     <Shield className="mr-2 h-4 w-4" />
+                                     Pay with Health Wallet
+                                 </Button>
+                                 <Button className="w-full h-12 rounded-xl font-bold border-2" variant="outline" onClick={markAsPaid}>
+                                     Pay via Flutterwave/Card
+                                 </Button>
+                             </div>
                         )}
                         {!isLocked && user && !selectedAddressId && (
                              <p className="text-sm text-destructive mt-2 text-center font-bold">Please add an address in your account settings.</p>

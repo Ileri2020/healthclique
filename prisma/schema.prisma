@@ -34,6 +34,8 @@ model User {
   notification       Notification[]
   avatarUrl          String?           @default("https://res.cloudinary.com/dc5khnuiu/image/upload/v1752627019/uxokaq0djttd7gsslwj9.png")
   contact            String?           @default("xxxx-xxx-xxxx")
+  walletBalance      Float             @default(0.0)
+  walletCurrency     String            @default("NGN")
   createdAt          DateTime          @default(now())
   updatedAt          DateTime          @updatedAt
   wishlist           Wishlist[]

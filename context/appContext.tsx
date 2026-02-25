@@ -44,7 +44,16 @@ export const AppContextProvider: React.FC<any> = ({ children }) => {
   const [isList, setIsList] = useState(true);
   const [videos, setVideos] = useState<VideoType[]>([]);
   const [selectedVideo, setSelectedVideo] = useState<VideoType | null>(null);
-  const [user, setUser] = useState<any>({ name: "visitor", id: "nil", email: "nil", avatarUrl: "https://res.cloudinary.com/dc5khnuiu/image/upload/v1752627019/uxokaq0djttd7gsslwj9.png", role: "user", contact: "xxxx" });
+  const [user, setUser] = useState<any>({ 
+    name: "visitor", 
+    id: "nil", 
+    email: "nil", 
+    avatarUrl: "https://res.cloudinary.com/dc5khnuiu/image/upload/v1752627019/uxokaq0djttd7gsslwj9.png", 
+    role: "user", 
+    contact: "xxxx",
+    walletBalance: 0,
+    walletCurrency: "₦"
+  });
   const [cart, setCart] = useState<any[]>([]);
   const [isModal, setIsModal] = useState(false);
   const [useMock, setUseMock] = useState(true);
