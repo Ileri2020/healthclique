@@ -50,6 +50,8 @@ export async function POST(req , res) {
         : [],
       regulatoryClassification: Formdata.get("regulatoryClassification") || "OTC",
       requiresPrescription: Formdata.get("requiresPrescription") === "true",
+      weight: Formdata.get("weight"),
+      bulkPrices: Formdata.get("bulkPrices") ? JSON.parse(Formdata.get("bulkPrices") as string) : [],
       url: cldRes.url,
     },
   });

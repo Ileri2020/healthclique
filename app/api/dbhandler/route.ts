@@ -132,6 +132,7 @@ export async function GET(req: NextRequest) {
           include.brand = true;
           include.activeIngredients = true;
           include.healthConcerns = true;
+          include.bulkPrices = true;
         } else {
           include.category = true;
         }
@@ -170,6 +171,7 @@ export async function GET(req: NextRequest) {
         include.brand = true;
         include.activeIngredients = true;
         include.healthConcerns = true;
+        include.bulkPrices = true;
         include.reviews = { include: { user: { select: { name: true, avatarUrl: true } } } };
       }
       
@@ -227,8 +229,8 @@ export async function POST(req: NextRequest) {
     if (model === "cart") {
       const { userId, products, status } = body;
       const dbProducts = await prisma.product.findMany({
-        where: { id: { in: products.map((p: any) => p.productId) } },
-        select: { id: true, price: true },
+        where: { id: { in: products.map((p: any) => p.productId).filter(Boolean) } },
+        select: { id: true, price: true, bulkPrices: true },
       });
 
       let total = 0;
@@ -240,8 +242,20 @@ export async function POST(req: NextRequest) {
       const markup = PRICE_MARKUPS[userRole] || 1.3;
 
       products.forEach((item: any) => {
+        if (item.productId?.startsWith("special-")) {
+            total += (item.customPrice || 0) * item.quantity;
+            return;
+        }
+        
         const found = dbProducts.find((p) => p.id === item.productId);
-        if (found) total += (found.price * markup) * item.quantity;
+        if (found) {
+            let itemPrice = found.price;
+            if (item.bulkPriceId) {
+                const bulk = found.bulkPrices.find(b => b.id === item.bulkPriceId);
+                if (bulk) itemPrice = bulk.price;
+            }
+            total += (itemPrice * markup) * item.quantity;
+        }
       });
 
       return NextResponse.json(await prisma.cart.create({
@@ -254,6 +268,8 @@ export async function POST(req: NextRequest) {
               productId: p.productId && !p.productId.startsWith('special-') ? p.productId : null, 
               quantity: p.quantity,
               customName: p.customName || (p.productId?.startsWith('special-') ? p.name : null),
+              customPrice: p.customPrice,
+              bulkPriceId: p.bulkPriceId,
               isSpecial: !!p.isSpecial || p.productId?.startsWith('special-')
             })) 
           },
@@ -284,6 +300,15 @@ export async function POST(req: NextRequest) {
       }
       if (Array.isArray(body.healthConcerns)) {
         body.healthConcerns = { connectOrCreate: body.healthConcerns.map((name: string) => ({ where: { name }, create: { name } })) };
+      }
+      if (Array.isArray(body.bulkPrices)) {
+        body.bulkPrices = {
+          create: body.bulkPrices.map((bp: any) => ({
+            name: bp.name,
+            quantity: parseInt(bp.quantity),
+            price: parseFloat(bp.price)
+          }))
+        };
       }
     }
 
@@ -363,6 +388,16 @@ export async function PUT(req: NextRequest) {
     }
     if (Array.isArray(updatedData.healthConcerns)) {
       updatedData.healthConcerns = { set: [], connectOrCreate: updatedData.healthConcerns.map((name: string) => ({ where: { name }, create: { name } })) };
+    }
+    if (Array.isArray(updatedData.bulkPrices)) {
+      updatedData.bulkPrices = {
+        deleteMany: {},
+        create: updatedData.bulkPrices.map((bp: any) => ({
+          name: bp.name,
+          quantity: parseInt(bp.quantity),
+          price: parseFloat(bp.price)
+        }))
+      };
     }
   }
   try {

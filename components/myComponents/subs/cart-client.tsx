@@ -98,6 +98,11 @@ export function CartClient({ className, cart }: CartProps) {
         products: items.map((item) => ({
           productId: item.id,
           quantity: item.quantity,
+          bulkPriceId: (item as any).bulkPriceId,
+          bulkName: (item as any).bulkName,
+          customName: (item as any).customName,
+          customPrice: (item as any).customPrice,
+          isSpecial: (item as any).isSpecial,
         })),
         total: subtotal,
         status: "pending", // or "paid" depending on your logic
@@ -246,10 +251,11 @@ export function CartClient({ className, cart }: CartProps) {
                             onClick={() => setIsOpen(false)}
                           >
                             {item.name}
+                            {(item as any).bulkName && <span className="text-xs ml-2 text-primary font-black uppercase">({(item as any).bulkName})</span>}
                           </Link>
                           <button
                             className={` -mt-1 -mr-1 ml-2 rounded-full p-1 text-muted-foreground transition-colors  hover:bg-muted hover:text-destructive`}
-                            onClick={() => removeItem(item.id)}
+                            onClick={() => removeItem(item.id, (item as any).bulkPriceId)}
                             type="button"
                           >
                             <X className="h-4 w-4" />
@@ -266,7 +272,7 @@ export function CartClient({ className, cart }: CartProps) {
                             className={`flex h-7 w-7 items-center justify-center rounded-l-md border-r text-muted-foreground transition-colors hover:bg-muted hover:text-foreground`}
                             disabled={item.quantity <= 1}
                             onClick={() =>
-                              updateQuantity(item.id, item.quantity - 1)
+                              updateQuantity(item.id, item.quantity - 1, (item as any).bulkPriceId)
                             }
                             type="button"
                           >
@@ -281,7 +287,7 @@ export function CartClient({ className, cart }: CartProps) {
                           <button
                             className={`flex h-7 w-7 items-center justify-center rounded-r-md border-l text-muted-foreground transition-colors hover:bg-muted hover:text-foreground`}
                             onClick={() =>
-                              updateQuantity(item.id, item.quantity + 1)
+                              updateQuantity(item.id, item.quantity + 1, (item as any).bulkPriceId)
                             }
                             type="button"
                           >

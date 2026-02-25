@@ -14,6 +14,8 @@ export interface CartItem {
   regulatoryClassification?: string;
   customName?: string;
   customPrice?: number;
+  bulkPriceId?: string;
+  bulkName?: string;
   isSpecial?: boolean;
 }
 

@@ -39,6 +39,8 @@ export default function ProductForm({ initialProduct, hideList = false }: { init
     scarce: initialProduct?.scarce || false,
     regulatoryClassification: initialProduct?.regulatoryClassification || 'OTC',
     requiresPrescription: initialProduct?.requiresPrescription || false,
+    weight: initialProduct?.weight || '',
+    bulkPrices: initialProduct?.bulkPrices || [],
   });
   const [file, setFile] = useState(null);
   const [categories, setCategories] = useState([]);
@@ -127,6 +129,8 @@ export default function ProductForm({ initialProduct, hideList = false }: { init
         scarce: initialProduct.scarce || false,
         regulatoryClassification: initialProduct.regulatoryClassification || 'OTC',
         requiresPrescription: initialProduct.requiresPrescription || false,
+        weight: initialProduct.weight || '',
+        bulkPrices: Array.isArray(initialProduct.bulkPrices) ? initialProduct.bulkPrices : [],
       });
       setEditId(initialProduct.id);
     }
@@ -156,6 +160,8 @@ export default function ProductForm({ initialProduct, hideList = false }: { init
       scarce: false,
       regulatoryClassification: 'OTC',
       requiresPrescription: false,
+      weight: '',
+      bulkPrices: [],
     });
     setEditId(null);
     setFile(null);
@@ -212,6 +218,8 @@ export default function ProductForm({ initialProduct, hideList = false }: { init
     }
     // Send healthConcerns as a comma-separated string in FormData
     pformData.append("healthConcerns", formData.healthConcerns.join(","));
+    pformData.append("weight", formData.weight);
+    pformData.append("bulkPrices", JSON.stringify(formData.bulkPrices));
 
     try {
       if (editId) {
@@ -229,6 +237,8 @@ export default function ProductForm({ initialProduct, hideList = false }: { init
             activeIngredients: formData.activeIngredients.split(",").map(i => i.trim()).filter(Boolean),
             regulatoryClassification: formData.regulatoryClassification,
             requiresPrescription: formData.requiresPrescription,
+            weight: formData.weight,
+            bulkPrices: formData.bulkPrices,
           }
         );
       } else {
@@ -284,6 +294,8 @@ export default function ProductForm({ initialProduct, hideList = false }: { init
       scarce: product.scarce || false,
       regulatoryClassification: product.regulatoryClassification || 'OTC',
       requiresPrescription: product.requiresPrescription || false,
+      weight: product.weight || '',
+      bulkPrices: Array.isArray(product.bulkPrices) ? product.bulkPrices : [],
     });
     // Scroll to form
     window.scrollTo({ top: 0, behavior: 'smooth' });
@@ -576,6 +588,94 @@ export default function ProductForm({ initialProduct, hideList = false }: { init
           )}
           {formData.regulatoryClassification === "Controlled Medicine" && (
             <p className="text-[10px] text-accent font-bold mt-1 uppercase text-center leading-tight">Controlled: Only accessible via official representative</p>
+          )}
+        </div>
+
+        <div className="w-full space-y-1">
+          <Label htmlFor="product-weight">Weight (mg, ml, caps, etc.)</Label>
+          <Input
+            id="product-weight"
+            placeholder="e.g. 500mg or 20 Capsules"
+            value={formData.weight}
+            onChange={(e) => setFormData({ ...formData, weight: e.target.value })}
+            className="border-primary/20 focus:border-primary"
+          />
+        </div>
+
+        <div className="w-full space-y-2 border-2 border-dashed border-primary/20 p-3 rounded-lg bg-primary/5">
+          <div className="flex justify-between items-center">
+            <Label className="font-black text-xs uppercase tracking-widest text-primary">Bulk Pricing Options</Label>
+            <Button 
+                type="button" 
+                size="sm" 
+                variant="outline" 
+                className="h-7 text-[10px] uppercase font-black border-primary text-primary"
+                onClick={() => setFormData({ ...formData, bulkPrices: [...formData.bulkPrices, { name: '', quantity: 1, price: 0 }] })}
+            >
+                Add Bulk
+            </Button>
+          </div>
+          
+          {formData.bulkPrices.map((bp: any, idx: number) => (
+            <div key={idx} className="space-y-2 p-2 bg-background border rounded shadow-sm relative group animate-in slide-in-from-right-2">
+                <Button 
+                    type="button" 
+                    variant="ghost" 
+                    size="icon" 
+                    className="h-6 w-6 absolute -top-2 -right-2 bg-destructive text-white rounded-full hover:bg-destructive/80 opacity-0 group-hover:opacity-100 transition-opacity"
+                    onClick={() => {
+                        const newBulk = [...formData.bulkPrices];
+                        newBulk.splice(idx, 1);
+                        setFormData({ ...formData, bulkPrices: newBulk });
+                    }}
+                >
+                    <X className="h-4 w-4" />
+                </Button>
+                <div className="grid grid-cols-2 gap-2">
+                    <div className="space-y-1">
+                        <Label className="text-[9px] font-black uppercase text-muted-foreground">Bulk Name (Pack, Dozen)</Label>
+                        <Input 
+                            value={bp.name} 
+                            placeholder="Pack of 10" 
+                            className="h-8 text-xs font-bold"
+                            onChange={(e) => {
+                                const newBulk = [...formData.bulkPrices];
+                                newBulk[idx].name = e.target.value;
+                                setFormData({ ...formData, bulkPrices: newBulk });
+                            }}
+                        />
+                    </div>
+                    <div className="space-y-1">
+                        <Label className="text-[9px] font-black uppercase text-muted-foreground">Units per Bulk</Label>
+                        <Input 
+                            type="number" 
+                            value={bp.quantity} 
+                            className="h-8 text-xs font-bold"
+                            onChange={(e) => {
+                                const newBulk = [...formData.bulkPrices];
+                                newBulk[idx].quantity = parseInt(e.target.value);
+                                setFormData({ ...formData, bulkPrices: newBulk });
+                            }}
+                        />
+                    </div>
+                </div>
+                <div className="space-y-1">
+                    <Label className="text-[9px] font-black uppercase text-muted-foreground">Bulk Price (BEFORE MARKUP)</Label>
+                    <Input 
+                        type="number" 
+                        value={bp.price} 
+                        className="h-8 text-xs font-bold"
+                        onChange={(e) => {
+                            const newBulk = [...formData.bulkPrices];
+                            newBulk[idx].price = parseFloat(e.target.value);
+                            setFormData({ ...formData, bulkPrices: newBulk });
+                        }}
+                    />
+                </div>
+            </div>
+          ))}
+          {formData.bulkPrices.length === 0 && (
+              <p className="text-[10px] text-center text-muted-foreground py-2 italic font-bold">No bulk variations added.</p>
           )}
         </div>
 

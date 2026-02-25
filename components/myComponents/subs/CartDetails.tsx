@@ -462,6 +462,7 @@ export function CartDetails({ cartId, onPaymentSuccess }: CartDetailsProps) {
                                                     <div className="space-y-1">
                                                         <Link href={isSpecial ? "#" : `/store/${product?.id}`} className="text-sm font-bold line-clamp-2 hover:underline decoration-primary">
                                                             {displayName}
+                                                            {item.bulkName && <span className="text-xs ml-2 text-primary font-black uppercase">({item.bulkName})</span>}
                                                         </Link>
                                                         {isSpecial && (
                                                             <Badge variant="secondary" className="text-[8px] h-4 bg-primary/20 text-primary border-none">

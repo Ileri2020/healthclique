@@ -16,9 +16,9 @@ export interface CartContextType {
   clearCart: () => void;
   itemCount: number;
   items: CartItem[];
-  removeItem: (id: string) => void;
+  removeItem: (id: string, bulkPriceId?: string) => void;
   subtotal: number;
-  updateQuantity: (id: string, quantity: number) => void;
+  updateQuantity: (id: string, quantity: number, bulkPriceId?: string) => void;
 }
 
 /* -------------------------------------------------------------------------- */
@@ -83,10 +83,10 @@ export function CartProvider({ children }: React.PropsWithChildren) {
     (newItem: Omit<CartItem, "quantity">, qty = 1) => {
       if (qty <= 0) return;
       setItems((prev) => {
-        const existing = prev.find((i) => i.id === newItem.id);
+        const existing = prev.find((i) => i.id === newItem.id && i.bulkPriceId === newItem.bulkPriceId);
         if (existing) {
           return prev.map((i) =>
-            i.id === newItem.id ? { ...i, quantity: i.quantity + qty } : i,
+            (i.id === newItem.id && i.bulkPriceId === newItem.bulkPriceId) ? { ...i, quantity: i.quantity + qty } : i,
           );
         }
         return [...prev, { ...newItem, quantity: qty }];
@@ -95,14 +95,14 @@ export function CartProvider({ children }: React.PropsWithChildren) {
     [],
   );
 
-  const removeItem = React.useCallback((id: string) => {
-    setItems((prev) => prev.filter((i) => i.id !== id));
+  const removeItem = React.useCallback((id: string, bulkPriceId?: string) => {
+    setItems((prev) => prev.filter((i) => !(i.id === id && i.bulkPriceId === bulkPriceId)));
   }, []);
 
-  const updateQuantity = React.useCallback((id: string, qty: number) => {
+  const updateQuantity = React.useCallback((id: string, qty: number, bulkPriceId?: string) => {
     setItems((prev) =>
       prev.flatMap((i) => {
-        if (i.id !== id) return i;
+        if (!(i.id === id && i.bulkPriceId === bulkPriceId)) return i;
         if (qty <= 0) return []; // treat zero/negative as remove
         if (qty === i.quantity) return i;
         return { ...i, quantity: qty };

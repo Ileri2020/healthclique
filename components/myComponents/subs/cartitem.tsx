@@ -5,7 +5,7 @@ import { useAppContext } from "@/hooks/useAppContext"
 import { PRICE_MARKUPS } from "@/lib/stock-pricing"
 import { useCart } from "@/hooks/use-cart"
 
-const Cartitem = (props:{name: string, price: number, qty: number, totalPrice: number, id: string, img: string}) => {
+const Cartitem = (props:{name: string, price: number, qty: number, totalPrice: number, id: string, img: string, bulkPriceId?: string, bulkName?: string}) => {
     const { user } = useAppContext();
     const { updateQuantity, removeItem } = useCart();
     const role = user?.role || "customer";
@@ -15,15 +15,15 @@ const Cartitem = (props:{name: string, price: number, qty: number, totalPrice: n
     const dynamicPrice = props.price * markup;
 
     const subFromCart = () => {
-      updateQuantity(props.id, props.qty - 1);
+      updateQuantity(props.id, props.qty - 1, props.bulkPriceId);
     }
 
     const removeFromCart = () => {
-      removeItem(props.id);
+      removeItem(props.id, props.bulkPriceId);
     }
 
     const addToCart = () => {
-      updateQuantity(props.id, props.qty + 1);
+      updateQuantity(props.id, props.qty + 1, props.bulkPriceId);
     }
 
   return (
@@ -32,7 +32,10 @@ const Cartitem = (props:{name: string, price: number, qty: number, totalPrice: n
       <div className="flex flex-col h-full w-full flex-1">
         <div className="flex flex-1 flex-row justify-between">
           <div className="h-full flex flex-col justify-between">
-              <div className="text-2xl md:text-3xl font-semibold text-accent text-nowrap whitespace-nowrap /font-dance">{props.name}</div>
+              <div className="text-2xl md:text-3xl font-semibold text-accent text-nowrap whitespace-nowrap /font-dance">
+                {props.name}
+                {props.bulkName && <span className="text-xs ml-2 text-primary font-black uppercase">({props.bulkName})</span>}
+              </div>
               <div>
                 <div className="">Price: <span className="text-xl font-semibold text-foreground/80">₦ {dynamicPrice.toLocaleString()}</span></div>
                 <div>Qty : <span className="text-xl">{props.qty}</span></div>

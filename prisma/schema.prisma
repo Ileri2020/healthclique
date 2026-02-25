@@ -104,6 +104,8 @@ model Product {
   //orderItems OrderItem[]
   regulatoryClassification String?            @default("OTC") // "Prescription Medicine", "OTC", "Pharmacy Only Medicine", "Controlled Medicine"
   requiresPrescription     Boolean            @default(false)
+  weight                   String? // e.g. "500mg", "10 caps", "100ml"
+  bulkPrices               BulkPrice[]
   createdAt                DateTime           @default(now())
   updatedAt                DateTime           @updatedAt
   wishlist                 Wishlist[]
@@ -120,6 +122,17 @@ model Stock {
   pricePerProduct Int? //not yet implemented to determine profit and dysplayed price
   createdAt       DateTime @default(now())
   updatedAt       DateTime @updatedAt
+}
+
+model BulkPrice {
+  id        String   @id @default(auto()) @map("_id") @db.ObjectId
+  product   Product  @relation(fields: [productId], references: [id], onDelete: Cascade)
+  productId String   @db.ObjectId
+  name      String // e.g. "Pack", "Dozen", "Carton"
+  quantity  Int // Number of single units in this bulk
+  price     Float // Base bulk price before role-based markup
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 }
 
 model Cart {
@@ -146,6 +159,7 @@ model CartItem {
   customName  String?
   customPrice Float?
   quantity    Int
+  bulkPriceId String?  @db.ObjectId
   isSpecial   Boolean  @default(false)
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt

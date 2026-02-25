@@ -9,7 +9,7 @@ import { useCart } from "@/hooks/use-cart"
 import { toast } from "sonner"
 import { HeartPulse, Loader2, MessageCircle, ShoppingCart } from "lucide-react"
 import { useAppContext } from "@/hooks/useAppContext"
-import { getProductPrice } from "@/lib/stock-pricing"
+import { getProductPrice, PRICE_MARKUPS } from "@/lib/stock-pricing"
 import { Badge } from "@/components/ui/badge"
 import { FileText, AlertCircle, Star } from "lucide-react"
 import { ProductReviews } from "@/components/myComponents/subs/productReviews"
@@ -23,6 +23,7 @@ const Description = () => {
   const [similarProducts, setSimilarProducts] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [showFullDesc, setShowFullDesc] = useState(false);
+  const [selectedBulk, setSelectedBulk] = useState<any>(null);
   const { id } = useParams();
   const { addItem } = useCart();
   const { user } = useAppContext();
@@ -70,8 +71,14 @@ const Description = () => {
 
   const handleAddToCart = () => {
     if (product) {
-      addItem(product, 1);
-      toast.success(`${product.name} added to cart`);
+      const basePrice = selectedBulk ? selectedBulk.price : product.price;
+      addItem({
+        ...product,
+        price: basePrice,
+        bulkPriceId: selectedBulk?.id,
+        bulkName: selectedBulk?.name,
+      }, 1);
+      toast.success(`${product.name}${selectedBulk ? ` (${selectedBulk.name})` : ''} added to cart`);
     }
   };
 
@@ -129,6 +136,11 @@ const Description = () => {
                 <Star key={i} className="h-5 w-5 fill-yellow-400 text-yellow-400" />
               ))}
               <span className="ml-2 text-sm font-medium text-muted-foreground">5.0 (Customer Reviews)</span>
+              {product.weight && (
+                  <Badge variant="secondary" className="ml-auto font-black px-3 py-1 bg-primary/5 text-primary border-primary/20">
+                      {product.weight}
+                  </Badge>
+              )}
             </div>
           
           {isPrescription && (
@@ -145,9 +157,45 @@ const Description = () => {
             </div>
           )}
 
-          <div className="text-3xl font-black text-foreground">
-            ₦ {getProductPrice(product, user?.role)?.toLocaleString()}
+          <div className="flex items-baseline gap-3">
+            <span className="text-4xl font-black text-foreground">
+                ₦ {((selectedBulk ? selectedBulk.price : getProductPrice(product, user?.role)) * (selectedBulk ? (PRICE_MARKUPS[user?.role as keyof typeof PRICE_MARKUPS] || 1.3) : 1)).toLocaleString()}
+            </span>
+            {selectedBulk && (
+                <span className="text-sm font-bold text-muted-foreground">
+                    / {selectedBulk.name}
+                </span>
+            )}
           </div>
+
+          {product.bulkPrices?.length > 0 && (
+            <div className="space-y-4 py-4 border-y border-dashed">
+                <h3 className="text-sm font-black uppercase tracking-widest text-primary flex items-center gap-2">
+                    <AlertCircle className="h-4 w-4" /> Multi-Buy Options
+                </h3>
+                <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
+                    <button 
+                        onClick={() => setSelectedBulk(null)}
+                        className={`p-3 rounded-xl border-2 text-left transition-all ${!selectedBulk ? 'border-primary bg-primary/5 shadow-md' : 'border-muted hover:border-primary/50'}`}
+                    >
+                        <div className="text-[10px] font-black uppercase text-muted-foreground">Single Unit</div>
+                        <div className="text-sm font-bold">1 {product.weight || 'Piece'}</div>
+                        <div className="text-xs font-black mt-1 text-primary">₦ {getProductPrice(product, user?.role).toLocaleString()}</div>
+                    </button>
+                    {product.bulkPrices.map((bp: any) => (
+                        <button 
+                            key={bp.id}
+                            onClick={() => setSelectedBulk(bp)}
+                            className={`p-3 rounded-xl border-2 text-left transition-all ${selectedBulk?.id === bp.id ? 'border-primary bg-primary/5 shadow-md' : 'border-muted hover:border-primary/50'}`}
+                        >
+                            <div className="text-[10px] font-black uppercase text-muted-foreground">{bp.name}</div>
+                            <div className="text-sm font-bold">{bp.quantity} {product.weight || 'Units'}</div>
+                            <div className="text-xs font-black mt-1 text-primary">₦ {(bp.price * (PRICE_MARKUPS[user?.role as keyof typeof PRICE_MARKUPS] || 1.3)).toLocaleString()}</div>
+                        </button>
+                    ))}
+                </div>
+            </div>
+          )}
 
           <div className="prose prose-sm max-w-none text-muted-foreground">
             <p className="whitespace-pre-line">
