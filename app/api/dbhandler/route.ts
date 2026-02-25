@@ -249,7 +249,14 @@ export async function POST(req: NextRequest) {
           userId,
           total,
           status: status || "pending",
-          products: { create: products.map((p: any) => ({ productId: p.productId, quantity: p.quantity })) },
+          products: { 
+            create: products.map((p: any) => ({ 
+              productId: p.productId && !p.productId.startsWith('special-') ? p.productId : null, 
+              quantity: p.quantity,
+              customName: p.customName || (p.productId?.startsWith('special-') ? p.name : null),
+              isSpecial: !!p.isSpecial || p.productId?.startsWith('special-')
+            })) 
+          },
         },
         include: { products: true },
       }));

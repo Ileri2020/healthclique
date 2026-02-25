@@ -16,6 +16,7 @@ import {
   CheckCircle2,
   ShoppingCart,
   X,
+  Plus,
 } from "lucide-react";
 import { GoogleGenerativeAI } from "@google/generative-ai";
 import axios from "axios";
@@ -162,19 +163,35 @@ export const SnapPrescription = ({
     results.forEach((res, idx) => {
       const selectedIds = selectedItems[idx] || [];
       selectedIds.forEach((id) => {
-        const product = res.options.find((opt: any) => opt.id === id);
-        if (product) {
+        if (id === "special") {
           addItem(
             {
-              id: product.id,
-              name: product.name,
-              price: product.price,
-              images: product.images,
-              category: product.category,
+              id: `special-${idx}-${Date.now()}`,
+              name: `REQ: ${res.identifiedItem.name}`,
+              price: 0,
+              images: [],
+              category: "Special",
+              isSpecial: true,
+              customName: res.identifiedItem.name,
             },
-            product.requestedQuantity || 1,
+            1,
           );
           totalAdded++;
+        } else {
+          const product = res.options.find((opt: any) => opt.id === id);
+          if (product) {
+            addItem(
+              {
+                id: product.id,
+                name: product.name,
+                price: product.price,
+                images: product.images,
+                category: product.category,
+              },
+              product.requestedQuantity || 1,
+            );
+            totalAdded++;
+          }
         }
       });
     });
@@ -408,15 +425,26 @@ export const SnapPrescription = ({
                             </div>
                           ))
                         ) : (
-                          <div className="p-8 rounded-3xl border-2 border-dashed border-muted-foreground/20 text-center space-y-2 grayscale opacity-50">
-                            <X className="w-8 h-8 mx-auto text-muted-foreground" />
-                            <p className="font-bold text-sm">
-                              No direct match found
-                            </p>
-                            <p className="text-xs font-medium">
-                              Try searching manually for "
-                              {res.identifiedItem.name}"
-                            </p>
+                          <div className="p-8 rounded-3xl border-2 border-dashed border-muted-foreground/20 text-center space-y-4 bg-muted/5">
+                            <div className="space-y-1">
+                              <X className="w-8 h-8 mx-auto text-muted-foreground/40" />
+                              <p className="font-bold text-sm">
+                                "{res.identifiedItem.name}" not in stock
+                              </p>
+                              <p className="text-[10px] font-medium text-muted-foreground uppercase tracking-widest leading-none">
+                                Scarce or Extemporaneous (Pharmacist concoction)
+                              </p>
+                            </div>
+                            
+                            <Button 
+                              variant="outline" 
+                              size="sm" 
+                              className={`rounded-xl h-10 gap-2 border-primary/20 ${selectedItems[identifiedIdx]?.includes("special") ? "bg-primary text-white border-primary" : "hover:bg-primary/5 hover:border-primary/40"}`}
+                              onClick={() => toggleSelection(identifiedIdx, "special")}
+                            >
+                              <Plus className="w-3 h-3" />
+                              {selectedItems[identifiedIdx]?.includes("special") ? "Item Requested" : "Request Pharmacist to Prepare/Find"}
+                            </Button>
                           </div>
                         )}
                       </div>

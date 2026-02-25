@@ -31,7 +31,10 @@ interface CartItem {
         name: string;
         price: number;
         images: string[];
-    };
+    } | null;
+    customName?: string;
+    customPrice?: number;
+    isSpecial?: boolean;
 }
 
 interface CartData {
@@ -248,7 +251,7 @@ export function CartDetails({ cartId, onPaymentSuccess }: CartDetailsProps) {
     const validProducts = Array.isArray(cart?.products) ? cart.products : [];
     
     const subtotal = validProducts.reduce((acc, item) => {
-        const price = item?.product?.price || (item as any)?.price || 0;
+        const price = item.customPrice || item?.product?.price || (item as any)?.price || 0;
         return acc + (price * (item?.quantity || 1));
     }, 0);
 
@@ -434,44 +437,117 @@ export function CartDetails({ cartId, onPaymentSuccess }: CartDetailsProps) {
                     <div className="flex-1 overflow-y-auto px-4 space-y-4 pb-4">
                         <AnimatePresence>
                             {validProducts.map((item: any) => {
+                                const isSpecial = item.isSpecial;
                                 const product: any = (item as any).product || item;
-                                const imageUrl = product.images?.[0] || "/placeholder.jpg";
+                                const imageUrl = isSpecial ? "/placeholder.jpg" : (product.images?.[0] || "/placeholder.jpg");
+                                const displayName = isSpecial ? (item.customName || item.name) : (product?.name ?? "Unnamed product");
+                                const currentPrice = isSpecial ? (item.customPrice || 0) : (product?.price || 0);
+
                                 return (
                                     <motion.div
                                         key={item.id}
-                                        className="flex rounded-lg border bg-card p-2 shadow-sm"
+                                        className={cn(
+                                            "flex flex-col rounded-lg border bg-card p-3 shadow-sm",
+                                            isSpecial && "border-primary/20 bg-primary/5"
+                                        )}
                                     >
-                                        <img
-                                            src={imageUrl}
-                                            alt={product?.name ?? "Product"}
-                                            className="h-20 w-20 rounded object-cover bg-muted"
-                                        />
-                                        <div className="ml-4 flex flex-1 flex-col justify-between">
-                                            <div className="flex justify-between items-start gap-2">
-                                                <Link href={`/store/${product?.id}`} className="text-sm font-medium line-clamp-2 hover:underline">
-                                                    {product?.name ?? "Unnamed product"}
-                                                </Link>
-                                                {(user?.role === "admin" || user?.role === "staff") && (
-                                                    <Button 
-                                                        variant="ghost" 
-                                                        size="icon" 
-                                                        className="h-8 w-8 text-indigo-600 hover:text-indigo-700 hover:bg-indigo-50"
-                                                        onClick={() => setReplacingItem(item)}
-                                                    >
-                                                        <ArrowLeftRight className="h-4 w-4" />
-                                                    </Button>
-                                                )}
-                                            </div>
-
-                                            <div className="mt-2 flex justify-between items-center">
-                                                <div className="flex items-center text-sm text-muted-foreground bg-secondary/50 px-2 py-1 rounded">
-                                                    <span>Qty: {item.quantity}</span>
+                                        <div className="flex gap-4">
+                                            <img
+                                                src={imageUrl}
+                                                alt={displayName}
+                                                className="h-20 w-20 rounded-xl object-cover bg-muted border"
+                                            />
+                                            <div className="flex-1 flex flex-col justify-between">
+                                                <div className="flex justify-between items-start gap-2">
+                                                    <div className="space-y-1">
+                                                        <Link href={isSpecial ? "#" : `/store/${product?.id}`} className="text-sm font-bold line-clamp-2 hover:underline decoration-primary">
+                                                            {displayName}
+                                                        </Link>
+                                                        {isSpecial && (
+                                                            <Badge variant="secondary" className="text-[8px] h-4 bg-primary/20 text-primary border-none">
+                                                                Special Order / Scarce
+                                                            </Badge>
+                                                        )}
+                                                    </div>
+                                                    {(user?.role === "admin" || user?.role === "staff") && !isSpecial && (
+                                                        <Button 
+                                                            variant="ghost" 
+                                                            size="icon" 
+                                                            className="h-8 w-8 text-indigo-600 hover:text-indigo-700 hover:bg-indigo-50"
+                                                            onClick={() => setReplacingItem(item)}
+                                                        >
+                                                            <ArrowLeftRight className="h-4 w-4" />
+                                                        </Button>
+                                                    )}
                                                 </div>
-                                                <span className="text-sm font-medium">
-                                                    ₦{((product?.price || 0) * item.quantity).toFixed(2)}
-                                                </span>
+
+                                                <div className="mt-2 flex justify-between items-center">
+                                                    <div className="flex items-center text-[10px] font-bold text-muted-foreground bg-secondary/80 px-2 py-0.5 rounded-full">
+                                                        Qty: {item.quantity}
+                                                    </div>
+                                                    <div className="text-right">
+                                                        <span className="text-sm font-black text-primary">
+                                                            {currentPrice > 0 ? `₦${(currentPrice * item.quantity).toLocaleString()}` : "Price Awaiting"}
+                                                        </span>
+                                                    </div>
+                                                </div>
                                             </div>
                                         </div>
+
+                                        {/* Admin Special Pricing */}
+                                        {isSpecial && (user?.role === "admin" || user?.role === "staff") && (
+                                            <div className="mt-3 pt-3 border-t border-primary/10 flex items-center gap-3">
+                                                <div className="flex-1 relative">
+                                                    <span className="absolute left-3 top-1/2 -translate-y-1/2 text-[10px] font-black text-muted-foreground">₦</span>
+                                                    <Input 
+                                                        type="number" 
+                                                        placeholder="Set Price" 
+                                                        className="h-8 pl-6 text-xs font-bold rounded-lg border-primary/20 focus-visible:ring-primary"
+                                                        value={item.customPrice || ""}
+                                                        onChange={(e) => {
+                                                            const newPrice = parseFloat(e.target.value);
+                                                            setCart((prev: any) => {
+                                                                if (!prev) return null;
+                                                                const updatedProducts = prev.products.map((p: any) => 
+                                                                    p.id === item.id ? { ...p, customPrice: newPrice } : p
+                                                                );
+                                                                return { ...prev, products: updatedProducts };
+                                                            });
+                                                        }}
+                                                    />
+                                                </div>
+                                                <Button 
+                                                    size="sm" 
+                                                    className="h-8 rounded-lg px-4 text-[10px] font-black"
+                                                    disabled={!item.customPrice}
+                                                    onClick={async () => {
+                                                        try {
+                                                            await axios.put(`/api/dbhandler?model=cartItem&id=${item.id}`, {
+                                                                customPrice: item.customPrice
+                                                            });
+                                                            
+                                                            // Notify User
+                                                            const message = `[PRICE UPDATE] Pharmacist has set the price for your request "${displayName}" to ₦${item.customPrice.toLocaleString()}. Your total order has been updated.`;
+                                                            await axios.post(`/api/dbhandler?model=message`, {
+                                                                content: message,
+                                                                senderId: user.id,
+                                                                receiverId: cart.userId
+                                                            });
+
+                                                            toast.success("Price set and user notified!");
+                                                            
+                                                            // Refresh cart to update total
+                                                            const freshCart = await axios.get(`/api/dbhandler?model=cart&id=${cart.id}`);
+                                                            setCart(Array.isArray(freshCart.data) ? freshCart.data[0] : freshCart.data);
+                                                        } catch (err) {
+                                                            toast.error("Failed to update special price");
+                                                        }
+                                                    }}
+                                                >
+                                                    Set Price
+                                                </Button>
+                                            </div>
+                                        )}
                                     </motion.div>
                                 );
                             })}

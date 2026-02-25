@@ -14,8 +14,9 @@ import {
 } from "@/components/ui/popover";
 import landingimg from '@/public/pharmacist.png'
 import { RiseAndFadeText } from "./textctrl";
-import { GlobalSearch } from "./index";
+import { GlobalSearch, SpecialOrderForm } from "./index";
 import { SnapPrescription } from "./SnapPrescription";
+import { FlaskConical } from "lucide-react";
 import { useAppContext } from "@/hooks/useAppContext";
 import {
   Dialog,
@@ -123,6 +124,12 @@ const Hero = () => {
                   </DialogContent>
                 </Dialog>
               )}
+              <SpecialOrderForm>
+                <Button size="lg" variant="secondary" className="h-14 px-8 rounded-xl text-lg gap-2 bg-amber-500/10 text-amber-600 hover:bg-amber-500 hover:text-white border-2 border-amber-500/20 group transition-all">
+                  <FlaskConical className="w-5 h-5 group-hover:animate-bounce" />
+                  Order Scarce / Special Meds
+                </Button>
+              </SpecialOrderForm>
             </div>
 
             {/* Value Badges */}

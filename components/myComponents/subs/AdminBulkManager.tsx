@@ -4,6 +4,7 @@ import React, { useState } from "react";
 import axios from "axios";
 import { Download, Upload, Loader2, FileSpreadsheet, CheckCircle2, AlertCircle, RefreshCcw } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { toast } from "sonner";

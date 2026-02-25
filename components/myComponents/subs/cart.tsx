@@ -12,6 +12,9 @@ export interface CartItem {
   price: number;
   quantity: number;
   regulatoryClassification?: string;
+  customName?: string;
+  customPrice?: number;
+  isSpecial?: boolean;
 }
 
 interface CartProps {

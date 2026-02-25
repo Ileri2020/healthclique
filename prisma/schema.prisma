@@ -138,14 +138,17 @@ model Cart {
 }
 
 model CartItem {
-  id        String   @id @default(auto()) @map("_id") @db.ObjectId
-  cart      Cart     @relation(fields: [cartId], references: [id])
-  cartId    String   @db.ObjectId
-  product   Product  @relation(fields: [productId], references: [id])
-  productId String   @db.ObjectId
-  quantity  Int
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
+  id          String   @id @default(auto()) @map("_id") @db.ObjectId
+  cart        Cart     @relation(fields: [cartId], references: [id])
+  cartId      String   @db.ObjectId
+  product     Product? @relation(fields: [productId], references: [id])
+  productId   String?  @db.ObjectId
+  customName  String?
+  customPrice Float?
+  quantity    Int
+  isSpecial   Boolean  @default(false)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
 }
 
 model Payment {

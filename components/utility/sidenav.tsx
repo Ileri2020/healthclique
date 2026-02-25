@@ -12,6 +12,8 @@ import { ChevronRight, LayoutGrid, Stethoscope, Tag, ShoppingCart, MessageSquare
 import { Cart } from "../myComponents/subs/cart"
 import { Button } from "../ui/button";
 import { SnapPrescription } from "../myComponents/subs/SnapPrescription";
+import { SpecialOrderForm } from "../myComponents/subs/SpecialOrderForm";
+import { FlaskConical } from "lucide-react";
 
 const Sidenav = () => {
     const pathname = usePathname();
@@ -164,13 +166,19 @@ const Sidenav = () => {
                     )}
                 </div>
 
-                <div className="p-4 border-t bg-muted/20">
+                <div className="p-4 border-t bg-muted/20 space-y-2">
                     <SnapPrescription>
                         <Button className="w-full flex items-center gap-3 h-12 rounded-2xl bg-accent hover:bg-accent/90 shadow-lg shadow-accent/20 font-bold">
                             <Camera className="w-5 h-5" />
                             Snap Prescription
                         </Button>
                     </SnapPrescription>
+                    <SpecialOrderForm>
+                        <Button className="w-full flex items-center gap-3 h-12 rounded-2xl bg-amber-500/10 text-amber-600 border border-amber-500/20 hover:bg-amber-500 hover:text-white transition-all font-bold">
+                            <FlaskConical className="w-5 h-5" />
+                            Scarce / Special Order
+                        </Button>
+                    </SpecialOrderForm>
                 </div>
 
                 <div className="p-6 border-t bg-muted/30 flex items-center justify-between">

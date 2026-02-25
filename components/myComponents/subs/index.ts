@@ -17,4 +17,5 @@ export const FeaturedIngredients = dynamic(()=>import("./featuredIngredients"), 
 export const GlobalSearch = dynamic(()=>import("./GlobalSearch").then(mod => mod.GlobalSearch), { ssr: false, })
 export const SnapPrescription = dynamic(()=>import("./SnapPrescription").then(mod => mod.SnapPrescription), { ssr: false, })
 export const NotificationUI = dynamic(()=>import("./NotificationUI").then(mod => mod.NotificationUI), { ssr: false, })
+export { SpecialOrderForm } from "./SpecialOrderForm"
  
