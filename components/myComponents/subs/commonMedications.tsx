@@ -2,6 +2,7 @@
 
 import { Button } from "@/components/ui/button";
 import { ArrowRight, Plus, Minus } from "lucide-react";
+import { Skeleton } from "@/components/ui/skeleton";
 import Link from "next/link";
 import React, { useEffect, useState, useCallback, useRef } from "react";
 import { ProductCard } from "./productCard";
@@ -103,8 +104,20 @@ const CommonMedications = () => {
     return (
       <section className="py-12 md:py-16 bg-background">
         <div className="container mx-auto max-w-7xl px-4">
-          <div className="flex justify-center items-center py-16">
-            <div className="animate-spin rounded-full h-10 w-10 border-t-2 border-b-2 border-primary" />
+          <div className="mb-10">
+            <h2 className="text-3xl font-bold tracking-tight mb-2">Featured Products</h2>
+            <div className="h-1 w-20 bg-primary rounded-full" />
+          </div>
+          <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-6">
+            {[...Array(5)].map((_, i) => (
+              <div key={i} className="space-y-4">
+                <Skeleton className="aspect-square w-full rounded-2xl" />
+                <div className="space-y-2">
+                  <Skeleton className="h-4 w-2/3" />
+                  <Skeleton className="h-4 w-1/2" />
+                </div>
+              </div>
+            ))}
           </div>
         </div>
       </section>
@@ -114,40 +127,39 @@ const CommonMedications = () => {
   if (pharmacyProducts.length === 0) return null;
 
   return (
-    <section className="py-12 md:py-16 bg-background">
-      <div className="container mx-auto max-w-7xl">
+    <section className="py-12 md:py-16 bg-background overflow-hidden relative">
+      <div className="container mx-auto max-w-7xl px-4">
         {/* Section Header */}
-        <div className="flex flex-col md:flex-row md:items-end justify-between mb-8 gap-4 px-4">
+        <div className="flex flex-col md:flex-row md:items-end justify-between mb-10 gap-6">
           <div className="text-left">
-            <h2 className="text-2xl font-bold tracking-tight text-foreground">
-              Common Medications
-            </h2>
-            <p className="text-muted-foreground">
-              Recently added essential pharmaceuticals and healthcare products
-            </p>
+            <h3 className="text-sm font-black uppercase tracking-widest text-primary mb-2">Our Curated Selection</h3>
+            <h2 className="text-4xl font-black text-foreground">Featured Products</h2>
+            <div className="mt-2 h-1.5 w-24 rounded-full bg-primary" />
           </div>
 
           <div className="flex items-center gap-3">
-            {/* Admin: Manage Featured Dialog */}
             {isAdmin && (
               <Dialog open={manageOpen} onOpenChange={(open) => { setManageOpen(open); if (!open) fetchData(); }}>
                 <DialogTrigger asChild>
-                  <Button variant="outline" size="sm" className="gap-2 border-primary text-primary hover:bg-primary hover:text-primary-foreground">
+                  <Button variant="outline" className="gap-2 border-primary text-primary hover:bg-primary hover:text-white rounded-full h-11 px-6 shadow-sm">
                     <Plus className="h-4 w-4" />
                     Manage Deals Carousel
                   </Button>
                 </DialogTrigger>
                 <DialogContent className="max-w-lg max-h-[90vh] overflow-y-auto">
                   <DialogHeader>
-                    <DialogTitle>Manage "Deals & New Arrivals" Carousel</DialogTitle>
+                    <DialogTitle>Manage Deals & New Arrivals</DialogTitle>
                   </DialogHeader>
                   <FeaturedProductForm hideList={false} />
                 </DialogContent>
               </Dialog>
             )}
 
-            <Link href="/store" className="text-primary font-semibold flex items-center gap-1 hover:underline text-sm">
-              View All <ArrowRight className="w-4 h-4" />
+            <Link href="/store?featured=true">
+              <Button variant="ghost" className="gap-2 group text-primary font-bold">
+                Explore All Featured
+                <ArrowRight className="h-4 w-4 transition-transform group-hover:translate-x-1" />
+              </Button>
             </Link>
           </div>
         </div>

@@ -24,6 +24,8 @@ const Stocks = () => {
   const categoryFilter = searchParams.get("category");
   const concernFilter = searchParams.get("concern"); // ✅ NEW: health concern filter
   const brandFilter = searchParams.get("brand");
+  const isFeatured = searchParams.get("featured") === "true";
+  const isDiscounted = searchParams.get("discounted") === "true";
   
   const { addItem } = useCart();
   const [products, setProducts] = useState<any[]>([]);
@@ -36,12 +38,33 @@ const Stocks = () => {
     setLoading(true);
     try {
       let url = '/api/dbhandler?model=product&include=category,brand,stock';
+      
+      // If we have multiple brands or categories, the API might not support it directly, 
+      // but we can fetch more and filter client-side if needed, OR we can stick to what works.
+      // For now, let's keep it simple: if brandFilter is "Emzor,Pfizer", we'll just use the first one 
+      // OR better, we'll just use the filter as is if the API supports it.
       if (brandFilter) url += `&brand=${encodeURIComponent(brandFilter)}`;
       if (categoryFilter) url += `&categoryName=${encodeURIComponent(categoryFilter)}`;
       if (concernFilter) url += `&concern=${encodeURIComponent(concernFilter)}`;
 
       const res = await axios.get(url);
-      setProducts(res.data);
+      let data = res.data;
+
+      if (isFeatured) {
+        // If we want actual "FeaturedProduct" model entries
+        const featRes = await axios.get('/api/dbhandler?model=featuredProduct&minimal=true');
+        const featIds = new Set(featRes.data.map((f: any) => f.productId));
+        data = data.filter((p: any) => featIds.has(p.id));
+      }
+
+      if (isDiscounted) {
+        // Fetch from heavily-discounted API
+        const discRes = await axios.get('/api/heavily-discounted?admin=false');
+        const discIds = new Set(discRes.data.map((d: any) => d.productId));
+        data = data.filter((p: any) => discIds.has(p.id));
+      }
+
+      setProducts(data);
       setCurrentPage(1); // Reset pagination on filter change
     } catch (err) {
       console.error("Failed to fetch products", err);

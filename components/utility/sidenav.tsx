@@ -8,14 +8,18 @@ import { usePathname } from 'next/navigation';
 import { GlobalSearch } from "../myComponents/subs/GlobalSearch"
 import { useEffect, useState } from "react"
 import axios from "axios"
-import { ChevronRight, LayoutGrid, Stethoscope, Tag, ShoppingCart, MessageSquare, Camera } from "lucide-react"
+import { ChevronRight, LayoutGrid, Stethoscope, Tag, ShoppingCart, MessageSquare, Camera, LogOut } from "lucide-react"
 import { Cart } from "../myComponents/subs/cart"
 import { Button } from "../ui/button";
 import { SnapPrescription } from "../myComponents/subs/SnapPrescription";
 import { SpecialOrderForm } from "../myComponents/subs/SpecialOrderForm";
 import { FlaskConical } from "lucide-react";
+import { useAppContext } from "@/hooks/useAppContext";
+import { signOut } from "next-auth/react";
+import { Login, Signup } from "../myComponents/subs";
 
 const Sidenav = () => {
+    const { user, setUser } = useAppContext();
     const pathname = usePathname();
     const [categories, setCategories] = useState<any[]>([]);
     const [concerns, setConcerns] = useState<string[]>([]);
@@ -105,7 +109,7 @@ const Sidenav = () => {
                         <div className="space-y-4">
                             <h3 className="text-xs font-black uppercase tracking-widest text-muted-foreground/60 flex items-center gap-2 px-2">
                                 <LayoutGrid className="w-4 h-4" />
-                                Cartegories
+                                Categories
                             </h3>
                             <div className="grid grid-cols-1 gap-1">
                                 {displayedCategories.map((category) => (
@@ -166,7 +170,7 @@ const Sidenav = () => {
                     )}
                 </div>
 
-                <div className="p-4 border-t bg-muted/20 space-y-2">
+                <div className="p-1 border-t bg-muted/20 space-y-2">
                     <SnapPrescription>
                         <Button className="w-full flex items-center gap-3 h-12 rounded-2xl bg-accent hover:bg-accent/90 shadow-lg shadow-accent/20 font-bold">
                             <Camera className="w-5 h-5" />
@@ -181,9 +185,48 @@ const Sidenav = () => {
                     </SpecialOrderForm>
                 </div>
 
-                <div className="p-6 border-t bg-muted/30 flex items-center justify-between">
-                    <p className="text-[10px] font-black uppercase tracking-widest text-muted-foreground/50 italic">© 2026 Health Clique</p>
-                    <ModeToggle />
+                <div className="p-1 border-t bg-muted/30 flex flex-col gap-2">
+                    <div className="flex items-center justify-between gap-2">
+                        {user.id !== "nil" ? (
+                            <div className="flex items-center gap-3 bg-background/50 p-2 rounded-2xl flex-1 border border-border/50">
+                                <div className="w-10 h-10 rounded-full overflow-hidden border-2 border-primary/20 bg-muted shrink-0">
+                                    <img 
+                                        src={user.avatarUrl || user.image || "https://res.cloudinary.com/dc5khnuiu/image/upload/v1752627019/uxokaq0djttd7gsslwj9.png"} 
+                                        alt={user.name} 
+                                        className="w-full h-full object-cover"
+                                    />
+                                </div>
+                                <div className="flex-1 min-w-0">
+                                    <p className="text-xs font-black truncate">{user.name}</p>
+                                    <button 
+                                        onClick={() => {
+                                            signOut({ callbackUrl: "/" });
+                                            setUser({
+                                                name: "visitor",
+                                                id: "nil",
+                                                email: "nil",
+                                                avatarUrl: "https://res.cloudinary.com/dc5khnuiu/image/upload/v1752627019/uxokaq0djttd7gsslwj9.png",
+                                                role: "user",
+                                                contact: "xxxx",
+                                                walletBalance: 0,
+                                                walletCurrency: "₦"
+                                            });
+                                        }}
+                                        className="text-[10px] font-black text-red-500 uppercase flex items-center gap-1 hover:text-red-600 transition-colors"
+                                    >
+                                        <LogOut className="w-3 h-3" />
+                                        Sign Out
+                                    </button>
+                                </div>
+                            </div>
+                        ) : (
+                            <div className="flex items-center gap-2 flex-1">
+                                <Login />
+                                <Signup />
+                            </div>
+                        )}
+                        <ModeToggle />
+                    </div>
                 </div>
             </SheetContent>
         </Sheet>

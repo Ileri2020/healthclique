@@ -3,6 +3,7 @@
 import React, { useEffect, useState } from "react";
 import { useAppContext } from "@/hooks/useAppContext";
 import Link from "next/link";
+import { Skeleton } from "@/components/ui/skeleton";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Plus, Pencil, Trash2, Hash, ArrowUpDown, Search } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -225,7 +226,23 @@ const PartnerBrands = () => {
     );
   };
 
-  if (loading) return null;
+  if (loading) {
+    return (
+      <section className="py-20 bg-muted/20">
+        <div className="container mx-auto max-w-7xl px-4">
+          <div className="flex flex-col items-center mb-16">
+            <Skeleton className="h-4 w-32 mb-2" />
+            <Skeleton className="h-10 w-64" />
+          </div>
+          <div className="flex gap-8 overflow-hidden">
+            {[...Array(6)].map((_, i) => (
+              <Skeleton key={i} className="h-32 min-w-[180px] rounded-2xl" />
+            ))}
+          </div>
+        </div>
+      </section>
+    );
+  }
 
   return (
     <section className="py-20 bg-muted/20 relative group overflow-hidden">

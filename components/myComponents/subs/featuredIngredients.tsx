@@ -1,5 +1,6 @@
 "use client";
 
+import { Skeleton } from "@/components/ui/skeleton";
 import Link from "next/link";
 import { useEffect, useState, useRef } from "react";
 import {
@@ -56,11 +57,13 @@ const IngredientCard = ({ ingredient, count, images }: { ingredient: string, cou
 
 const FeaturedIngredients = () => {
   const [ingredients, setIngredients] = useState<any[]>([]);
+  const [loading, setLoading] = useState(true);
   const autoplay1 = useRef(Autoplay({ delay: 3500, stopOnInteraction: false }));
   const autoplay2 = useRef(Autoplay({ delay: 3500, stopOnInteraction: false }));
 
   useEffect(() => {
     const fetchIngredients = async () => {
+      setLoading(true);
       try {
         const res = await axios.get('/api/dbhandler?model=product');
         const products = res.data;
@@ -94,12 +97,36 @@ const FeaturedIngredients = () => {
           .slice(0, 24);
           
         setIngredients(sorted);
-      } catch (err) {
-        console.error("Failed to fetch ingredients", err);
+      } finally {
+        setLoading(false);
       }
     };
     fetchIngredients();
   }, []);
+
+  if (loading) {
+    return (
+      <section className="py-12 md:py-16 bg-background border-t">
+        <div className="container mx-auto max-w-7xl px-4">
+          <div className="mb-10 text-left">
+            <Skeleton className="h-10 w-64 mb-4" />
+            <Skeleton className="h-4 w-96" />
+          </div>
+          <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-6">
+            {[...Array(6)].map((_, i) => (
+              <div key={i} className="space-y-4">
+                <Skeleton className="aspect-square w-full rounded-2xl" />
+                <div className="space-y-2">
+                  <Skeleton className="h-4 w-2/3 mx-auto" />
+                  <Skeleton className="h-4 w-1/2 mx-auto" />
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      </section>
+    );
+  }
 
   if (ingredients.length === 0) return null;
 

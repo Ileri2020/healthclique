@@ -2,6 +2,7 @@
 
 import { Button } from "@/components/ui/button";
 import { ArrowRight, Plus, ShoppingCart, MessageCircle, Info } from "lucide-react";
+import { Skeleton } from "@/components/ui/skeleton";
 import Link from "next/link";
 import React, { useEffect, useState } from "react";
 import { ProductCard } from "./productCard";
@@ -95,7 +96,7 @@ const FeaturedProducts = () => {
   };
 
   /** Standalone sub-component so each section gets its own stable autoplay ref */
-  const ProductSection = ({ title, subtitle, items }: { title: string, subtitle: string, items: any[] }) => {
+  const ProductSection = ({ title, subtitle, items, href }: { title: string, subtitle: string, items: any[], href?: string }) => {
     const plugin = React.useRef(Autoplay({ delay: 3200, stopOnInteraction: false }));
     return (
     <div className="mb-16">
@@ -104,7 +105,7 @@ const FeaturedProducts = () => {
           <h3 className="text-2xl font-bold tracking-tight text-foreground">{title}</h3>
           <p className="text-muted-foreground">{subtitle}</p>
         </div>
-        <Link href="/store" className="text-primary font-semibold flex items-center gap-1 hover:underline">
+        <Link href={href || "/store"} className="text-primary font-semibold flex items-center gap-1 hover:underline">
           View All <ArrowRight className="w-4 h-4" />
         </Link>
       </div>
@@ -148,9 +149,17 @@ const FeaturedProducts = () => {
       <div className="container mx-auto max-w-7xl">
         
         {loading ? (
-             <div className="flex justify-center items-center py-20">
-                <div className="animate-spin rounded-full h-12 w-12 border-t-2 border-b-2 border-primary"></div>
-             </div>
+          <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-6 px-4">
+            {[...Array(5)].map((_, i) => (
+              <div key={i} className="space-y-4">
+                <Skeleton className="aspect-square w-full rounded-2xl" />
+                <div className="space-y-2">
+                  <Skeleton className="h-4 w-2/3" />
+                  <Skeleton className="h-4 w-1/2" />
+                </div>
+              </div>
+            ))}
+          </div>
         ) : (
           <>
             {/* 1. Admin Featured Section (Removed) */}
@@ -163,6 +172,7 @@ const FeaturedProducts = () => {
                 title="Top Brands" 
                 subtitle="Quality products from trusted global pharmaceutical leaders"
                 items={brandProducts}
+                href="/store"
                />
             )}
 
@@ -172,6 +182,7 @@ const FeaturedProducts = () => {
                 title="Dental & Oral Care" 
                 subtitle="Maintain bright smiles with our expert dental selection"
                 items={oralCare}
+                href="/store?category=Dental%20Care"
                />
             )}
 

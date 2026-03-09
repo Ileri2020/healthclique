@@ -1,5 +1,6 @@
 "use client";
 
+import { Skeleton } from "@/components/ui/skeleton";
 import Link from "next/link";
 import { useEffect, useState, useRef } from "react";
 import { useIsAdmin } from "@/hooks/useIsAdmin";
@@ -128,16 +129,19 @@ import { useAppContext } from "@/hooks/useAppContext";
 const FeaturedCategories = () => {
   const { user } = useAppContext();
   const [categories, setCategories] = useState<any[]>([]);
+  const [loading, setLoading] = useState(true);
   const [showAll, setShowAll] = useState(false);
   const isAdmin = user?.role === "admin" || user?.role === "staff";
   const autoplay1 = useRef(Autoplay({ delay: 3000, stopOnInteraction: false }));
   const autoplay2 = useRef(Autoplay({ delay: 3000, stopOnInteraction: false }));
 
   const fetchCategories = async () => {
+    setLoading(true);
     const cats = await getCategories();
     // Filter out categories with 0 products if not admin/staff
     const activeCats = isAdmin ? cats : cats.filter(c => c.productCount > 0);
     setCategories(activeCats);
+    setLoading(false);
   };
 
   useEffect(() => {
@@ -176,7 +180,19 @@ const FeaturedCategories = () => {
             )}
         </div>
 
-        {showAll ? (
+        {loading ? (
+             <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-6 gap-6">
+                {[...Array(6)].map((_, i) => (
+                    <div key={i} className="space-y-4">
+                        <Skeleton className="aspect-square w-full rounded-2xl" />
+                        <div className="space-y-2">
+                            <Skeleton className="h-4 w-2/3 mx-auto" />
+                            <Skeleton className="h-4 w-1/3 mx-auto" />
+                        </div>
+                    </div>
+                ))}
+             </div>
+        ) : showAll ? (
             <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-6 gap-4 mt-8">
                {categories.map((category) => (
                   <CategoryCard key={category.id} category={category} isAdmin={isAdmin} onRefresh={fetchCategories} />
