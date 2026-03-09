@@ -55,11 +55,11 @@ const Sidenav = () => {
                 <CiMenuFries />
             </SheetTrigger>
             <SheetContent side="left" className="flex flex-col w-[300px] sm:w-[400px] p-0 gap-0 border-r-0 shadow-2xl">
-                <SheetHeader className="p-6 border-b bg-gradient-to-r from-primary/5 to-transparent">
+                <SheetHeader className="p-3 border-b bg-gradient-to-r from-primary/5 to-transparent">
                     <SheetTitle className="text-left text-2xl font-black text-primary tracking-tighter italic">Health <span className="text-accent">Clique</span></SheetTitle>
                 </SheetHeader>
                 
-                <div className="flex-1 overflow-y-auto px-2 md:px-4 py-2 space-y-3 scrollbar-hide">
+                <div className="flex-1 overflow-y-auto px-2 md:px-4 py-2 space-y-1 scrollbar-hide">
                     {/* Cart & Talk Action */}
                     <div className="flex gap-2 md:gap-4">
                         <Cart className="flex-1" />
@@ -74,7 +74,7 @@ const Sidenav = () => {
                     </div>
 
                     {/* Search Section */}
-                    <div className="space-y-3 bg-muted/30 p-4 rounded-3xl border border-border/50">
+                    <div className="space-y-1 bg-muted/30 p-2 rounded-3xl border border-border/50">
                         <h3 className="text-xs font-black uppercase tracking-widest text-muted-foreground/60 flex items-center gap-2">
                              Quick Find
                         </h3>
