@@ -1,6 +1,7 @@
 "use client"
 import { motion } from "framer-motion"
 import { Button } from "@/components/ui/button"
+import { Skeleton } from "@/components/ui/skeleton"
 import { useParams } from "next/navigation"
 import { useEffect, useState } from "react"
 import { ProductCard } from "@/components/myComponents/subs/productCard"
