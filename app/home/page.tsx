@@ -12,6 +12,7 @@ import PartnerBrands from "@/components/myComponents/subs/partner-brands"
 import FeaturedIngredients from "@/components/myComponents/subs/featuredIngredients"
 import { MessageCircle } from "lucide-react"
 import Link from "next/link"
+import { HeavilyDiscountedCarousel } from "@/components/myComponents/subs/HeavilyDiscountedCarousel";
 const Home = () => {
   return (
     <motion.section
@@ -31,6 +32,8 @@ const Home = () => {
       <FeaturedIngredients />
       <FeaturedProducts />
       <Features />
+      <HeavilyDiscountedCarousel />
+
       {/* converted to a do you know section */}
       {/* <div className="flex-1 flex justify-center items-center w-full md:w-[85%] overflow-clip mx-auto">
         <Gallery />

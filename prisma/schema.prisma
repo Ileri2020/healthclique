@@ -40,6 +40,7 @@ model User {
   wishlist           Wishlist[]
   sentMessages       Message[]         @relation("SentMessages")
   receivedMessages   Message[]         @relation("ReceivedMessages")
+  heavilyDiscountedProducts HeavilyDiscountedProduct[]
 }
 
 model Post {
@@ -108,6 +109,7 @@ model Product {
   createdAt                DateTime           @default(now())
   updatedAt                DateTime           @updatedAt
   wishlist                 Wishlist[]
+  heavilyDiscountedProducts HeavilyDiscountedProduct[]
 }
 
 //for inputing available product, after sales, deduct the quantity
@@ -301,6 +303,17 @@ model Visit {
   userAgent String?
   ip        String?
   createdAt DateTime @default(now())
+}
+
+model HeavilyDiscountedProduct {
+  id          String   @id @default(auto()) @map("_id") @db.ObjectId
+  product     Product  @relation(fields: [productId], references: [id])
+  productId   String   @db.ObjectId
+  creator     User     @relation(fields: [creatorId], references: [id])
+  creatorId   String   @db.ObjectId
+  approved    Boolean  @default(false)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
 }
 
 // model Comment {

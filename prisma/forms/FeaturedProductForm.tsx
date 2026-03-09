@@ -216,7 +216,9 @@ export default function FeaturedProductForm({ hideList = false }: FeaturedProduc
               );
             })}
             {filteredProducts.length === 0 && (
-              <p className="text-xs text-muted-foreground text-center py-10 italic">No products matched your search.</p>
+              <li>
+                <p className="text-xs text-muted-foreground text-center py-10 italic">No products matched your search.</p>
+              </li>
             )}
           </ul>
 
@@ -282,9 +284,9 @@ export default function FeaturedProductForm({ hideList = false }: FeaturedProduc
               </li>
             ))}
             {featuredProduct.length === 0 && (
-              <div className="col-span-full py-16 text-center border-2 border-dashed rounded-2xl bg-muted/5">
+              <li className="col-span-full py-16 text-center border-2 border-dashed rounded-2xl bg-muted/5">
                  <p className="text-muted-foreground italic">No products are currently featured on the home page.</p>
-              </div>
+              </li>
             )}
           </ul>
 

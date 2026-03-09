@@ -48,46 +48,55 @@ export default function AnalyticsDashboard() {
             });
     }, [queryParams.from, queryParams.to]);
 
-    return (
-        <div className="flex-1 space-y-6 p-4 md:p-8 pt-6">
-            <div className="flex flex-col space-y-2 md:flex-row md:items-center md:justify-between space-x-2">
-                <h2 className="text-3xl font-bold tracking-tight">Analytics Dashboard</h2>
-                <div className="flex items-center space-x-2">
-                    <Popover>
-                        <PopoverTrigger asChild>
-                            <Button variant="outline" className="justify-start text-left font-normal w-[240px]">
-                                <CalendarIcon className="mr-2 h-4 w-4" />
-                                {date?.from ? (
-                                    date.to ? (
-                                        <>
-                                            {format(date.from, "LLL dd, y")} -{" "}
-                                            {format(date.to, "LLL dd, y")}
-                                        </>
-                                    ) : (
-                                        format(date.from, "LLL dd, y")
-                                    )
-                                ) : (
-                                    <span>Pick a date range</span>
-                                )}
-                            </Button>
-                        </PopoverTrigger>
-                        <PopoverContent className="w-auto p-0" align="end">
-                            <Calendar
-                                initialFocus
-                                mode="range"
-                                defaultMonth={date?.from}
-                                selected={date}
-                                onSelect={setDate}
-                                numberOfMonths={2}
-                            />
-                        </PopoverContent>
-                    </Popover>
-                    <Button>
-                        <Download className="mr-2 h-4 w-4" />
-                        Export
-                    </Button>
+        if (isLoading) {
+            return (
+                <div className="flex flex-col items-center justify-center p-20">
+                    <Skeleton className="h-10 w-10 rounded-full bg-muted/40 mb-4" />
+                    <Skeleton className="h-6 w-[220px] bg-muted/30 mb-2" />
+                    <p className="text-center font-black animate-pulse">Loading Analytics...</p>
                 </div>
-            </div>
+            );
+        }
+        return (
+            <div className="flex-1 space-y-6 p-4 md:p-8 pt-6">
+                <div className="flex flex-col space-y-2 md:flex-row md:items-center md:justify-between space-x-2">
+                    <h2 className="text-3xl font-bold tracking-tight">Analytics Dashboard</h2>
+                    <div className="flex items-center space-x-2">
+                        <Popover>
+                            <PopoverTrigger asChild>
+                                <Button variant="outline" className="justify-start text-left font-normal w-[240px]">
+                                    <CalendarIcon className="mr-2 h-4 w-4" />
+                                    {date?.from ? (
+                                        date.to ? (
+                                            <>
+                                                {format(date.from, "LLL dd, y")} -{" "}
+                                                {format(date.to, "LLL dd, y")}
+                                            </>
+                                        ) : (
+                                            format(date.from, "LLL dd, y")
+                                        )
+                                    ) : (
+                                        <span>Pick a date range</span>
+                                    )}
+                                </Button>
+                            </PopoverTrigger>
+                            <PopoverContent className="w-auto p-0" align="end">
+                                <Calendar
+                                    initialFocus
+                                    mode="range"
+                                    defaultMonth={date?.from}
+                                    selected={date}
+                                    onSelect={setDate}
+                                    numberOfMonths={2}
+                                />
+                            </PopoverContent>
+                        </Popover>
+                        <Button>
+                            <Download className="mr-2 h-4 w-4" />
+                            Export
+                        </Button>
+                    </div>
+                </div>
 
             {isLoading && !data ? (
                 <div className="flex items-center justify-center h-64">
@@ -130,6 +139,43 @@ export default function AnalyticsDashboard() {
                         </ChartCard>
                         <ChartCard title="User Roles Distribution" className="col-span-3">
                             <UserRoleChart data={data?.userRoles} isLoading={isLoading} />
+                        </ChartCard>
+                    </div>
+
+                    {/* Additional Charts */}
+                    <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
+                        <ChartCard title="New Users (Period)" className="col-span-2">
+                            <div className="flex flex-col items-center justify-center h-48">
+                                <span className="text-4xl font-bold text-primary">{data?.kpis?.newUsers ?? 0}</span>
+                                <span className="text-muted-foreground mt-2">New Users</span>
+                                <span className="text-xs text-muted-foreground">Total: {data?.kpis?.totalUsers ?? 0}</span>
+                            </div>
+                        </ChartCard>
+                        <ChartCard title="New Products (Period)" className="col-span-2">
+                            <div className="flex flex-col items-center justify-center h-48">
+                                <span className="text-4xl font-bold text-primary">{data?.kpis?.newProducts ?? 0}</span>
+                                <span className="text-muted-foreground mt-2">New Products</span>
+                                <span className="text-xs text-muted-foreground">Total: {data?.kpis?.totalProducts ?? 0}</span>
+                            </div>
+                        </ChartCard>
+                        <ChartCard title="Brands" className="col-span-2">
+                            <div className="flex flex-col items-center justify-center h-48">
+                                <span className="text-4xl font-bold text-primary">{data?.kpis?.totalBrands ?? 0}</span>
+                                <span className="text-muted-foreground mt-2">Brands</span>
+                            </div>
+                        </ChartCard>
+                        <ChartCard title="Posts (Period)" className="col-span-2">
+                            <div className="flex flex-col items-center justify-center h-48">
+                                <span className="text-4xl font-bold text-primary">{data?.kpis?.newPosts ?? 0}</span>
+                                <span className="text-muted-foreground mt-2">New Posts</span>
+                                <span className="text-xs text-muted-foreground">Total: {data?.kpis?.totalPosts ?? 0}</span>
+                            </div>
+                        </ChartCard>
+                        <ChartCard title="Total Visits (Period)" className="col-span-2">
+                            <div className="flex flex-col items-center justify-center h-48">
+                                <span className="text-4xl font-bold text-primary">{data?.kpis?.totalVisits ?? 0}</span>
+                                <span className="text-muted-foreground mt-2">Site Visits</span>
+                            </div>
                         </ChartCard>
                     </div>
                 </>

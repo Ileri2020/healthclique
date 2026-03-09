@@ -73,8 +73,8 @@ const Stocks = () => {
   if (loading) {
     return (
       <div className='w-full max-w-7xl flex gap-5 flex-wrap p-4 justify-center mx-auto'>
-        {[1, 2, 3, 4, 5, 6, 7, 8].map((_, index) => (
-          <Skeleton key={index} className="w-full md:w-[240px] h-[350px] rounded-2xl" />
+            {[1, 2, 3, 4, 5, 6, 7, 8].map((_, index) => (
+              <Skeleton key={index} className="h-40 w-40 rounded-xl bg-muted/30" />
         ))}
       </div>
     );

@@ -85,7 +85,8 @@ const Description = () => {
   if (loading) {
     return (
       <div className="flex h-[60vh] w-full items-center justify-center">
-        <Loader2 className="h-10 w-10 animate-spin text-primary" />
+        <Skeleton className="h-10 w-10 rounded-full bg-muted/40" />
+        <Skeleton className="h-6 w-[200px] bg-muted/30 ml-4" />
       </div>
     );
   }
