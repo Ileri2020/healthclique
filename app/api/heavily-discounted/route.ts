@@ -9,8 +9,21 @@ export async function GET(req: Request) {
   const userId = searchParams.get("userId");
 
   let where: any = {};
-  if (!admin) where.approved = true;
-  if (userId) where.creatorId = userId;
+  if (admin) {
+    // Admin sees everything
+    where = {};
+  } else if (userId && userId !== "nil") {
+    // User sees approved OR their own (even if unapproved)
+    where = {
+      OR: [
+        { approved: true },
+        { creatorId: userId }
+      ]
+    };
+  } else {
+    // Visitor sees only approved
+    where = { approved: true };
+  }
 
   const products = await prisma.heavilyDiscountedProduct.findMany({
     where,

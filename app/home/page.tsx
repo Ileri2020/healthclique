@@ -26,13 +26,13 @@ const Home = () => {
       {/* <Filters /> */}
       <Hero />
       <CommonMedications />
+      <HeavilyDiscountedCarousel />
       <PartnerBrands />
       <ConcernGrid />
       <FeaturedCategories />
       <FeaturedIngredients />
       <FeaturedProducts />
       <Features />
-      <HeavilyDiscountedCarousel />
 
       {/* converted to a do you know section */}
       {/* <div className="flex-1 flex justify-center items-center w-full md:w-[85%] overflow-clip mx-auto">
