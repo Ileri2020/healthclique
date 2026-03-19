@@ -40,7 +40,11 @@ const register = async ( formData : FormData) => {
             role: role,
         })
     }
-    postUser()
+    try {
+        await postUser();
+    } catch (error) {
+        console.error("Registration failed:", error);
+    }
 
 };
 

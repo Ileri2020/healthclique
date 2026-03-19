@@ -1,7 +1,17 @@
 import mongoose from "mongoose";
 
 
-export const userSchema = new mongoose.Schema({
+export interface IUser {
+    userName: string;
+    email: string;
+    password?: string;
+    role?: 'admin' | 'user' | 'staff';
+    address?: mongoose.Types.ObjectId;
+    image?: string;
+    authProviderId?: string;
+}
+
+export const userSchema = new mongoose.Schema<IUser>({
     userName: { type: String, unique: true, required: true },
     email: { type: String, unique: true, required: true },
     password: { type: String},
@@ -11,19 +21,7 @@ export const userSchema = new mongoose.Schema({
     authProviderId: { type: String},
   }, {timestamps: true});
 
-  let User
-
-  try {
-      // users = mongoose.model('User')  //always make sure that the name of the model is correct and this only works only if the model is already in the database, else redefinine the model and schema
-      console.log ("about to get or create model")
-      User = mongoose.models.User as unknown as null || mongoose.model('Users', userSchema)
-      console.log ("user model now active")
-  } catch (error) {
-      // users = mongoose.model('users', userSchema)
-      console.log("error in getting model")
-  }
-
-
+const User: mongoose.Model<IUser> = mongoose.models.Users || mongoose.model<IUser>('Users', userSchema);
 
 export default User;
 

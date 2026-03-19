@@ -1,7 +1,5 @@
-// ts-nocheck
 'use client'
 import { FlutterWaveButton, closePaymentModal } from 'flutterwave-react-v3';
-import async from './flutterwavehook';
 
 type FlutterwavePaymentProps = {
   amount: number;

@@ -18,7 +18,7 @@ const connect =async () => {
         return;
       }
 
-    await mongoose.connect(process.env.MONGODB_URL,
+    await mongoose.connect(process.env.MONGODB_URL as string,
       // {
       //   dbName:"succo",
       //   bufferCommands: true,

@@ -10,6 +10,7 @@ import { cn } from "@/lib/utils";
 import axios from "axios";
 import { Loader2, RefreshCcw, ShoppingCart, Plus, Search, ArrowLeftRight, Shield } from "lucide-react";
 import React, { useEffect, useState } from "react";
+import MonnifyPaymentButton from "@/components/payment/monnify";
 // Check if Flutterwave hook exists
 // import FlutterWaveButtonHook from "../../payment/flutterwavehook"; 
 import { useAppContext } from "@/hooks/useAppContext";
@@ -658,9 +659,44 @@ export function CartDetails({ cartId, onPaymentSuccess }: CartDetailsProps) {
                                      <Shield className="mr-2 h-4 w-4" />
                                      Pay with Health Wallet
                                  </Button>
-                                 <Button className="w-full h-12 rounded-xl font-bold border-2" variant="outline" onClick={markAsPaid}>
-                                     Pay via Flutterwave/Card
-                                 </Button>
+
+                                 <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
+                                     <Button className="w-full h-12 rounded-xl font-bold border-2" variant="outline" onClick={markAsPaid}>
+                                         Pay via Flutterwave/Card
+                                     </Button>
+
+                                     <MonnifyPaymentButton
+                                         amount={totalAmount}
+                                         currency="NGN"
+                                         email={user?.email || ''}
+                                         phoneNumber={user?.phone || ''}
+                                         name={user?.name || `${user?.firstName || ''} ${user?.lastName || ''}`.trim() || 'Guest'}
+                                         onSuccess={async (response) => {
+                                             toast.success('Monnify payment completed. Updating order status...');
+                                             if (!cart) return;
+                                             try {
+                                                 await axios.put(`/api/dbhandler?model=cart&id=${cart.id}`, {
+                                                     status: 'paid',
+                                                     total: totalAmount,
+                                                     deliveryFee,
+                                                     payment: {
+                                                         method: 'monnify',
+                                                         amount: totalAmount,
+                                                         tx_ref: response?.reference || response?.transactionReference || '',
+                                                     },
+                                                 });
+                                                 setCart({ ...cart, status: 'paid' });
+                                                 onPaymentSuccess?.();
+                                             } catch (error) {
+                                                 console.error('Failed to mark cart paid after Monnify success', error);
+                                                 toast.error('Could not finalize order status after Monnify payment');
+                                             }
+                                         }}
+                                         onFailure={(error) => {
+                                             console.error('Monnify error', error);
+                                         }}
+                                     />
+                                 </div>
                              </div>
                         )}
                         {!isLocked && user && !selectedAddressId && (

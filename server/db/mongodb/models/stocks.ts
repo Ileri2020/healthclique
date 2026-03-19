@@ -1,6 +1,16 @@
 import mongoose from "mongoose";
 
-const StocksSchema = new mongoose.Schema({
+export interface IStock {
+    name: string;
+    description: string;
+    img: string;
+    category: 'food' | 'drink' | 'snacks' | 'suplement';
+    cost: number;
+    price: number;
+    qty?: number;
+}
+
+const StocksSchema = new mongoose.Schema<IStock>({
     name: { type: String, required: true },
     description: { type: String, required: true },
     img: { type: String, required: true },
@@ -10,18 +20,7 @@ const StocksSchema = new mongoose.Schema({
     qty: {type: Number},
 }, {timestamps: true});
 
-
-let Stock
-
-  try {
-      // users = mongoose.model('User')  //always make sure that the name of the model is correct and this only works only if the model is already in the database, else redefinine the model and schema
-      console.log ("about to get or create stock")
-      Stock = mongoose.models.Stocks as unknown as null || mongoose.model('Stocks', StocksSchema)
-      console.log ("stock model now active")
-  } catch (error) {
-      // users = mongoose.model('users', userSchema)
-      console.log("error in getting stock model")
-  }
+const Stock: mongoose.Model<IStock> = mongoose.models.Stocks || mongoose.model<IStock>('Stocks', StocksSchema);
 
 export default Stock;
 

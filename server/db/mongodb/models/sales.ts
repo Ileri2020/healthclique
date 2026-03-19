@@ -1,6 +1,21 @@
 import mongoose from "mongoose";
 // schema need review especially for product list
-const SalesSchema = new mongoose.Schema({
+export interface ISale {
+    products: Array<{
+        id: mongoose.Types.ObjectId;
+        quantity: number;
+    }>;
+    coupon?: mongoose.Types.ObjectId;
+    discount?: number;
+    totalCost?: number;
+    totalSale: number;
+    totalQty?: number;
+    status?: 'pending' | 'shipped' | 'delivered' | 'cancelled';
+    paymentMethod?: string;
+    paymentStatus?: 'paid' | 'unpaid';
+}
+
+const SalesSchema = new mongoose.Schema<ISale>({
     products: [
         {
           id: { type: mongoose.Schema.Types.ObjectId, ref: 'Stock' },
@@ -10,28 +25,15 @@ const SalesSchema = new mongoose.Schema({
     ],
     coupon: { type: mongoose.Schema.Types.ObjectId, ref: 'Coupon' },
     discount: {type: Number },
-    totalCost: {type: Number },//, required: true
+    totalCost: {type: Number },
     totalSale: {type: Number, required: true },
     totalQty: {type: Number},
     status: { type: String, enum: ['pending', 'shipped', 'delivered', 'cancelled'] },
     paymentMethod: { type: String},
     paymentStatus: { type: String, enum: ['paid', 'unpaid'] },
-    //time : { type : Date, default: Date.now },
 }, {timestamps: true});
 
-// const Sale = mongoose.model("Sales", SalesSchema);
-let Sale
-
-  try {
-      // users = mongoose.model('User')  //always make sure that the name of the model is correct and this only works only if the model is already in the database, else redefinine the model and schema
-      console.log ("about to get or create sale")
-      Sale = mongoose.models.Sales as unknown as null || mongoose.model('Sales', SalesSchema)
-      console.log ("sale model now active")
-  } catch (error) {
-      // users = mongoose.model('users', userSchema)
-      console.log("error in getting sale model")
-  }
-
+const Sale: mongoose.Model<ISale> = mongoose.models.Sales || mongoose.model<ISale>('Sales', SalesSchema);
 
 export default Sale;
 
