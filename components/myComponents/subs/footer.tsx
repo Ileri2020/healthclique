@@ -1,17 +1,30 @@
-import { Facebook, Github, Instagram, Linkedin, Twitter } from "lucide-react";
+import React from "react";
+import { Facebook, Instagram, Linkedin, Twitter } from "lucide-react";
 import Link from "next/link";
-
 import { SEO_CONFIG } from "../../../app/layout";
 import { cn } from "@/lib/utils"
-// import { Button } from "~/ui/primitives/button";
 import { Button } from "@/components/ui/button";
 
 export function Footer({ className }: { className?: string }) {
+  const [categories, setCategories] = React.useState<{ id: string, name: string }[]>([]);
+
+  React.useEffect(() => {
+    const fetchCategories = async () => {
+      try {
+        const res = await fetch("/api/dbhandler?model=category");
+        const data = await res.json();
+        setCategories(data.slice(0, 5)); // Take first 5 for footer
+      } catch (err) {
+        console.error("Footer: Failed to fetch categories", err);
+      }
+    };
+    fetchCategories();
+  }, []);
+
   const socialMediaLinks = [
     { href: "#", icon: <Facebook className="h-4 w-4" />, label: "Facebook" },
     { href: "#", icon: <Twitter className="h-4 w-4" />, label: "Twitter" },
     { href: "#", icon: <Instagram className="h-4 w-4" />, label: "Instagram" },
-    //{ href: "#", icon: <Github className="h-4 w-4" />, label: "GitHub" },
     { href: "#", icon: <Linkedin className="h-4 w-4" />, label: "LinkedIn" },
   ];
   
@@ -19,23 +32,26 @@ export function Footer({ className }: { className?: string }) {
     { href: "/home", label: "Home" },
     { href: "/about", label: "About Us" },
     { href: "/store", label: "Store" },
-    { href: "/help", label: "Help Center" },
     { href: "/account", label: "User Account" },
   ];
   
-  const categoryLinks = [
-    { href: "/", label: "Spices" },
-    { href: "/", label: "Food Item" },
-    { href: "/", label: "Cloth" },
-    { href: "/", label: "Poultry Food" },
-    { href: "/", label: "Content Tools" },
-  ];
+  const categoryLinks = categories.length > 0 
+    ? categories.map(c => ({ href: `/store?category=${encodeURIComponent(c.name)}`, label: c.name }))
+    : [
+        { href: "/store", label: "All Categories" },
+      ];
   
   const supportLinks = [
     { href: "/help", label: "Help Center" },
-    { href: "/contact", label: "Contact and Advert" },
+    { href: "/contact", label: "Contact Us" },
     { href: "/privacy", label: "Privacy Policy" },  
     { href: "/terms", label: "Terms of Service" },
+  ];
+
+  const advertLinks = [
+    { href: "/contact", label: "Advertise with Us" },
+    { href: "/contact", label: "Health Consult" },
+    { href: "/contact", label: "Corporate Partnership" },
   ];
   
   const footerLinks = [
@@ -55,10 +71,14 @@ export function Footer({ className }: { className?: string }) {
       links : categoryLinks,
     },
     {
-      label : 'Support and Advert',
+      label : 'Support',
       links : supportLinks,
     },
-  ]
+    {
+      label : 'Advert',
+      links : advertLinks,
+    },
+  ];
   
   
   return (
@@ -67,7 +87,7 @@ export function Footer({ className }: { className?: string }) {
         className={`container mx-auto max-w-7xl px-4 py-12 sm:px-6 lg:px-8 `}
       >
         <div
-          className={`grid grid-cols-1 gap-8 md:grid-cols-4`}
+          className={`grid grid-cols-1 gap-8 md:grid-cols-2 lg:grid-cols-5`}
         >
           <div className="space-y-4">
             <Link className="flex items-center gap-2" href="/">

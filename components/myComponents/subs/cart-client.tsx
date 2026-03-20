@@ -482,7 +482,7 @@ export function CartClient({ className, cart }: CartProps) {
 
               <Link href="/cart" onClick={() => setIsOpen(false)}>
                 <Button className="w-full mt-2" variant="secondary" size="lg">
-                  View Full Cart
+                  See All Carts
                 </Button>
               </Link>
               

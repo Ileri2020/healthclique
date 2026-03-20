@@ -16,14 +16,14 @@ import {
 } from "lucide-react";
 
 const concerns = [
-  { name: "Pain Relief",      icon: HeartPulse,   color: "text-red-500",    bg: "bg-red-50 dark:bg-red-950/40" },
-  { name: "Cough, Cold & Flu",icon: Activity,     color: "text-blue-500",   bg: "bg-blue-50 dark:bg-blue-950/40" },
-  { name: "Mother & Kids",    icon: Baby,         color: "text-pink-500",   bg: "bg-pink-50 dark:bg-pink-950/40" },
-  { name: "Gut Health",       icon: Zap,          color: "text-orange-500", bg: "bg-orange-50 dark:bg-orange-950/40" },
-  { name: "Vitamins",         icon: Trees,        color: "text-green-500",  bg: "bg-green-50 dark:bg-green-950/40" },
-  { name: "His Health",       icon: User,         color: "text-indigo-500", bg: "bg-indigo-50 dark:bg-indigo-950/40" },
-  { name: "Her Health",       icon: Users,        color: "text-purple-500", bg: "bg-purple-50 dark:bg-purple-950/40" },
-  { name: "Mental Wellness",  icon: BrainCircuit, color: "text-teal-500",   bg: "bg-teal-50 dark:bg-teal-950/40" },
+  { name: "Pain Relief",      icon: HeartPulse,   color: "text-red-500",    bg: "bg-red-50 dark:bg-red-950/40", category: "Analgesics" },
+  { name: "Cough, Cold & Flu",icon: Activity,     color: "text-blue-500",   bg: "bg-blue-50 dark:bg-blue-950/40", category: "Respiratory" },
+  { name: "Mother & Kids",    icon: Baby,         color: "text-pink-500",   bg: "bg-pink-50 dark:bg-pink-950/40", category: "Baby Care" },
+  { name: "Gut Health",       icon: Zap,          color: "text-orange-500", bg: "bg-orange-50 dark:bg-orange-950/40", category: "Digestive" },
+  { name: "Vitamins",         icon: Trees,        color: "text-green-500",  bg: "bg-green-50 dark:bg-green-950/40", category: "Vitamins & Supplements" },
+  { name: "His Health",       icon: User,         color: "text-indigo-500", bg: "bg-indigo-50 dark:bg-indigo-950/40", category: "Men's Health" },
+  { name: "Her Health",       icon: Users,        color: "text-purple-500", bg: "bg-purple-50 dark:bg-purple-950/40", category: "Women's Health" },
+  { name: "Mental Wellness",  icon: BrainCircuit, color: "text-teal-500",   bg: "bg-teal-50 dark:bg-teal-950/40", category: "Nervous System" },
 ];
 
 const ShopByConcern = () => {
@@ -39,8 +39,7 @@ const ShopByConcern = () => {
           {concerns.map((concern) => (
             <Link 
               key={concern.name}
-              // Use ?concern= so the Store page can filter by healthConcerns[] field
-              href={`/store?concern=${encodeURIComponent(concern.name)}`}
+              href={`/store?category=${encodeURIComponent(concern.category)}`}
               className="flex flex-col items-center p-6 rounded-2xl border bg-card hover:border-primary hover:shadow-lg transition-all duration-300 group"
             >
               <div className={`w-12 h-12 rounded-xl ${concern.bg} flex items-center justify-center mb-4 group-hover:scale-110 transition-transform`}>
