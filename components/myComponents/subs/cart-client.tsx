@@ -19,6 +19,7 @@ import { PRICE_MARKUPS } from "@/lib/stock-pricing";
 import { AddressEdit, Login, Signup } from "./index";
 import MonnifyPaymentButton from "../../payment/monnify";
 import FlutterWaveButtonHook from "../../payment/flutterwavehook";
+import { ManualTransfer } from "../../payment/manual";
 
 
 
@@ -435,48 +436,57 @@ export function CartClient({ className, cart }: CartProps) {
                 <div className="space-y-3 pt-2">
                   {!checkoutData ? (
                     <Button 
-                      className="w-full" 
+                      className="w-full h-12 rounded-xl text-lg font-black shadow-lg shadow-primary/10" 
                       size="lg" 
                       onClick={prepareCheckout}
-                      disabled={!selectedAddressId}
+                      disabled={!selectedAddressId || items.length === 0}
                     >
                       Proceed to Checkout
                     </Button>
                   ) : (
-                    <div className="grid grid-cols-2 gap-2">
-                      <FlutterWaveButtonHook
-                        tx_ref={checkoutData.tx_ref}
-                        amount={totalAmount}
-                        currency="NGN"
-                        email={user?.email ?? ""}
-                        phone_number={user?.contact ?? ""}
-                        name={user?.name ?? ""}
-                        onSuccess={async (response: any) => {
-                          await axios.post(`/api/payment?action=confirm`, { tx_ref: checkoutData.tx_ref, method: 'flutterwave' });
-                          clearCart();
-                          setCheckoutData(null);
-                          setIsOpen(false);
-                          alert("Payment Successful!");
-                        }}
-                      />
-                      <MonnifyPaymentButton
-                        reference={checkoutData.tx_ref}
-                        amount={totalAmount}
-                        currency="NGN"
-                        email={user?.email ?? ""}
-                        phoneNumber={user?.contact ?? ""}
-                        name={user?.name ?? ""}
-                        onSuccess={async (response: any) => {
-                          await axios.post(`/api/payment?action=confirm`, { tx_ref: checkoutData.tx_ref, method: 'monnify' });
-                          clearCart();
-                          setCheckoutData(null);
-                          setIsOpen(false);
-                          alert("Payment Successful!");
-                        }}
+                    <div className="flex flex-col gap-3">
+                      <p className="text-xs font-black text-center text-muted-foreground uppercase tracking-widest">Select Payment Method</p>
+                      <div className="grid grid-cols-2 gap-2">
+                        <FlutterWaveButtonHook
+                          tx_ref={checkoutData.tx_ref}
+                          amount={totalAmount}
+                          currency="NGN"
+                          email={user?.email ?? ""}
+                          phone_number={user?.contact ?? ""}
+                          name={user?.name ?? ""}
+                          onSuccess={async (response: any) => {
+                            await axios.post(`/api/payment?action=confirm`, { tx_ref: checkoutData.tx_ref, method: 'flutterwave' });
+                            clearCart();
+                            setCheckoutData(null);
+                            setIsOpen(false);
+                            alert("Payment Successful!");
+                          }}
+                        />
+                        <MonnifyPaymentButton
+                          reference={checkoutData.tx_ref}
+                          amount={totalAmount}
+                          currency="NGN"
+                          email={user?.email ?? ""}
+                          phoneNumber={user?.contact ?? ""}
+                          name={user?.name ?? ""}
+                          onSuccess={async (response: any) => {
+                            await axios.post(`/api/payment?action=confirm`, { tx_ref: checkoutData.tx_ref, method: 'monnify' });
+                            clearCart();
+                            setCheckoutData(null);
+                            setIsOpen(false);
+                            alert("Payment Successful!");
+                          }}
+                        />
+                      </div>
+                      <ManualTransfer 
+                         amount={totalAmount} 
+                         tx_ref={checkoutData.tx_ref} 
+                         cartId={checkoutData.cartId}
+                         userId={user.id}
                       />
                     </div>
                   )}
-                </div>
+</div>
               )}
 
               <Link href="/cart" onClick={() => setIsOpen(false)}>

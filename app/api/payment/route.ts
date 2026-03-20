@@ -25,20 +25,78 @@ export async function POST(req: NextRequest) {
 
     // ---------------- CONFIRM PAYMENT ----------------
     if (action === "confirm") {
-      const { tx_ref, method } = body;
-      if (!tx_ref) return NextResponse.json({ error: "tx_ref is required" }, { status: 400 });
+      const { tx_ref: confirm_tx_ref, method } = body;
+      if (!confirm_tx_ref) return NextResponse.json({ error: "tx_ref is required" }, { status: 400 });
 
-      // In a real app, you'd verify with the provider API here.
-      // For this flow, we'll mark as paid upon client-side confirmation.
-      const payment = await prisma.payment.findUnique({ where: { tx_ref } });
-      if (payment) {
-        await prisma.cart.update({
-          where: { id: payment.cartId },
-          data: { status: "paid" },
-        });
-        return NextResponse.json({ success: true, message: "Payment confirmed" });
+      // Verification Logic
+      let isVerified = false;
+
+      if (method === 'monnify') {
+        try {
+          const apiKey = process.env.NEXT_PUBLIC_MONNIFY_API_KEY;
+          const secretKey = process.env.MONNIFY_SECRET_KEY;
+          
+          if (apiKey && secretKey) {
+            // Get Access Token
+            const authRes = await axios.post("https://api.monnify.com/api/v1/auth/login", {}, {
+              headers: {
+                Authorization: `Basic ${Buffer.from(`${apiKey}:${secretKey}`).toString("base64")}`
+              }
+            });
+            const token = authRes.data.responseBody.accessToken;
+
+            // Verify Transaction
+            const verifyRes = await axios.get(`https://api.monnify.com/api/v2/transactions/verify/${confirm_tx_ref}`, {
+              headers: { Authorization: `Bearer ${token}` }
+            });
+
+            if (verifyRes.data.responseBody.paymentStatus === 'PAID') {
+              isVerified = true;
+            }
+          } else {
+            // Fallback for dev if keys missing
+            console.warn("Monnify keys missing, skipping server-side verification");
+            isVerified = true; 
+          }
+        } catch (err) {
+          console.error("Monnify verification error:", err);
+          // Return failure if verification fails
+          return NextResponse.json({ success: false, message: "Verification failed" });
+        }
+      } else if (method === 'flutterwave') {
+        // Flutterwave verification would go here (requires FLW_SECRET_KEY)
+        isVerified = true; // Placeholder
+      } else if (method === 'manual_transfer') {
+        const payment = await prisma.payment.findUnique({ where: { tx_ref: confirm_tx_ref } });
+        if (payment) {
+          await prisma.cart.update({
+            where: { id: payment.cartId },
+            data: { status: "pending_verification" },
+          });
+          await prisma.payment.update({
+            where: { tx_ref: confirm_tx_ref },
+            data: { method: "manual_transfer" }
+          });
+          return NextResponse.json({ success: true, message: "Manual transfer noted" });
+        }
       }
-      return NextResponse.json({ success: false, message: "Transaction not found" });
+
+      if (isVerified) {
+        const payment = await prisma.payment.findUnique({ where: { tx_ref: confirm_tx_ref } });
+        if (payment) {
+          await prisma.cart.update({
+            where: { id: payment.cartId },
+            data: { status: "paid" },
+          });
+          await prisma.payment.update({
+            where: { tx_ref: confirm_tx_ref },
+            data: { method: method || "online" }
+          });
+          return NextResponse.json({ success: true, message: "Payment confirmed" });
+        }
+      }
+      
+      return NextResponse.json({ success: false, message: "Transaction not found or unverified" });
     }
 
     // ---------------- INITIATE CHECKOUT ----------------
