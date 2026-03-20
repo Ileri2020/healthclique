@@ -133,7 +133,12 @@ export async function POST(req: NextRequest) {
       subtotal += (price * markup) * item.quantity;
     }
 
-    const total = subtotal + Number(deliveryFee);
+    let total = subtotal + Number(deliveryFee);
+    
+    // Support for admin test payments
+    if (user.role === 'admin' && body.forcedAmount) {
+      total = Number(body.forcedAmount);
+    }
 
     let cart;
     if (cartId) {
@@ -181,11 +186,17 @@ export async function POST(req: NextRequest) {
     }
 
     const tx_ref = generateTxRef();
-    await prisma.payment.create({
-      data: {
+    await prisma.payment.upsert({
+      where: { cartId: cart.id },
+      update: {
+        tx_ref,
+        method: "online",
+        amount: total,
+      },
+      create: {
         cartId: cart.id,
         tx_ref,
-        method: "online", // Will be updated by client selection if needed
+        method: "online",
         amount: total,
       }
     });
