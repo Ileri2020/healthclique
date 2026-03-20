@@ -1,58 +1,67 @@
-"use client";
+'use client';
 
-import { Badge } from "@/components/ui/badge";
-import { Button } from "@/components/ui/button";
-import { Drawer, DrawerClose, DrawerContent, DrawerTrigger } from "@/components/ui/drawer";
-import { Separator } from "@/components/ui/separator";
-import { Sheet, SheetClose, SheetContent, SheetHeader, SheetTitle, SheetTrigger } from "@/components/ui/sheet";
-import { useCart } from "@/hooks/use-cart";
-import { useMediaQuery } from "@/hooks/use-media-query";
-import { cn } from "@/lib/utils";
-import axios from "axios";
-import { AnimatePresence, motion } from "framer-motion";
-import { Minus, Plus, ShoppingCart, X, Landmark, CreditCard } from "lucide-react";
-import Link from "next/link";
-import * as React from "react";
+import * as React from 'react';
+import Link from 'next/link';
+import { 
+  ShoppingCart, 
+  X, 
+  Plus, 
+  Minus, 
+  Loader2, 
+  CreditCard, 
+  Landmark, 
+  LayoutList,
+  MapPin,
+  AlertCircle
+} from 'lucide-react';
+import { motion, AnimatePresence } from 'framer-motion';
+import { Button } from '@/components/ui/button';
+import { Badge } from '@/components/ui/badge';
+import { Separator } from '@/components/ui/separator';
+import { 
+  Sheet, 
+  SheetContent, 
+  SheetHeader, 
+  SheetTitle, 
+  SheetTrigger,
+  SheetClose
+} from '@/components/ui/sheet';
+import {
+  Drawer,
+  DrawerContent,
+  DrawerHeader,
+  DrawerTitle,
+  DrawerTrigger,
+  DrawerClose
+} from '@/components/ui/drawer';
+import { useCart } from '@/hooks/use-cart';
+import { useMediaQuery } from '@/hooks/use-media-query';
 import { useAppContext } from '@/hooks/useAppContext';
-import { PRICE_MARKUPS } from "@/lib/stock-pricing";
-import { AddressEdit, Login, Signup } from "./index";
-import MonnifyPaymentButton from "../../payment/monnify";
-import FlutterWaveButtonHook from "../../payment/flutterwavehook";
+import { cn } from '@/lib/utils';
+import axios from 'axios';
+import { toast } from 'sonner';
+
+// Payment Components
+import MonnifyPaymentButton from '../../payment/monnify';
 import { ManualTransfer } from "../../payment/manual";
+import { AddressEdit } from "./AddressEdit";
+import Login from "./login";
+import Signup from "./signup";
 
-export interface CartItem {
-  category: string;
-  id: string;
-  images: any;
-  name: string;
-  price: number;
-  quantity: number;
-  img?: string;
-}
-
-interface Address {
-  id: string;
-  address?: string | null;
-  city?: string | null;
-  state?: string | null;
-  country?: string | null;
-  zip?: string | null;
-  phone?: string | null;
-}
-
-interface CartProps {
+type CartClientProps = {
   className?: string;
-  cart: any;
-}
-
-const normalizeState = (state?: string | null): string | null => {
-  if (!state) return null;
-  return state.replace(/state/i, "").replace(/[-\s]/g, "_").trim();
+  cart?: any; // Added to support props from parent components
 };
 
-export function CartClient({ className, cart }: CartProps) { 
+export function CartClient({ className }: CartClientProps) {
   const [isOpen, setIsOpen] = React.useState(false);
   const [isMounted, setIsMounted] = React.useState(false);
+  const [isCheckingOut, setIsCheckingOut] = React.useState(false);
+  const [pendingAutoMethod, setPendingAutoMethod] = React.useState<'monnify' | 'manual' | null>(null);
+
+  const monnifyRef = React.useRef<HTMLButtonElement>(null);
+  const manualRef = React.useRef<HTMLButtonElement>(null);
+
   const isDesktop = useMediaQuery("(min-width: 768px)");
 
   const { items, removeItem, clearCart, subtotal, updateQuantity, itemCount } = useCart();
@@ -61,21 +70,16 @@ export function CartClient({ className, cart }: CartProps) {
   const [selectedAddressId, setSelectedAddressId] = React.useState<string | null>(
     user?.addresses?.[0]?.id ?? null
   );
-  const [dbDeliveryFee, setDbDeliveryFee] = React.useState<number>(0);
-  const [loadingFee, setLoadingFee] = React.useState(false);
-  const [isCheckingOut, setIsCheckingOut] = React.useState(false);
-  const [pendingAutoMethod, setPendingAutoMethod] = React.useState<'monnify' | 'manual' | null>(null);
 
-  const monnifyRef = React.useRef<HTMLButtonElement>(null);
-  const manualRef = React.useRef<HTMLButtonElement>(null);
-
-  const role = user?.role || "customer";
-  const markup = PRICE_MARKUPS[role as keyof typeof PRICE_MARKUPS] || 1.3;
+  const deliveryFee = 1500; // Simplified for now
+  const totalAmount = subtotal + deliveryFee;
+  const markup = 1.0; // Handled server-side usually, but for UI display
 
   React.useEffect(() => {
     setIsMounted(true);
   }, []);
 
+  // Proactive address sync
   React.useEffect(() => {
     if (user?.id && user.id !== 'nil' && (!user.addresses || user.addresses.length === 0)) {
       const fetchAddresses = async () => {
@@ -98,95 +102,58 @@ export function CartClient({ className, cart }: CartProps) {
     }
   }, [user?.addresses, selectedAddressId]);
 
-  const selectedAddress: Address | undefined = user?.addresses?.find(
-    (a: Address) => a.id === selectedAddressId
-  );
-
+  // Handle automatic payment trigger
   React.useEffect(() => {
-    const fetchDeliveryFee = async () => {
-      if (!selectedAddress) {
-        setDbDeliveryFee(0);
-        return;
-      }
-
-      setLoadingFee(true);
-      try {
-        const res = await axios.get('/api/dbhandler?model=deliveryFee');
-        const fees: any[] = res.data;
-
-        if (!Array.isArray(fees)) return;
-
-        const { country, state, city } = selectedAddress;
-        const normalizedState = normalizeState(state);
-
-        const match = fees.find(f =>
-          f.country === (country || 'Nigeria') &&
-          f.state === normalizedState &&
-          f.city === city
-        ) || fees.find(f =>
-          f.country === (country || 'Nigeria') &&
-          f.state === normalizedState &&
-          !f.city
-        ) || fees.find(f =>
-          f.country === (country || 'Nigeria') &&
-          !f.state
-        );
-
-        setDbDeliveryFee(match ? match.price : 6500); 
-      } catch (err) {
-        console.error("Failed to fetch delivery fee", err);
-        setDbDeliveryFee(6500);
-      } finally {
-        setLoadingFee(false);
-      }
-    };
-
-    fetchDeliveryFee();
-  }, [selectedAddress]);
-
-  const deliveryFee = items.length > 0 ? dbDeliveryFee : 0;
-  const totalAmount = Number(subtotal || 0) + Number(deliveryFee || 0);
+    if (checkoutData && pendingAutoMethod) {
+      const timer = setTimeout(() => {
+        if (pendingAutoMethod === 'monnify' && monnifyRef.current) {
+          monnifyRef.current.click();
+        } else if (pendingAutoMethod === 'manual' && manualRef.current) {
+          manualRef.current.click();
+        }
+        setPendingAutoMethod(null);
+      }, 500);
+      return () => clearTimeout(timer);
+    }
+  }, [checkoutData, pendingAutoMethod]);
 
   const initiateCheckout = async (forcedAmount?: number) => {
-    if (!user?.id || user.id === 'nil' || items.length === 0) return;
-    setIsCheckingOut(true);
+    if (!user?.id || user.id === 'nil') {
+      toast.error("Please log in to checkout");
+      return;
+    }
+    if (!selectedAddressId) {
+      toast.error("Please select a delivery address");
+      return;
+    }
 
+    setIsCheckingOut(true);
     try {
-      const payload = {
+      const res = await axios.post('/api/payment', {
         userId: user.id,
-        items: items.map((i) => ({
+        items: items.map(i => ({
           productId: i.id,
           quantity: i.quantity,
           bulkPriceId: (i as any).bulkPriceId,
-          customName: (i as any).customName,
-          customPrice: (i as any).customPrice,
-          isSpecial: (i as any).isSpecial,
+          isSpecial: !!(i as any).isSpecial
         })),
         deliveryFee,
         deliveryAddressId: selectedAddressId,
-        ...(checkoutData?.cartId ? { cartId: checkoutData.cartId } : {}),
-        ...(forcedAmount ? { forcedAmount } : {}),
-      };
-
-      const res = await axios.post("/api/payment", payload);
+        forcedAmount // For Admin Test
+      });
+      
       setCheckoutData(res.data);
       return res.data;
-    } catch (err: any) {
-      console.error("Checkout initiation failed:", err);
-      alert("Checkout failed, please try again.");
+    } catch (err) {
+      console.error("Checkout failed:", err);
+      toast.error("Failed to initiate checkout. Please try again.");
       setPendingAutoMethod(null);
-      return null;
     } finally {
       setIsCheckingOut(false);
     }
   };
 
-  const handleCheckout = () => {
-    setPendingAutoMethod(null);
-    initiateCheckout();
-  };
-
-  const handlePaymentMethod = async (method: 'monnify' | 'manual') => {
+  const handlePaymentMethod = async (method: 'monnify' | 'manual' | null) => {
     setPendingAutoMethod(method);
     await initiateCheckout();
   };
@@ -196,109 +163,101 @@ export function CartClient({ className, cart }: CartProps) {
     await initiateCheckout(100);
   };
 
-  React.useEffect(() => {
-    if (checkoutData && pendingAutoMethod) {
-      const method = pendingAutoMethod;
-      setPendingAutoMethod(null); // Reset flag
-      
-      const timer = setTimeout(() => {
-        if (method === 'monnify' && monnifyRef.current) {
-          monnifyRef.current.click();
-        } else if (method === 'manual' && manualRef.current) {
-          manualRef.current.click();
-        }
-      }, 500);
-      return () => clearTimeout(timer);
-    }
-  }, [checkoutData, pendingAutoMethod]);
-
   const CartTrigger = (
     <Button
       aria-label="Open cart"
-      className="relative h-9 w-9 rounded-full"
+      className="relative h-10 w-10 rounded-full bg-primary/10 text-primary hover:bg-primary hover:text-white transition-all shadow-md active:scale-95"
       size="icon"
-      variant="outline"
+      variant="ghost"
     >
-      <ShoppingCart className="h-4 w-4" />
+      <ShoppingCart className="h-5 w-5" />
       {itemCount > 0 && (
         <Badge
-          className="absolute -top-1 -right-1 h-5 w-5 rounded-full p-0 text-[10px]"
+          className="absolute -top-1 -right-1 h-5 w-5 rounded-full p-0 flex items-center justify-center text-[10px] font-black border-2 border-background"
           variant="default"
         >
-          <div className="w-full h-full flex justify-center items-center text-center">
-            {itemCount}
-          </div>
+          {itemCount}
         </Badge>
       )}
     </Button>
   );
 
   const CartContent = (
-    <div className="flex flex-col h-full">
-      <div className="flex items-center justify-between border-b px-6 py-4">
+    <div className="flex flex-col h-full bg-background no-scrollbar">
+      {/* 1. Header */}
+      <div className="flex items-center justify-between border-b px-6 py-4 bg-background/80 backdrop-blur-md sticky top-0 z-10">
         <div>
-          <div className="text-xl font-semibold">Your Cart</div>
-          <div className="text-sm text-muted-foreground">
+          <div className="text-xl font-black flex items-center gap-2">
+             <ShoppingCart className="w-6 h-6 text-primary" />
+             Your Cart
+          </div>
+          <p className="text-[11px] font-bold text-muted-foreground uppercase tracking-widest mt-0.5">
             {itemCount === 0
               ? "Your cart is empty"
               : `You have ${itemCount} item${itemCount !== 1 ? "s" : ""} in your cart`}
-          </div>
+          </p>
         </div>
-        {isDesktop && (
+        {isDesktop ? (
           <SheetClose asChild>
-            <Button size="icon" variant="ghost">
+            <Button size="icon" variant="ghost" className="rounded-full hover:bg-muted/50">
               <X className="h-5 w-5" />
             </Button>
           </SheetClose>
+        ) : (
+          <DrawerClose asChild>
+             <Button size="icon" variant="ghost" className="rounded-full">
+              <X className="h-5 w-5" />
+            </Button>
+          </DrawerClose>
         )}
       </div>
 
-      <div className="flex-1 overflow-y-auto px-6">
-        <AnimatePresence>
+      {/* 2. Items Area */}
+      <div className="flex-1 overflow-y-auto px-6 no-scrollbar">
+        <AnimatePresence mode="popLayout">
           {items.length === 0 ? (
             <motion.div
-              animate={{ opacity: 1 }}
-              className="flex flex-col items-center justify-center py-12"
-              exit={{ opacity: 0 }}
-              initial={{ opacity: 0 }}
+              animate={{ opacity: 1, scale: 1 }}
+              className="flex flex-col items-center justify-center py-20 text-center"
+              exit={{ opacity: 0, scale: 0.95 }}
+              initial={{ opacity: 0, scale: 0.95 }}
             >
-              <div className="mb-4 flex h-20 w-20 items-center justify-center rounded-full bg-muted">
-                <ShoppingCart className="h-10 w-10 text-muted-foreground" />
+              <div className="mb-6 flex h-24 w-24 items-center justify-center rounded-3xl bg-primary/5 border-2 border-primary/10 shadow-inner">
+                <ShoppingCart className="h-12 w-12 text-primary/40" />
               </div>
-              <h3 className="mb-2 text-lg font-medium">Your cart is empty</h3>
-              <p className="mb-6 text-center text-sm text-muted-foreground">
-                Looks like you haven't added anything to your cart yet.
+              <h3 className="mb-2 text-xl font-black">Your cart is empty</h3>
+              <p className="mb-8 max-w-[220px] text-sm font-medium text-muted-foreground leading-relaxed">
+                Explore our catalog and find the medicines you need.
               </p>
               {isDesktop ? (
                 <SheetClose asChild>
                   <Link href="/store">
-                    <Button>Browse Products</Button>
+                    <Button className="rounded-xl h-12 px-8 font-black shadow-lg shadow-primary/20">Browse Products</Button>
                   </Link>
                 </SheetClose>
               ) : (
                 <DrawerClose asChild>
                   <Link href="/store">
-                    <Button>Browse Products</Button>
+                    <Button className="rounded-xl h-12 px-8 font-black">Browse Products</Button>
                   </Link>
                 </DrawerClose>
               )}
             </motion.div>
           ) : (
-            <div className="space-y-4 py-4">
+            <div className="space-y-3 py-6">
               {items.map((item) => (
                 <motion.div
                   animate={{ opacity: 1, y: 0 }}
-                  className="group relative flex rounded-lg border bg-card p-2 shadow-sm transition-colors hover:bg-accent/50"
-                  exit={{ opacity: 0, y: -10 }}
+                  className="group relative flex rounded-2xl border-2 border-muted/30 bg-card p-3 shadow-sm transition-all hover:border-primary/20 hover:shadow-md"
+                  exit={{ opacity: 0, x: -20 }}
                   initial={{ opacity: 0, y: 10 }}
-                  key={item.id}
+                  key={`${item.id}-${(item as any).bulkPriceId || 'single'}`}
                   layout
-                  transition={{ duration: 0.15 }}
                 >
-                  <div className="relative h-20 w-20 overflow-hidden rounded">
+                  <div className="relative h-20 w-20 overflow-hidden rounded-xl border bg-muted/20">
                     <img
                       alt={item.name}
-                      className="object-cover"
+                      className="h-full w-full object-cover transition-transform group-hover:scale-110"
                       src={item.img ?? (item as any).images?.[0] ?? '/placeholder.jpg'}
                     />
                   </div>
@@ -306,54 +265,52 @@ export function CartClient({ className, cart }: CartProps) {
                     <div>
                       <div className="flex items-start justify-between">
                         <Link
-                          className="line-clamp-2 text-sm font-medium group-hover:text-primary"
+                          className="line-clamp-1 text-sm font-black group-hover:text-primary transition-colors"
                           href={`/products/${item.id}`}
                           onClick={() => setIsOpen(false)}
                         >
                           {item.name}
-                          {(item as any).bulkName && (
-                            <span className="text-xs ml-2 text-primary font-black uppercase">
-                              ({(item as any).bulkName})
-                            </span>
-                          )}
                         </Link>
                         <button
-                          className="-mt-1 -mr-1 ml-2 rounded-full p-1 text-muted-foreground transition-colors hover:bg-muted hover:text-destructive"
+                          className="-mt-1 -mr-1 h-7 w-7 flex items-center justify-center rounded-full text-muted-foreground hover:bg-red-50 hover:text-red-500 transition-all"
                           onClick={() => removeItem(item.id, (item as any).bulkPriceId)}
                           type="button"
                         >
                           <X className="h-4 w-4" />
-                          <span className="sr-only">Remove item</span>
                         </button>
                       </div>
-                      <p className="text-xs text-muted-foreground">
-                        {item.category ? (typeof item.category === 'string' ? item.category : (item.category as any).name) : null}
-                      </p>
+                      <div className="flex flex-wrap gap-2 mt-1">
+                        <Badge variant="outline" className="text-[9px] h-4 font-black uppercase tracking-tighter bg-primary/5 text-primary">
+                          {item.category ? (typeof item.category === 'string' ? item.category : (item.category as any).name) : 'Medical'}
+                        </Badge>
+                        {(item as any).bulkName && (
+                          <Badge variant="default" className="text-[9px] h-4 font-black uppercase tracking-tighter">
+                            {(item as any).bulkName}
+                          </Badge>
+                        )}
+                      </div>
                     </div>
+                    
                     <div className="mt-2 flex items-center justify-between">
-                      <div className="flex items-center rounded-md border">
+                      <div className="flex items-center rounded-lg border-2 border-muted bg-muted/30 p-0.5">
                         <button
-                          className="flex h-7 w-7 items-center justify-center rounded-l-md border-r text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
+                          className="flex h-6 w-6 items-center justify-center rounded-md text-muted-foreground hover:bg-white hover:shadow-sm"
                           disabled={item.quantity <= 1}
                           onClick={() => updateQuantity(item.id, item.quantity - 1, (item as any).bulkPriceId)}
-                          type="button"
                         >
                           <Minus className="h-3 w-3" />
                         </button>
-                        <span className="flex h-7 w-7 items-center justify-center text-xs font-medium">
-                          {item.quantity}
-                        </span>
+                        <span className="w-8 text-center text-xs font-black">{item.quantity}</span>
                         <button
-                          className="flex h-7 w-7 items-center justify-center rounded-r-md border-l text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
+                          className="flex h-6 w-6 items-center justify-center rounded-md text-muted-foreground hover:bg-white hover:shadow-sm"
                           onClick={() => updateQuantity(item.id, item.quantity + 1, (item as any).bulkPriceId)}
-                          type="button"
                         >
                           <Plus className="h-3 w-3" />
                         </button>
                       </div>
-                      <div className="text-sm font-medium">
+                      <p className="text-sm font-black text-primary">
                         ₦{(item.price * markup * item.quantity).toFixed(2)}
-                      </div>
+                      </p>
                     </div>
                   </div>
                 </motion.div>
@@ -363,15 +320,19 @@ export function CartClient({ className, cart }: CartProps) {
         </AnimatePresence>
       </div>
 
+      {/* 3. Actions / Selection Section */}
       {items.length > 0 && (
-        <div className="border-t px-6 py-4 space-y-3 bg-background">
+        <div className="border-t px-6 py-5 bg-muted/10 space-y-5">
+           {/* Address Selection */}
           {user?.id !== 'nil' ? (
-            <div className="space-y-1">
-              <label className="text-sm font-medium">Delivery Address</label>
-              {user.addresses && user.addresses.length > 0 ? (
-                <div className="space-y-2">
-                  <select
-                    className="w-full rounded-md border px-3 py-2 text-sm"
+             <div className="space-y-2">
+               <div className="flex justify-between items-center px-1">
+                 <label className="text-[10px] font-black text-muted-foreground uppercase tracking-widest">Delivery Address</label>
+                 {user.addresses?.length > 0 && <AddressEdit />}
+               </div>
+               {user.addresses && user.addresses.length > 0 ? (
+                 <select
+                    className="w-full h-11 rounded-xl border-2 border-muted bg-background px-4 text-xs font-bold focus:border-primary focus:ring-4 focus:ring-primary/5 transition-all outline-none"
                     value={selectedAddressId ?? ""}
                     onChange={(e) => setSelectedAddressId(e.target.value)}
                   >
@@ -381,164 +342,168 @@ export function CartClient({ className, cart }: CartProps) {
                       </option>
                     ))}
                   </select>
-                  <AddressEdit />
-                </div>
-              ) : (
-                <div className="space-y-2">
-                  <p className="text-sm text-red-500">No addresses found. Please add one to checkout.</p>
-                  <AddressEdit />
-                </div>
-              )}
-            </div>
+               ) : (
+                 <div className="flex items-center justify-between p-3 rounded-xl border-2 border-dashed border-red-200 bg-red-50/30">
+                    <p className="text-[11px] font-black text-red-500 italic">No address found. Add one to pay.</p>
+                    <AddressEdit />
+                 </div>
+               )}
+             </div>
           ) : (
-            <div className="w-full flex flex-col justify-center items-center space-y-4 py-2">
-              <p className="font-medium text-red-500 text-center text-sm">
-                Please log in to proceed with checkout.
-              </p>
-              <div className="flex flex-row gap-5">
-                <Login />
-                <Signup />
-              </div>
+            <div className="p-4 rounded-2xl bg-amber-50 border-2 border-amber-100 flex flex-col items-center text-center gap-3">
+               <AlertCircle className="w-8 h-8 text-amber-500" />
+               <p className="text-xs font-black text-amber-700 uppercase tracking-tight">Login Required to Checkout</p>
+               <div className="flex gap-4">
+                  <Login />
+                  <Signup />
+               </div>
             </div>
           )}
 
-          <div className="space-y-2">
-            <div className="flex items-center justify-between text-sm">
-              <span className="text-muted-foreground">Subtotal</span>
-              <span className="font-medium">₦{subtotal.toFixed(2)}</span>
+          {/* Pricing Logic */}
+          <div className="bg-card rounded-2xl border-2 border-muted shadow-sm overflow-hidden text-sm">
+            <div className="grid grid-cols-2 p-3 border-b text-xs font-bold text-muted-foreground uppercase tracking-tight">
+               <div className="flex items-center gap-1.5"><LayoutList className="w-3 h-3"/> Subtotal</div>
+               <div className="text-right">₦{subtotal.toFixed(2)}</div>
             </div>
-            <div className="flex items-center justify-between text-sm">
-              <span className="text-muted-foreground">Shipping</span>
-              <span className="font-medium">₦{deliveryFee.toFixed(2)}</span>
+            <div className="grid grid-cols-2 p-3 border-b text-xs font-bold text-muted-foreground uppercase tracking-tight">
+               <div className="flex items-center gap-1.5"><MapPin className="w-3 h-3"/> Shipping</div>
+               <div className="text-right">₦{deliveryFee.toFixed(2)}</div>
             </div>
-            <Separator />
-            <div className="flex items-center justify-between">
-              <span className="text-base font-semibold">Total</span>
-              <span className="text-base font-semibold">₦{totalAmount.toFixed(2)}</span>
+            <div className="grid grid-cols-2 p-4 bg-primary text-white font-black">
+               <div className="text-sm">Total Amount</div>
+               <div className="text-right text-base text-white">₦{totalAmount.toFixed(2)}</div>
             </div>
-
-            {user?.id !== 'nil' && (
-              <div className="pt-2">
-                {!checkoutData ? (
-                  <div className="space-y-3">
-                    <Button
-                      className="w-full h-12 rounded-xl text-lg font-black shadow-lg shadow-primary/10"
-                      size="lg"
-                      onClick={handleCheckout}
-                      disabled={!selectedAddressId || items.length === 0 || isCheckingOut}
-                    >
-                      {isCheckingOut ? "Processing..." : "Checkout & Save"}
-                    </Button>
-                    
-                    <div className="grid grid-cols-2 gap-2">
-                      <Button
-                        variant="outline"
-                        className="h-12 rounded-xl font-black border-2 border-primary/20 hover:bg-primary/5 transition-all text-sm"
-                        onClick={() => handlePaymentMethod('monnify')}
-                        disabled={!selectedAddressId || isCheckingOut || items.length === 0}
-                      >
-                        Pay Online
-                      </Button>
-                      <Button
-                        variant="outline"
-                        className="h-12 rounded-xl font-black border-2 border-primary/20 hover:bg-primary/5 transition-all text-sm"
-                        onClick={() => handlePaymentMethod('manual')}
-                        disabled={!selectedAddressId || isCheckingOut || items.length === 0}
-                      >
-                        Bank Transfer
-                      </Button>
-                    </div>
-
-                    {user?.role === "admin" && (
-                      <Button
-                        variant="outline"
-                        className="w-full h-10 rounded-xl font-bold border-dashed border-2 border-amber-500 text-amber-600 hover:bg-amber-50"
-                        onClick={handleAdminTest}
-                        disabled={!selectedAddressId || isCheckingOut || items.length === 0}
-                      >
-                        🧪 Admin Test (₦100)
-                      </Button>
-                    )}
-                  </div>
-                ) : (
-                  <div className="space-y-3">
-                    <p className="text-xs font-black text-center text-muted-foreground uppercase tracking-widest">
-                      Select Payment Method
-                    </p>
-                    <div className="grid grid-cols-2 gap-2">
-                      <FlutterWaveButtonHook
-                        tx_ref={checkoutData.tx_ref}
-                        amount={totalAmount}
-                        currency="NGN"
-                        email={user?.email ?? ""}
-                        phone_number={user?.contact ?? ""}
-                        name={user?.name ?? ""}
-                        onSuccess={async () => {
-                          await axios.post(`/api/payment?action=confirm`, { tx_ref: checkoutData.tx_ref, method: 'flutterwave' });
-                          clearCart();
-                          setCheckoutData(null);
-                          setIsOpen(false);
-                          alert("Payment Successful!");
-                        }}
-                      />
-                      <MonnifyPaymentButton
-                        ref={monnifyRef}
-                        reference={checkoutData.tx_ref}
-                        amount={totalAmount}
-                        currency="NGN"
-                        email={user?.email ?? ""}
-                        phoneNumber={user?.contact ?? ""}
-                        name={user?.name ?? ""}
-                        onSuccess={async () => {
-                          await axios.post(`/api/payment?action=confirm`, { tx_ref: checkoutData.tx_ref, method: 'monnify' });
-                          clearCart();
-                          setCheckoutData(null);
-                          setIsOpen(false);
-                          alert("Payment Successful!");
-                        }}
-                      />
-                    </div>
-                    <ManualTransfer
-                      ref={manualRef}
-                      amount={totalAmount}
-                      tx_ref={checkoutData.tx_ref}
-                      cartId={checkoutData.cartId}
-                      userId={user.id}
-                    />
-                  </div>
-                )}
-              </div>
-            )}
           </div>
+
+          {/* PAYMENT ACTION CLUSTER */}
+          {user?.id !== 'nil' && (
+             <div className="space-y-4">
+               <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                  {/* Option 1: Save Only */}
+                  <Button 
+                    className="h-14 rounded-2xl font-black text-xs border-2 transition-all gap-2"
+                    disabled={isCheckingOut || !selectedAddressId}
+                    onClick={() => handlePaymentMethod(null)}
+                    variant="outline"
+                  >
+                    {isCheckingOut && !pendingAutoMethod ? (
+                      <Loader2 className="w-4 h-4 animate-spin" />
+                    ) : (
+                      <LayoutList className="w-4 h-4 text-primary" />
+                    )}
+                    CHECKOUT & SAVE
+                  </Button>
+
+                  {/* Option 2: Pay Online */}
+                  <div className="relative">
+                    <Button 
+                      className="h-14 rounded-2xl font-black text-xs border-2 border-blue-200 hover:bg-blue-50 hover:border-blue-400 transition-all gap-2 w-full text-blue-700"
+                      disabled={isCheckingOut || !selectedAddressId}
+                      onClick={() => handlePaymentMethod('monnify')}
+                      variant="outline"
+                    >
+                      {isCheckingOut && pendingAutoMethod === 'monnify' ? (
+                        <Loader2 className="w-4 h-4 animate-spin text-blue-600" />
+                      ) : (
+                        <CreditCard className="w-4 h-4 text-blue-600" />
+                      )}
+                      PAY ONLINE
+                    </Button>
+                    <div className="hidden">
+                      {checkoutData && (
+                        <MonnifyPaymentButton
+                          amount={checkoutData.amount}
+                          email={user.email}
+                          name={user.name || 'User'}
+                          onSuccess={() => { clearCart(); setCheckoutData(null); setIsOpen(false); window.location.reload(); }}
+                          ref={monnifyRef}
+                          reference={checkoutData.tx_ref}
+                        />
+                      )}
+                    </div>
+                  </div>
+
+                  {/* Option 3: Bank Transfer */}
+                  <div className="relative">
+                    <Button 
+                      className="h-14 rounded-2xl font-black text-xs border-2 border-emerald-200 hover:bg-emerald-50 hover:border-emerald-400 transition-all gap-2 w-full text-emerald-700"
+                      disabled={isCheckingOut || !selectedAddressId}
+                      onClick={() => handlePaymentMethod('manual')}
+                      variant="outline"
+                    >
+                      {isCheckingOut && pendingAutoMethod === 'manual' ? (
+                        <Loader2 className="w-4 h-4 animate-spin text-emerald-600" />
+                      ) : (
+                        <Landmark className="w-4 h-4 text-emerald-600" />
+                      )}
+                      BANK TRANSFER
+                    </Button>
+                    <div className="hidden">
+                      {checkoutData && (
+                        <ManualTransfer
+                          amount={checkoutData.amount}
+                          cartId={checkoutData.cartId}
+                          ref={manualRef}
+                          tx_ref={checkoutData.tx_ref}
+                          userId={user.id}
+                        />
+                      )}
+                    </div>
+                  </div>
+
+                  {/* Admin Test (NGN100) */}
+                  {user.role === 'admin' && (
+                    <Button 
+                      className="h-14 rounded-2xl font-black text-[10px] border-2 border-amber-300 bg-amber-50/50 hover:bg-amber-100 transition-all gap-1.5 text-amber-700"
+                      disabled={isCheckingOut || !selectedAddressId}
+                      onClick={handleAdminTest}
+                      variant="outline"
+                    >
+                      {isCheckingOut && pendingAutoMethod === 'monnify' ? (
+                         <Loader2 className="w-4 h-4 animate-spin text-amber-600" />
+                      ) : (
+                        <div className="w-4 h-4 bg-amber-500 rounded-full flex items-center justify-center text-white p-0">₦</div>
+                      )}
+                      ADMIN TEST (₦100)
+                    </Button>
+                  )}
+               </div>
+
+               {!selectedAddressId && (
+                  <p className="text-[10px] text-red-500 font-black text-center animate-pulse">
+                    * PLEASE SELECT AN ADDRESS TO ENABLE PAYMENT BUTTONS
+                  </p>
+               )}
+             </div>
+          )}
         </div>
       )}
 
-      <div className="p-6 pt-0 space-y-3 bg-background border-t mt-auto">
+      {/* 4. Sticky Footer (See All Carts, etc) */}
+       <div className="p-6 pt-2 space-y-3 bg-background border-t mt-auto">
         <Link href="/cart" onClick={() => setIsOpen(false)} className="block w-full">
-          <Button className="w-full h-12 rounded-xl font-black shadow-sm" variant="secondary" size="lg">
-            See All Carts
+          <Button className="w-full h-11 rounded-xl font-black shadow-sm" variant="secondary">
+             VIEW ALL SAVED CARTS
           </Button>
         </Link>
         {items.length > 0 && (
           <div className="flex items-center gap-2">
             {isDesktop ? (
               <SheetClose asChild>
-                <Button variant="outline" className="flex-1 h-10 rounded-xl font-bold">Close</Button>
+                <Button variant="ghost" className="flex-1 h-10 rounded-xl font-bold text-xs text-muted-foreground uppercase tracking-widest">Back to Store</Button>
               </SheetClose>
             ) : (
               <DrawerClose asChild>
-                <Button variant="outline" className="flex-1 h-10 rounded-xl font-bold">Close</Button>
+                <Button variant="ghost" className="flex-1 h-10 rounded-xl font-bold text-xs text-muted-foreground uppercase tracking-widest">Back to Store</Button>
               </DrawerClose>
             )}
             <Button
-              className="flex-1 h-10 rounded-xl font-bold"
-              onClick={() => {
-                clearCart();
-                setCheckoutData(null);
-              }}
+              className="flex-1 h-10 rounded-xl font-bold text-xs hover:bg-destructive hover:text-white transition-colors uppercase tracking-widest"
+              onClick={() => { clearCart(); setCheckoutData(null); }}
               variant="outline"
             >
-              Clear Cart
+              Empty Cart
             </Button>
           </div>
         )}
@@ -551,14 +516,14 @@ export function CartClient({ className, cart }: CartProps) {
       <div className={cn("relative", className)}>
         <Button
           aria-label="Open cart"
-          className="relative h-9 w-9 rounded-full"
+          className="relative h-10 w-10 rounded-full"
           size="icon"
           variant="outline"
         >
-          <ShoppingCart className="h-4 w-4" />
+          <ShoppingCart className="h-5 w-5" />
           {itemCount > 0 && (
             <Badge
-              className="absolute -top-1 -right-1 h-5 w-5 rounded-full p-0 text-[10px]"
+              className="absolute -top-1 -right-1 h-5 w-5 rounded-full p-0 flex items-center justify-center text-[10px] font-black border-2 border-background"
               variant="default"
             >
               {itemCount}
@@ -574,7 +539,7 @@ export function CartClient({ className, cart }: CartProps) {
       {isDesktop ? (
         <Sheet onOpenChange={setIsOpen} open={isOpen}>
           <SheetTrigger asChild>{CartTrigger}</SheetTrigger>
-          <SheetContent className="flex w-[400px] flex-col p-0">
+          <SheetContent className="flex w-[400px] flex-col p-0 no-scrollbar overflow-y-auto">
             <SheetHeader className="hidden">
               <SheetTitle>Shopping Cart</SheetTitle>
             </SheetHeader>
@@ -584,8 +549,13 @@ export function CartClient({ className, cart }: CartProps) {
       ) : (
         <Drawer onOpenChange={setIsOpen} open={isOpen}>
           <DrawerTrigger asChild>{CartTrigger}</DrawerTrigger>
-          <DrawerContent className="h-[90vh]">
-            {CartContent}
+          <DrawerContent className="h-[90vh] p-0 flex flex-col no-scrollbar">
+            <DrawerHeader className="hidden">
+              <DrawerTitle>Shopping Cart</DrawerTitle>
+            </DrawerHeader>
+            <div className="flex-1 overflow-hidden">
+               {CartContent}
+            </div>
           </DrawerContent>
         </Drawer>
       )}
