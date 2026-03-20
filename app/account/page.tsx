@@ -266,6 +266,7 @@ const Account = () => {
         <div className="rounded-xl border bg-card shadow-sm overflow-hidden">
           <div className="px-5 py-3 bg-muted/40 border-b flex items-center justify-between">
             <h2 className="text-sm font-semibold text-muted-foreground uppercase tracking-wide">Shipping Address</h2>
+            <EditUser />
           </div>
 
           {primaryAddress ? (

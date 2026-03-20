@@ -17,6 +17,7 @@ import * as React from "react";
 import { useAppContext } from '@/hooks/useAppContext';
 import { PRICE_MARKUPS } from "@/lib/stock-pricing";
 import { Login, Signup } from "./index";
+import EditUser from "./useredit";
 import MonnifyPaymentButton from "../../payment/monnify";
 import FlutterWaveButtonHook from "../../payment/flutterwavehook";
 
@@ -380,19 +381,25 @@ export function CartClient({ className, cart }: CartProps) {
               <div className="space-y-1">
                 <label className="text-sm font-medium">Delivery Address</label>
                 {user.addresses && user.addresses.length > 0 ? (
-                  <select
-                    className="w-full rounded-md border px-3 py-2 text-sm"
-                    value={selectedAddressId ?? ""}
-                    onChange={(e) => setSelectedAddressId(e.target.value)}
-                  >
-                    {user.addresses.map((address: any) => (
-                      <option key={address.id} value={address.id}>
-                        {[address.address, address.city, address.state].filter(Boolean).join(", ")}
-                      </option>
-                    ))}
-                  </select>
+                  <div className="space-y-2">
+                    <select
+                      className="w-full rounded-md border px-3 py-2 text-sm"
+                      value={selectedAddressId ?? ""}
+                      onChange={(e) => setSelectedAddressId(e.target.value)}
+                    >
+                      {user.addresses.map((address: any) => (
+                        <option key={address.id} value={address.id}>
+                          {[address.address, address.city, address.state].filter(Boolean).join(", ")}
+                        </option>
+                      ))}
+                    </select>
+                    <EditUser />
+                  </div>
                 ) : (
-                  <p className="text-sm text-red-500">No addresses found. Please add one in settings.</p>
+                  <div className="space-y-2">
+                    <p className="text-sm text-red-500">No addresses found. Please add one in settings.</p>
+                    <EditUser />
+                  </div>
                 )}
               </div>
             ) : (

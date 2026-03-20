@@ -23,7 +23,15 @@ function useUnreadCount() {
       try {
         const res = await axios.get("/api/dbhandler?model=message");
         const unread = res.data.filter((msg: any) => msg.receiverId === user.id && !msg.isRead);
-        if (unread.length > unreadCount && unreadCount === 0) setShowToast(true);
+        
+        // Session storage to track toast display
+        const lastShownCount = parseInt(sessionStorage.getItem("lastToastCount") || "0");
+        
+        if (unread.length > lastShownCount) {
+          setShowToast(true);
+          sessionStorage.setItem("lastToastCount", unread.length.toString());
+        }
+        
         setUnreadCount(unread.length);
       } catch {}
     };
