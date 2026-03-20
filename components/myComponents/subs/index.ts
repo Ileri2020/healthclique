@@ -18,4 +18,5 @@ export const GlobalSearch = dynamic(()=>import("./GlobalSearch").then(mod => mod
 export const SnapPrescription = dynamic(()=>import("./SnapPrescription").then(mod => mod.SnapPrescription), { ssr: false, })
 export const NotificationUI = dynamic(()=>import("./NotificationUI").then(mod => mod.NotificationUI), { ssr: false, })
 export { SpecialOrderForm } from "./SpecialOrderForm"
+export { AddressEdit } from "./AddressEdit"
  

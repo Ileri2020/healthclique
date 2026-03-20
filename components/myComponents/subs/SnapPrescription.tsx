@@ -26,7 +26,8 @@ import { toast } from "sonner"; // Assuming sonner is used for toasts, otherwise
 import { Badge } from "@/components/ui/badge";
 import { Checkbox } from "@/components/ui/checkbox";
 import { ScrollArea } from "@/components/ui/scroll-area";
-import { AlertCircle, Info, RotateCcw } from "lucide-react";
+import { AlertCircle, Info, RotateCcw, FileText } from "lucide-react";
+import { Textarea } from "@/components/ui/textarea";
 
 export const SnapPrescription = ({
   children,
@@ -42,6 +43,7 @@ export const SnapPrescription = ({
     {},
   );
   const { addItem } = useCart();
+  const [manualText, setManualText] = useState("");
   const fileInputRef = useRef<HTMLInputElement>(null);
   const cameraInputRef = useRef<HTMLInputElement>(null);
 
@@ -56,11 +58,11 @@ export const SnapPrescription = ({
     }
   };
 
-  const processImage = async () => {
-    if (!image) return;
+  const processInput = async () => {
+    if (!image && !manualText) return;
 
     setLoading(true);
-    setStatus("Uploading image..."); //Fetching API key
+    setStatus(image ? "Analyzing image..." : "Analyzing your request...");
     setResults([]);
     setSelectedItems({});
 
@@ -70,17 +72,13 @@ export const SnapPrescription = ({
       } = await axios.get("/api/keys/gemini");
       const genAI = new GoogleGenerativeAI(apiKey);
       const model = genAI.getGenerativeModel(
-        { model: "gemini-2.5-flash" },
+        { model: "gemini-1.5-flash" },
         { apiVersion: "v1" },
       );
 
-      setStatus("Analyzing prescription...");
-      const mimeType = image.match(/data:(.*?);base64/)?.[1] || "image/jpeg";
-      const base64Data = image.split(",")[1];
-      const part = { inlineData: { data: base64Data, mimeType } };
-
       const prompt = `
-        Analyze this medical prescription or list of products.
+        Analyze this ${image ? "medical prescription or list of products (image)" : "list of products/prescription (text)"}.
+        ${manualText ? `USER TEXT: "${manualText}"` : ""}
         Extract the items. For each, give:
         - name: Drug Name (text)
         - quantity: Quantity requested
@@ -93,7 +91,15 @@ export const SnapPrescription = ({
         Return ONLY a JSON object: { "products": [...] }
       `;
 
-      const result = await model.generateContent([prompt, part]);
+      let result;
+      if (image) {
+        const mimeType = image.match(/data:(.*?);base64/)?.[1] || "image/jpeg";
+        const base64Data = image.split(",")[1];
+        const part = { inlineData: { data: base64Data, mimeType } };
+        result = await model.generateContent([prompt, part]);
+      } else {
+        result = await model.generateContent(prompt);
+      }
       const response = await result.response;
       const parsed = JSON.parse(
         response
@@ -243,86 +249,128 @@ export const SnapPrescription = ({
 
         <ScrollArea className="flex-1">
           <div className="p-6 space-y-6">
-            {!image ? (
-              /* ... same upload UI ... */
-              <div className="flex flex-col items-center gap-4 w-full">
-                <div
-                  className="w-full h-48 border-2 border-dashed border-muted-foreground/25 rounded-3xl flex flex-col items-center justify-center gap-3 bg-muted/5 hover:bg-muted/10 transition-all cursor-pointer group"
-                  onClick={() => fileInputRef.current?.click()}
-                >
-                  <div className="w-16 h-16 rounded-full bg-primary/10 flex items-center justify-center text-primary group-hover:scale-110 transition-transform">
-                    <Upload className="w-8 h-8" />
-                  </div>
-                  <div className="text-center">
-                    <p className="font-black text-lg">Upload Prescription</p>
-                    <p className="text-sm text-muted-foreground font-medium">
-                      Drag and drop or click to select
-                    </p>
-                  </div>
-                </div>
-                <input
-                  type="file"
-                  accept="image/*"
-                  className="hidden"
-                  ref={fileInputRef}
-                  onChange={handleFileChange}
-                />
-                <input
-                  type="file"
-                  accept="image/*"
-                  className="hidden"
-                  ref={cameraInputRef}
-                  onChange={handleFileChange}
-                  capture="environment"
-                />
-                <div className="grid grid-cols-2 gap-4 w-full">
-                  <Button
-                    variant="outline"
-                    className="h-14 rounded-2xl gap-3 font-bold border-2 hover:bg-primary/5 hover:border-primary/50 transition-all"
-                    onClick={() => cameraInputRef.current?.click()}
-                  >
-                    <Camera className="w-6 h-6 text-primary" /> Use Camera
-                  </Button>
-                  <Button
-                    variant="outline"
-                    className="h-14 rounded-2xl gap-3 font-bold border-2 hover:bg-primary/5 hover:border-primary/50 transition-all"
+            {!image && !manualText ? (
+              <div className="flex flex-col items-center gap-6 w-full">
+                {/* Image Options */}
+                <div className="w-full space-y-4">
+                  <div
+                    className="w-full h-40 border-2 border-dashed border-muted-foreground/25 rounded-3xl flex flex-col items-center justify-center gap-3 bg-muted/5 hover:bg-muted/10 transition-all cursor-pointer group"
                     onClick={() => fileInputRef.current?.click()}
                   >
-                    <Upload className="w-6 h-6 text-primary" /> Upload Files
+                    <div className="w-12 h-12 rounded-full bg-primary/10 flex items-center justify-center text-primary group-hover:scale-110 transition-transform">
+                      <Upload className="w-6 h-6" />
+                    </div>
+                    <div className="text-center">
+                      <p className="font-black text-base">Upload Prescription</p>
+                      <p className="text-xs text-muted-foreground font-medium">
+                        Drag and drop or click to select
+                      </p>
+                    </div>
+                  </div>
+                  <div className="grid grid-cols-2 gap-4">
+                    <Button
+                      variant="outline"
+                      className="h-12 rounded-2xl gap-3 font-bold border-2"
+                      onClick={() => cameraInputRef.current?.click()}
+                    >
+                      <Camera className="w-5 h-5 text-primary" /> Camera
+                    </Button>
+                    <Button
+                      variant="outline"
+                      className="h-12 rounded-2xl gap-3 font-bold border-2"
+                      onClick={() => fileInputRef.current?.click()}
+                    >
+                      <Upload className="w-5 h-5 text-primary" /> Files
+                    </Button>
+                  </div>
+                </div>
+
+                <div className="relative w-full py-2">
+                  <div className="absolute inset-0 flex items-center">
+                    <span className="w-full border-t" />
+                  </div>
+                  <div className="relative flex justify-center text-xs uppercase">
+                    <span className="bg-background px-2 text-muted-foreground font-bold">
+                      OR TYPE YOUR LIST
+                    </span>
+                  </div>
+                </div>
+
+                {/* Manual Text Option */}
+                <div className="w-full space-y-4">
+                  <div className="p-4 bg-primary/5 rounded-2xl border-2 border-primary/20">
+                    <div className="flex items-center gap-3 mb-3">
+                      <FileText className="w-5 h-5 text-primary" />
+                      <p className="font-bold text-sm">Write your prescription</p>
+                    </div>
+                    <Textarea 
+                      placeholder="e.g. Paracetamol 500mg, 2 packs of Vitamin C, Insulin glargine 300 units/mL..."
+                      className="min-h-[120px] rounded-xl border-none bg-transparent focus-visible:ring-0 p-0 text-sm"
+                      value={manualText}
+                      onChange={(e) => setManualText(e.target.value)}
+                    />
+                  </div>
+                  <Button 
+                    className="w-full h-12 rounded-2xl font-black gap-2"
+                    disabled={!manualText.trim()}
+                    onClick={processInput}
+                  >
+                    Process Text List
                   </Button>
                 </div>
               </div>
             ) : results.length === 0 ? (
               <div className="space-y-6">
-                <div className="relative w-full aspect-video rounded-3xl overflow-hidden border-4 border-white shadow-xl bg-muted ring-1 ring-black/5">
-                  <img
-                    src={image}
-                    alt="Prescription"
-                    className="w-full h-full object-contain"
-                  />
-                  {loading && (
-                    <div className="absolute inset-0 bg-black/40 backdrop-blur-sm flex items-center justify-center flex-col gap-4 text-white">
-                      <Loader2 className="w-10 h-10 animate-spin" />
-                      <p className="font-black tracking-widest uppercase text-xs">
-                        {status}
-                      </p>
+                {image ? (
+                  <div className="relative w-full aspect-video rounded-3xl overflow-hidden border-4 border-white shadow-xl bg-muted ring-1 ring-black/5">
+                    <img
+                      src={image}
+                      alt="Prescription"
+                      className="w-full h-full object-contain"
+                    />
+                    {loading && (
+                      <div className="absolute inset-0 bg-black/40 backdrop-blur-sm flex items-center justify-center flex-col gap-4 text-white">
+                        <Loader2 className="w-10 h-10 animate-spin" />
+                        <p className="font-black tracking-widest uppercase text-xs">
+                          {status}
+                        </p>
+                      </div>
+                    )}
+                    {!loading && (
+                      <Button
+                        size="icon"
+                        variant="destructive"
+                        className="absolute top-4 right-4 rounded-full h-10 w-10 shadow-lg"
+                        onClick={() => setImage(null)}
+                      >
+                        <X className="w-5 h-5" />
+                      </Button>
+                    )}
+                  </div>
+                ) : (
+                  <div className="p-6 bg-primary/5 rounded-3xl border-2 border-primary/10 space-y-4">
+                    <div className="flex items-center gap-3">
+                      <div className="w-10 h-10 rounded-full bg-primary/20 flex items-center justify-center">
+                        <FileText className="w-5 h-5 text-primary" />
+                      </div>
+                      <h4 className="font-black">Your Request</h4>
                     </div>
-                  )}
-                  {!loading && (
-                    <Button
-                      size="icon"
-                      variant="destructive"
-                      className="absolute top-4 right-4 rounded-full h-10 w-10 shadow-lg"
-                      onClick={() => setImage(null)}
-                    >
-                      <X className="w-5 h-5" />
-                    </Button>
-                  )}
-                </div>
+                    <p className="text-sm italic text-muted-foreground whitespace-pre-wrap">
+                      "{manualText}"
+                    </p>
+                    {loading && (
+                       <div className="flex items-center gap-2 text-primary">
+                         <Loader2 className="w-4 h-4 animate-spin" />
+                         <span className="text-xs font-bold uppercase">{status}</span>
+                       </div>
+                    )}
+                  </div>
+                )}
+                
                 {!loading && !status.includes("Error") && (
                   <Button
                     className="w-full h-16 rounded-2xl text-xl font-black shadow-xl shadow-primary/20 hover:scale-[1.02] active:scale-[0.98] transition-all"
-                    onClick={processImage}
+                    onClick={processInput}
                   >
                     Identify Products
                   </Button>

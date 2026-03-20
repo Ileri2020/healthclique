@@ -87,64 +87,51 @@ export function Footer({ className }: { className?: string }) {
       <div
         className={`container mx-auto max-w-7xl px-4 py-12 sm:px-6 lg:px-8 `}
       >
-        <div
-          className={`grid grid-cols-1 gap-8 md:grid-cols-2 lg:grid-cols-5`}
-        >
-          <div className="space-y-4">
-            <Link className="flex items-center gap-2" href="/">
-              <span
-                className={`
-                  bg-gradient-to-r from-primary to-primary/70 bg-clip-text
-                  text-xl font-bold tracking-tight text-transparent
-                `}
+        <div className="space-y-4 mb-10">
+          <Link className="flex items-center gap-2" href="/">
+            <span
+              className={`
+                bg-gradient-to-r from-primary to-primary/70 bg-clip-text
+                text-xl font-bold tracking-tight text-transparent
+              `}
+            >
+              {SEO_CONFIG.name}
+            </span>
+          </Link>
+          <p className="text-sm text-muted-foreground max-w-sm">
+            {SEO_CONFIG.description}
+          </p>
+
+          <div className="flex space-x-4">
+            {socialMediaLinks.map((social, index) => (
+              <Button
+                className="h-8 w-8 rounded-full"
+                size="icon"
+                variant="ghost"
+                key={index}
               >
-                {SEO_CONFIG.name}
-              </span>
-            </Link>
-            <p className="text-sm text-muted-foreground">
-              {SEO_CONFIG.description}
-            </p>
-
-
-
-            {/* socials */}
-            <div className="flex space-x-4">
-              {
-                socialMediaLinks.map((social, index)=>(
-                  <Button
-                    className="h-8 w-8 rounded-full"
-                    size="icon"
-                    variant="ghost"
-                    key={index}
-                  >
-                    {social.icon}
-                    <span className="sr-only">{social.label}</span>
-                  </Button>
-                ))
-              }
-            </div>
+                {social.icon}
+                <span className="sr-only">{social.label}</span>
+              </Button>
+            ))}
           </div>
+        </div>
 
-          {/* Collumns */}
-          {columns.map((column, index)=>(
+        <div className={`grid grid-cols-2 gap-8 md:grid-cols-4`}>
+          {columns.map((column, index) => (
             <div key={index}>
               <h3 className="mb-4 text-sm font-semibold">{column.label}</h3>
               <ul className="space-y-2 text-sm">
-                {
-                  column.links.map((link, index)=>(
-                    <li key={index}>
-                      <Link
-                        className={`
-                          text-muted-foreground
-                          hover:text-foreground
-                        `}
-                        href={link.href}
-                      >
-                        {link.label}
-                      </Link>
-                    </li>
-                  ))
-                }
+                {column.links.map((link, index) => (
+                  <li key={index}>
+                    <Link
+                      className="text-muted-foreground hover:text-foreground transition-colors"
+                      href={link.href}
+                    >
+                      {link.label}
+                    </Link>
+                  </li>
+                ))}
               </ul>
             </div>
           ))}

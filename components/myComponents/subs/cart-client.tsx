@@ -16,8 +16,7 @@ import Link from "next/link";
 import * as React from "react";
 import { useAppContext } from '@/hooks/useAppContext';
 import { PRICE_MARKUPS } from "@/lib/stock-pricing";
-import { Login, Signup } from "./index";
-import EditUser from "./useredit";
+import { AddressEdit, Login, Signup } from "./index";
 import MonnifyPaymentButton from "../../payment/monnify";
 import FlutterWaveButtonHook from "../../payment/flutterwavehook";
 
@@ -393,12 +392,12 @@ export function CartClient({ className, cart }: CartProps) {
                         </option>
                       ))}
                     </select>
-                    <EditUser />
+                    <AddressEdit />
                   </div>
                 ) : (
                   <div className="space-y-2">
-                    <p className="text-sm text-red-500">No addresses found. Please add one in settings.</p>
-                    <EditUser />
+                    <p className="text-sm text-red-500">No addresses found. Please add one to checkout.</p>
+                    <AddressEdit />
                   </div>
                 )}
               </div>

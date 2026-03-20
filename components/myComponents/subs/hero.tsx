@@ -92,7 +92,7 @@ const Hero = () => {
               <SnapPrescription>
                 <Button size="lg" variant="outline" className="h-14 px-8 rounded-xl text-lg gap-2 border-2 border-accent text-accent hover:bg-accent hover:text-white transition-all">
                   <Camera className="w-5 h-5" />
-                  Snap Prescription
+                  Snap or List Prescription
                 </Button>
               </SnapPrescription>
               {user?.email !== "nil" ? (

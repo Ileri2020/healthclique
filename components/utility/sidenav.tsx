@@ -174,7 +174,7 @@ const Sidenav = () => {
                     <SnapPrescription>
                         <Button className="w-full flex items-center gap-3 h-12 rounded-2xl bg-accent hover:bg-accent/90 shadow-lg shadow-accent/20 font-bold">
                             <Camera className="w-5 h-5" />
-                            Snap Prescription
+                            Snap or List Prescription
                         </Button>
                     </SnapPrescription>
                     <SpecialOrderForm>
