@@ -6,15 +6,15 @@ const prisma = new PrismaClient();
 
 export async function PUT(
   req: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
   try {
     const session = await usersession();
+    const { id } = await params;
     if (session?.user?.role !== "admin") {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
 
-    const { id } = params;
     const { text, order, active } = await req.json();
 
     const updated = await prisma.advertext.update({
@@ -31,15 +31,15 @@ export async function PUT(
 
 export async function DELETE(
   req: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
   try {
     const session = await usersession();
+    const { id } = await params;
     if (session?.user?.role !== "admin") {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
 
-    const { id } = params;
     await prisma.advertext.delete({
       where: { id },
     });
