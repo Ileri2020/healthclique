@@ -6,14 +6,18 @@ declare module "next-auth" {
    */
   interface Session {
     user: {
-      /** The user's postal address. */
       id?: string
       role?: string
+      avatarUrl?: string
+      addresses?: any[]
     } & DefaultSession["user"]
   }
 
   interface User {
+    id?: string
     role?: string
+    avatarUrl?: string
+    addresses?: any[]
   }
 }
 
@@ -23,5 +27,7 @@ declare module "next-auth/jwt" {
     /** OpenID ID Token */
     id?: string
     role?: string
+    avatarUrl?: string
+    addresses?: any[]
   }
 }

@@ -15,7 +15,7 @@ import { useAppContext } from "@/hooks/useAppContext";
 import { useCart } from "@/hooks/use-cart";
 import axios from "axios";
 
-export const ManualTransfer = ({ tx_ref, amount, cartId, userId }: { tx_ref: string, amount: number, cartId: string, userId: string }) => {
+export const ManualTransfer = React.forwardRef<HTMLButtonElement, { tx_ref: string, amount: number, cartId: string, userId: string }>(({ tx_ref, amount, cartId, userId }, ref) => {
   const [isOpen, setIsOpen] = useState(false);
   const [copiedAccount, setCopiedAccount] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -67,7 +67,7 @@ export const ManualTransfer = ({ tx_ref, amount, cartId, userId }: { tx_ref: str
   return (
     <Dialog open={isOpen} onOpenChange={setIsOpen}>
       <DialogTrigger asChild>
-        <Button variant="outline" className="w-full h-12 rounded-xl font-bold border-2 hover:bg-muted/5 transition-all gap-2 truncate whitespace-nowrap overflow-hidden">
+        <Button ref={ref} variant="outline" className="w-full h-12 rounded-xl font-bold border-2 hover:bg-muted/5 transition-all gap-2 truncate whitespace-nowrap overflow-hidden">
           <Landmark className="w-4 h-4 text-primary" />
           <span className="truncate">Bank Transfer</span>
         </Button>
@@ -130,4 +130,6 @@ export const ManualTransfer = ({ tx_ref, amount, cartId, userId }: { tx_ref: str
       </DialogContent>
     </Dialog>
   );
-};
+});
+
+ManualTransfer.displayName = "ManualTransfer";

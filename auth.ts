@@ -1,4 +1,4 @@
-// @ts-nocheck
+
 import NextAuth, { CredentialsSignin } from "next-auth";
 import Credentials from "next-auth/providers/credentials";
 import Google from "next-auth/providers/google";
@@ -67,15 +67,15 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
   callbacks: {
     async session({ session, token }) {
       if (token?.id) {
-        session.user.id = token.id;
+        session.user.id = token.id as string;
       }
       if (token?.role) {
-        session.user.role = token.role;
+        session.user.role = token.role as string;
       }
       if (token?.avatarUrl) {
-        session.user.avatarUrl = token.avatarUrl;
+        session.user.avatarUrl = token.avatarUrl as string;
       }
-      if (token?.addresses) {
+      if (Array.isArray(token?.addresses)) {
         session.user.addresses = token.addresses;
       }
       return session;
@@ -100,10 +100,11 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
 
       // When signing in with credentials
       if (account?.provider === "credentials" && user) {
-        token.id = user.id;
-        token.role = user.role;
-        token.avatarUrl = user.avatarUrl;
-        token.addresses = user.addresses;
+        const u = user as any;
+        token.id = u.id;
+        token.role = u.role;
+        token.avatarUrl = u.avatarUrl;
+        token.addresses = u.addresses;
       }
 
       return token;

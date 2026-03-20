@@ -1,5 +1,6 @@
 'use client';
 
+import * as React from 'react';
 import { useMonnifyPayment } from 'react-monnify-2';
 import { Button } from '@/components/ui/button';
 import { toast } from 'sonner';
@@ -17,7 +18,7 @@ type MonnifyPaymentButtonProps = {
   onFailure?: (error: any) => void;
 };
 
-export default function MonnifyPaymentButton({
+const MonnifyPaymentButton = React.forwardRef<HTMLButtonElement, MonnifyPaymentButtonProps>(({
   amount,
   currency = 'NGN',
   email,
@@ -27,7 +28,7 @@ export default function MonnifyPaymentButton({
   disabled = false,
   onSuccess,
   onFailure,
-}: MonnifyPaymentButtonProps) {
+}, ref) => {
   const config = {
     amount,
     currency,
@@ -68,8 +69,10 @@ export default function MonnifyPaymentButton({
 
   return (
     <Button
+      ref={ref}
       disabled={disabled}
       onClick={handlePayment}
+      type="button"
       className="w-full h-12 rounded-xl font-bold border-2 hover:scale-[1.02] transition-transform shadow-lg shadow-blue-500/10"
       variant="outline"
     >
@@ -77,6 +80,7 @@ export default function MonnifyPaymentButton({
       Pay with Monnify
     </Button>
   );
-}
+});
 
-
+MonnifyPaymentButton.displayName = "MonnifyPaymentButton";
+export default MonnifyPaymentButton;

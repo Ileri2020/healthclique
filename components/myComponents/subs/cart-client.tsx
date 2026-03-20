@@ -10,8 +10,7 @@ import { useMediaQuery } from "@/hooks/use-media-query";
 import { cn } from "@/lib/utils";
 import axios from "axios";
 import { AnimatePresence, motion } from "framer-motion";
-import { Minus, Plus, ShoppingCart, X } from "lucide-react";
-// import Image from "next/image";
+import { Minus, Plus, ShoppingCart, X, Landmark, CreditCard } from "lucide-react";
 import Link from "next/link";
 import * as React from "react";
 import { useAppContext } from '@/hooks/useAppContext';
@@ -21,9 +20,6 @@ import MonnifyPaymentButton from "../../payment/monnify";
 import FlutterWaveButtonHook from "../../payment/flutterwavehook";
 import { ManualTransfer } from "../../payment/manual";
 
-
-
-
 export interface CartItem {
   category: string;
   id: string;
@@ -31,6 +27,7 @@ export interface CartItem {
   name: string;
   price: number;
   quantity: number;
+  img?: string;
 }
 
 interface Address {
@@ -66,6 +63,11 @@ export function CartClient({ className, cart }: CartProps) {
   );
   const [dbDeliveryFee, setDbDeliveryFee] = React.useState<number>(0);
   const [loadingFee, setLoadingFee] = React.useState(false);
+  const [isCheckingOut, setIsCheckingOut] = React.useState(false);
+  const [pendingAutoMethod, setPendingAutoMethod] = React.useState<'monnify' | 'manual' | null>(null);
+
+  const monnifyRef = React.useRef<HTMLButtonElement>(null);
+  const manualRef = React.useRef<HTMLButtonElement>(null);
 
   const role = user?.role || "customer";
   const markup = PRICE_MARKUPS[role as keyof typeof PRICE_MARKUPS] || 1.3;
@@ -73,6 +75,22 @@ export function CartClient({ className, cart }: CartProps) {
   React.useEffect(() => {
     setIsMounted(true);
   }, []);
+
+  React.useEffect(() => {
+    if (user?.id && user.id !== 'nil' && (!user.addresses || user.addresses.length === 0)) {
+      const fetchAddresses = async () => {
+        try {
+          const res = await axios.get(`/api/dbhandler?model=shippingAddress&userId=${user.id}`);
+          if (Array.isArray(res.data)) {
+            setUser({ ...user, addresses: res.data });
+          }
+        } catch (err) {
+          console.error("Failed to fetch user addresses in cart", err);
+        }
+      };
+      fetchAddresses();
+    }
+  }, [user?.id, user?.addresses, setUser]);
 
   React.useEffect(() => {
     if (!selectedAddressId && user?.addresses?.length) {
@@ -126,39 +144,12 @@ export function CartClient({ className, cart }: CartProps) {
     fetchDeliveryFee();
   }, [selectedAddress]);
 
-  
-  // const totalItems = items.reduce((acc, item) => acc + item.quantity, 0);
-  // const subtotal = cartItems.reduce(
-  //   (acc, item) => acc + item.price * item.quantity,
-  //   0,
-  // );
-
-  // const handleUpdateQuantity = (id: string, newQuantity: number) => {
-  //   if (newQuantity < 1) return;
-  //   setCartItems((prev) =>
-  //     prev.map((item) =>
-  //       item.id === id ? { ...item, quantity: newQuantity } : item,
-  //     ),
-  //   );
-  // };
-
-  // const handleRemoveItem = (id: string) => {
-  //   setCartItems((prev) => prev.filter((item) => item.id !== id));
-  // };
-
-  // const handleClearCart = () => {
-  //   setCartItems([]);
-  // };
-
-
-
-
-
   const deliveryFee = items.length > 0 ? dbDeliveryFee : 0;
   const totalAmount = Number(subtotal || 0) + Number(deliveryFee || 0);
 
   const initiateCheckout = async (forcedAmount?: number) => {
     if (!user?.id || user.id === 'nil' || items.length === 0) return;
+    setIsCheckingOut(true);
 
     try {
       const payload = {
@@ -183,18 +174,43 @@ export function CartClient({ className, cart }: CartProps) {
     } catch (err: any) {
       console.error("Checkout initiation failed:", err);
       alert("Checkout failed, please try again.");
+      setPendingAutoMethod(null);
       return null;
+    } finally {
+      setIsCheckingOut(false);
     }
   };
 
-  const handleCheckout = () => initiateCheckout();
-  const handleAdminTest = () => initiateCheckout(100);
+  const handleCheckout = () => {
+    setPendingAutoMethod(null);
+    initiateCheckout();
+  };
 
+  const handlePaymentMethod = async (method: 'monnify' | 'manual') => {
+    setPendingAutoMethod(method);
+    await initiateCheckout();
+  };
 
+  const handleAdminTest = async () => {
+    setPendingAutoMethod('monnify');
+    await initiateCheckout(100);
+  };
 
-
-
-
+  React.useEffect(() => {
+    if (checkoutData && pendingAutoMethod) {
+      const method = pendingAutoMethod;
+      setPendingAutoMethod(null); // Reset flag
+      
+      const timer = setTimeout(() => {
+        if (method === 'monnify' && monnifyRef.current) {
+          monnifyRef.current.click();
+        } else if (method === 'manual' && manualRef.current) {
+          manualRef.current.click();
+        }
+      }, 500);
+      return () => clearTimeout(timer);
+    }
+  }, [checkoutData, pendingAutoMethod]);
 
   const CartTrigger = (
     <Button
@@ -206,9 +222,7 @@ export function CartClient({ className, cart }: CartProps) {
       <ShoppingCart className="h-4 w-4" />
       {itemCount > 0 && (
         <Badge
-          className={`
-            absolute -top-1 -right-1 h-5 w-5 rounded-full p-0 text-[10px]
-          `}
+          className="absolute -top-1 -right-1 h-5 w-5 rounded-full p-0 text-[10px]"
           variant="default"
         >
           <div className="w-full h-full flex justify-center items-center text-center">
@@ -218,16 +232,6 @@ export function CartClient({ className, cart }: CartProps) {
       )}
     </Button>
   );
-
-
-
-
-
-
-
-
-
-
 
   const CartContent = (
     <div className="flex flex-col h-full">
@@ -295,7 +299,7 @@ export function CartClient({ className, cart }: CartProps) {
                     <img
                       alt={item.name}
                       className="object-cover"
-                      src={item.img ?? item.images?.[0] ?? '/placeholder.jpg'}
+                      src={item.img ?? (item as any).images?.[0] ?? '/placeholder.jpg'}
                     />
                   </div>
                   <div className="ml-4 flex flex-1 flex-col justify-between">
@@ -416,22 +420,43 @@ export function CartClient({ className, cart }: CartProps) {
             {user?.id !== 'nil' && (
               <div className="pt-2">
                 {!checkoutData ? (
-                  <div className="space-y-2">
+                  <div className="space-y-3">
                     <Button
                       className="w-full h-12 rounded-xl text-lg font-black shadow-lg shadow-primary/10"
                       size="lg"
                       onClick={handleCheckout}
-                      disabled={!selectedAddressId || items.length === 0}
+                      disabled={!selectedAddressId || items.length === 0 || isCheckingOut}
                     >
-                      Proceed to Checkout
+                      {isCheckingOut ? "Processing..." : "Checkout & Save"}
                     </Button>
+                    
+                    <div className="grid grid-cols-2 gap-2">
+                      <Button
+                        variant="outline"
+                        className="h-12 rounded-xl font-black border-2 border-primary/20 hover:bg-primary/5 transition-all text-sm"
+                        onClick={() => handlePaymentMethod('monnify')}
+                        disabled={!selectedAddressId || isCheckingOut || items.length === 0}
+                      >
+                        Pay Online
+                      </Button>
+                      <Button
+                        variant="outline"
+                        className="h-12 rounded-xl font-black border-2 border-primary/20 hover:bg-primary/5 transition-all text-sm"
+                        onClick={() => handlePaymentMethod('manual')}
+                        disabled={!selectedAddressId || isCheckingOut || items.length === 0}
+                      >
+                        Bank Transfer
+                      </Button>
+                    </div>
+
                     {user?.role === "admin" && (
                       <Button
                         variant="outline"
                         className="w-full h-10 rounded-xl font-bold border-dashed border-2 border-amber-500 text-amber-600 hover:bg-amber-50"
                         onClick={handleAdminTest}
+                        disabled={!selectedAddressId || isCheckingOut || items.length === 0}
                       >
-                        🧪 Admin Test (NGN100)
+                        🧪 Admin Test (₦100)
                       </Button>
                     )}
                   </div>
@@ -457,6 +482,7 @@ export function CartClient({ className, cart }: CartProps) {
                         }}
                       />
                       <MonnifyPaymentButton
+                        ref={monnifyRef}
                         reference={checkoutData.tx_ref}
                         amount={totalAmount}
                         currency="NGN"
@@ -473,6 +499,7 @@ export function CartClient({ className, cart }: CartProps) {
                       />
                     </div>
                     <ManualTransfer
+                      ref={manualRef}
                       amount={totalAmount}
                       tx_ref={checkoutData.tx_ref}
                       cartId={checkoutData.cartId}
@@ -519,15 +546,6 @@ export function CartClient({ className, cart }: CartProps) {
     </div>
   );
 
-
-
-
-
-
-
-
-
-
   if (!isMounted) {
     return (
       <div className={cn("relative", className)}>
@@ -540,9 +558,7 @@ export function CartClient({ className, cart }: CartProps) {
           <ShoppingCart className="h-4 w-4" />
           {itemCount > 0 && (
             <Badge
-              className={`
-                absolute -top-1 -right-1 h-5 w-5 rounded-full p-0 text-[10px]
-              `}
+              className="absolute -top-1 -right-1 h-5 w-5 rounded-full p-0 text-[10px]"
               variant="default"
             >
               {itemCount}
@@ -552,17 +568,6 @@ export function CartClient({ className, cart }: CartProps) {
       </div>
     );
   }
-
-
-
-
-
-
-
-
-
-
-
 
   return (
     <div className={cn("relative", className)}>
