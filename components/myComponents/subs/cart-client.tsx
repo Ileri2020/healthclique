@@ -56,7 +56,7 @@ export function CartClient({ className, cart }: CartProps) {
   const isDesktop = useMediaQuery("(min-width: 768px)");
 
   const { items, removeItem, clearCart, subtotal, updateQuantity, itemCount } = useCart();
-  const { user, checkoutData, setCheckoutData } = useAppContext();
+  const { user, setUser, checkoutData, setCheckoutData } = useAppContext();
   
   const [selectedAddressId, setSelectedAddressId] = React.useState<string | null>(
     user?.addresses?.[0]?.id ?? null
