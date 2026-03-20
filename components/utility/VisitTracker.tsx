@@ -16,6 +16,13 @@ export function VisitTracker() {
   useEffect(() => {
     if (!pathname) return;
 
+    // Get or create browser ID
+    let browserId = localStorage.getItem("health-clique-browser-id");
+    if (!browserId) {
+      browserId = crypto.randomUUID();
+      localStorage.setItem("health-clique-browser-id", browserId);
+    }
+
     // Debounce: only send once per path per browser tab session
     const key = `visit:${pathname}`;
     if (sentRef.current.has(key)) return;
@@ -26,13 +33,14 @@ export function VisitTracker() {
       fetch("/api/visit", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ path: pathname }),
+        body: JSON.stringify({ path: pathname, browserId }),
         // keepalive so it completes even if the user navigates away
         keepalive: true,
       }).catch(() => {}); // swallow errors silently
     } catch {
       // noop
     }
+
   }, [pathname]);
 
   return null; // renders nothing

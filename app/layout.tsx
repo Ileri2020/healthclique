@@ -12,6 +12,8 @@ import { VisitTracker } from "@/components/utility/VisitTracker";
 import { SessionProvider } from "next-auth/react"
 import { usersession } from "@/session";
 import { Session } from "next-auth";
+import { LoginPopup } from "@/components/myComponents/subs/LoginPopup";
+
 // import {Roboto} from "next/font/google"
 
 // const roboto = Roboto({
@@ -75,8 +77,10 @@ export default async function RootLayout({
                   >
                     <Navbar />
                     <VisitTracker />
+                    <LoginPopup />
                     <NotificationUI />
                     {children}
+
                     <Footer />
                   </ThemeProvider>
               </CartProvider>

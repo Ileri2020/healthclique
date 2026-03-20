@@ -9,6 +9,7 @@ type FlutterwaveButtonHookProps = {
   email: string;
   phone_number: string;
   name: string;
+  tx_ref: string;
   disabled?: boolean;
   onSuccess: (response: any) => void;
   onFailure?: (response: any) => void;
@@ -20,13 +21,14 @@ export default function FlutterWaveButtonHook({
   email,
   phone_number,
   name,
+  tx_ref,
   disabled = false,
   onSuccess,
   onFailure,
 }: FlutterwaveButtonHookProps) {
   const config = {
     public_key: process.env.NEXT_PUBLIC_FLUTTERWAVE_PUBLIC_KEY as string,
-    tx_ref: Date.now().toString(),
+    tx_ref,
     amount,
     currency,
     payment_options: 'card,mobilemoney,ussd',

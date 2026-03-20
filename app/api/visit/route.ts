@@ -8,15 +8,32 @@ export async function POST(req: NextRequest) {
   try {
     const body = await req.json().catch(() => ({}));
     const path = body.path || "/";
+    const browserId = body.browserId || "unknown";
     const userAgent = req.headers.get("user-agent") || "";
     const ip =
       req.headers.get("x-forwarded-for")?.split(",")[0]?.trim() ||
       req.headers.get("x-real-ip") ||
       "unknown";
 
-    await prisma.visit.create({
-      data: { path, userAgent, ip },
+    // Only record once per browserId per path per day
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+
+    const existing = await prisma.visit.findFirst({
+      where: {
+        path,
+        browserId,
+        createdAt: {
+          gte: today,
+        },
+      },
     });
+
+    if (!existing) {
+      await prisma.visit.create({
+        data: { path, userAgent, ip, browserId },
+      });
+    }
 
     return NextResponse.json({ ok: true });
   } catch (err) {
@@ -25,6 +42,7 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ ok: true });
   }
 }
+
 
 // GET /api/visit - Returns daily visit counts for the analytics dashboard
 export async function GET(req: NextRequest) {

@@ -666,6 +666,7 @@ export function CartDetails({ cartId, onPaymentSuccess }: CartDetailsProps) {
                                      </Button>
 
                                      <MonnifyPaymentButton
+                                         reference={cart?.id ? `HC_${cart.id}` : `HC_${Date.now()}`}
                                          amount={totalAmount}
                                          currency="NGN"
                                          email={user?.email || ''}

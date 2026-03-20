@@ -35,6 +35,8 @@ interface AppContextProps {
   setUseMock: (useMock: boolean) => void;
   comments : any ;
   setComments : (comments : any) => void;
+  checkoutData: any;
+  setCheckoutData: (data: any) => void;
 }
 
 export const AppContext = createContext<AppContextProps | null>(null);
@@ -58,6 +60,7 @@ export const AppContextProvider: React.FC<any> = ({ children }) => {
   const [isModal, setIsModal] = useState(false);
   const [useMock, setUseMock] = useState(true);
   const [comments, setComments] = useState([])
+  const [checkoutData, setCheckoutData] = useState<any>(null);
 
   const appContextValues: AppContextProps = {
     // isDark,
@@ -78,6 +81,8 @@ export const AppContextProvider: React.FC<any> = ({ children }) => {
     setIsModal,
     useMock,
     setUseMock,
+    checkoutData,
+    setCheckoutData,
   };
 
   return (

@@ -1,6 +1,6 @@
 ================================================================================
 LOIS SPICE PROJECT - SOURCE CODE CONSOLIDATION
-Generated: 2026-03-10 11:56:58
+Generated: 2026-03-20 19:31:06
 ================================================================================
 
 
@@ -9090,6 +9090,7 @@ import { cn } from "@/lib/utils";
 import axios from "axios";
 import { Loader2, RefreshCcw, ShoppingCart, Plus, Search, ArrowLeftRight, Shield } from "lucide-react";
 import React, { useEffect, useState } from "react";
+import MonnifyPaymentButton from "@/components/payment/monnify";
 // Check if Flutterwave hook exists
 // import FlutterWaveButtonHook from "../../payment/flutterwavehook"; 
 import { useAppContext } from "@/hooks/useAppContext";
@@ -9738,9 +9739,44 @@ export function CartDetails({ cartId, onPaymentSuccess }: CartDetailsProps) {
                                      <Shield className="mr-2 h-4 w-4" />
                                      Pay with Health Wallet
                                  </Button>
-                                 <Button className="w-full h-12 rounded-xl font-bold border-2" variant="outline" onClick={markAsPaid}>
-                                     Pay via Flutterwave/Card
-                                 </Button>
+
+                                 <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
+                                     <Button className="w-full h-12 rounded-xl font-bold border-2" variant="outline" onClick={markAsPaid}>
+                                         Pay via Flutterwave/Card
+                                     </Button>
+
+                                     <MonnifyPaymentButton
+                                         amount={totalAmount}
+                                         currency="NGN"
+                                         email={user?.email || ''}
+                                         phoneNumber={user?.phone || ''}
+                                         name={user?.name || `${user?.firstName || ''} ${user?.lastName || ''}`.trim() || 'Guest'}
+                                         onSuccess={async (response) => {
+                                             toast.success('Monnify payment completed. Updating order status...');
+                                             if (!cart) return;
+                                             try {
+                                                 await axios.put(`/api/dbhandler?model=cart&id=${cart.id}`, {
+                                                     status: 'paid',
+                                                     total: totalAmount,
+                                                     deliveryFee,
+                                                     payment: {
+                                                         method: 'monnify',
+                                                         amount: totalAmount,
+                                                         tx_ref: response?.reference || response?.transactionReference || '',
+                                                     },
+                                                 });
+                                                 setCart({ ...cart, status: 'paid' });
+                                                 onPaymentSuccess?.();
+                                             } catch (error) {
+                                                 console.error('Failed to mark cart paid after Monnify success', error);
+                                                 toast.error('Could not finalize order status after Monnify payment');
+                                             }
+                                         }}
+                                         onFailure={(error) => {
+                                             console.error('Monnify error', error);
+                                         }}
+                                     />
+                                 </div>
                              </div>
                         )}
                         {!isLocked && user && !selectedAddressId && (
@@ -19934,10 +19970,8 @@ export function TooltipDemo() {
 LOCATION: components\payment\flutterwavecomponent.tsx
 ================================================================================
 
-// ts-nocheck
 'use client'
 import { FlutterWaveButton, closePaymentModal } from 'flutterwave-react-v3';
-import async from './flutterwavehook';
 
 type FlutterwavePaymentProps = {
   amount: number;
@@ -20065,6 +20099,93 @@ export default function FlutterWaveButtonHook({
     </Button>
   );
 }
+
+
+
+================================================================================
+LOCATION: components\payment\monnify.tsx
+================================================================================
+
+'use client';
+
+import { useMonnifyPayment } from 'react-monnify-2';
+import { Button } from '@/components/ui/button';
+import { toast } from 'sonner';
+import { CreditCard } from 'lucide-react';
+
+type MonnifyPaymentButtonProps = {
+  amount: number;
+  currency?: string;
+  email: string;
+  phoneNumber?: string;
+  name: string;
+  disabled?: boolean;
+  onSuccess?: (response: any) => void;
+  onFailure?: (error: any) => void;
+};
+
+export default function MonnifyPaymentButton({
+  amount,
+  currency = 'NGN',
+  email,
+  phoneNumber = '',
+  name,
+  disabled = false,
+  onSuccess,
+  onFailure,
+}: MonnifyPaymentButtonProps) {
+  const config = {
+    amount,
+    currency,
+    reference: `healthclique_${Date.now()}`,
+    customerFullName: name,
+    customerEmail: email,
+    customerMobileNumber: phoneNumber,
+    apiKey: process.env.NEXT_PUBLIC_MONNIFY_API_KEY as string,
+    contractCode: process.env.NEXT_PUBLIC_MONNIFY_CONTRACT_CODE as string,
+    isTestMode: process.env.NEXT_PUBLIC_MONNIFY_IS_TEST_MODE === 'true',
+    paymentDescription: 'Health Clique cart payment',
+  };
+
+  const initializePayment = useMonnifyPayment(config);
+
+  const handlePayment = () => {
+    if (disabled) return;
+
+    if (!process.env.NEXT_PUBLIC_MONNIFY_API_KEY || !process.env.NEXT_PUBLIC_MONNIFY_CONTRACT_CODE) {
+      toast.error('Monnify config missing. Check your env variables.');
+      onFailure?.({ error: 'Missing Monnify keys' });
+      return;
+    }
+
+    initializePayment(
+      (response: any) => {
+        toast.success('Monnify payment successful!');
+        onSuccess?.(response);
+      },
+      (closeData: any) => {
+        if (closeData && closeData.status === 'cancelled') {
+          toast.error('Monnify payment cancelled');
+        }
+        onFailure?.(closeData);
+      }
+    );
+  };
+
+  return (
+    <Button
+      disabled={disabled}
+      onClick={handlePayment}
+      className="w-full h-12 rounded-xl font-bold border-2 hover:scale-[1.02] transition-transform shadow-lg shadow-blue-500/10"
+      variant="outline"
+    >
+      <CreditCard className="mr-2 h-4 w-4 text-blue-600" />
+      Pay with Monnify
+    </Button>
+  );
+}
+
+
 
 
 
@@ -31644,7 +31765,7 @@ import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
 
 export default function UserForm() {
-  const [users, setUsers] = useState([]);
+  const [users, setUsers] = useState<any[]>([]);
   const [formData, setFormData] = useState({
     email: '',
     password: '',
@@ -33268,7 +33389,11 @@ const register = async ( formData : FormData) => {
             role: role,
         })
     }
-    postUser()
+    try {
+        await postUser();
+    } catch (error) {
+        console.error("Registration failed:", error);
+    }
 
 };
 
@@ -33413,12 +33538,12 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
             return session
         },
 
-        async signIn({user, account}) {
+        async signIn({ user, account }) {
 
-            if (account.provider === "google"){
+            if (account?.provider === "google") {
 
                 try {
-                    const { email, name, image, id } = user
+                    const { email, image, id } = user
                     // await connect()
                     // let alreadyUser
 
@@ -33434,19 +33559,19 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
                     const response = await fetch(`/api/data/finduser?email=${email}`, {
                         method: 'GET',
                         headers: {
-                          'Content-Type': 'application/json',
+                            'Content-Type': 'application/json',
                         },
                         // query: { email: email },
                     });
-            
+
                     if (response.ok) {
-                    user = await response.json();
-                    // return userData;
+                        alreadyUser = await response.json();
+                        // return userData;
                     } else {
-                        throw new Error('Failed to fetch user data')
+                        console.error('Failed to fetch user data')
                     }
 
-                    if(!alreadyUser) {
+                    if (!alreadyUser) {
                         // try {
                         //     User.create({
                         //         // firstName: firstName,
@@ -33462,13 +33587,16 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
                         //     console.log("unable to get user from database")
                         // }  
                         console.log("i need to create user account for you using api route")
+                        return true
                     } else {
                         return true
                     }
-                }catch (error) {
+                } catch (error) {
                     console.log("error while creating user from google credentials")
+                    return false
                 }
             }
+            return true
         }
 
 
@@ -33673,7 +33801,7 @@ const connect =async () => {
         return;
       }
 
-    await mongoose.connect(process.env.MONGODB_URL,
+    await mongoose.connect(process.env.MONGODB_URL as string,
       // {
       //   dbName:"succo",
       //   bufferCommands: true,
@@ -36987,7 +37115,15 @@ LOCATION: server\db\mongodb\models\notifications.ts
 import mongoose from "mongoose";
 
 
-const notificationSchema = new mongoose.Schema({
+export interface INotification {
+    from?: mongoose.Types.ObjectId;
+    to?: mongoose.Types.ObjectId;
+    category: 'suggestion' | 'complaint' | 'advertise' | 'comment' | 'reply' | 'general' | 'appreciate';
+    message?: string;
+    read: boolean;
+}
+
+const notificationSchema = new mongoose.Schema<INotification>({
     from: { type: mongoose.Schema.Types.ObjectId, ref: 'Users' },
     to: { type: mongoose.Schema.Types.ObjectId, ref: 'Users' },
     category: { type:String, enum: ['suggestion', 'complaint', 'advertise', 'comment', "reply", "general", "appreciate"], required: true },
@@ -36995,19 +37131,7 @@ const notificationSchema = new mongoose.Schema({
     read: { type: Boolean, default: false },
 }, {timestamps: true});
 
-
-
-let Notification
-
-  try {
-      // users = mongoose.model('User')  //always make sure that the name of the model is correct and this only works only if the model is already in the database, else redefinine the model and schema
-      console.log ("about to get or create model")
-      Notification = mongoose.models.Notifications as unknown as null || mongoose.model("Notifications", notificationSchema)
-      console.log ("notification model now active")
-  } catch (error) {
-      // users = mongoose.model('users', userSchema)
-      console.log("error in getting model")
-  }
+const Notification: mongoose.Model<INotification> = mongoose.models.Notifications || mongoose.model<INotification>("Notifications", notificationSchema);
 
 export default Notification;
 
@@ -37141,7 +37265,22 @@ LOCATION: server\db\mongodb\models\sales.ts
 
 import mongoose from "mongoose";
 // schema need review especially for product list
-const SalesSchema = new mongoose.Schema({
+export interface ISale {
+    products: Array<{
+        id: mongoose.Types.ObjectId;
+        quantity: number;
+    }>;
+    coupon?: mongoose.Types.ObjectId;
+    discount?: number;
+    totalCost?: number;
+    totalSale: number;
+    totalQty?: number;
+    status?: 'pending' | 'shipped' | 'delivered' | 'cancelled';
+    paymentMethod?: string;
+    paymentStatus?: 'paid' | 'unpaid';
+}
+
+const SalesSchema = new mongoose.Schema<ISale>({
     products: [
         {
           id: { type: mongoose.Schema.Types.ObjectId, ref: 'Stock' },
@@ -37151,28 +37290,15 @@ const SalesSchema = new mongoose.Schema({
     ],
     coupon: { type: mongoose.Schema.Types.ObjectId, ref: 'Coupon' },
     discount: {type: Number },
-    totalCost: {type: Number },//, required: true
+    totalCost: {type: Number },
     totalSale: {type: Number, required: true },
     totalQty: {type: Number},
     status: { type: String, enum: ['pending', 'shipped', 'delivered', 'cancelled'] },
     paymentMethod: { type: String},
     paymentStatus: { type: String, enum: ['paid', 'unpaid'] },
-    //time : { type : Date, default: Date.now },
 }, {timestamps: true});
 
-// const Sale = mongoose.model("Sales", SalesSchema);
-let Sale
-
-  try {
-      // users = mongoose.model('User')  //always make sure that the name of the model is correct and this only works only if the model is already in the database, else redefinine the model and schema
-      console.log ("about to get or create sale")
-      Sale = mongoose.models.Sales as unknown as null || mongoose.model('Sales', SalesSchema)
-      console.log ("sale model now active")
-  } catch (error) {
-      // users = mongoose.model('users', userSchema)
-      console.log("error in getting sale model")
-  }
-
+const Sale: mongoose.Model<ISale> = mongoose.models.Sales || mongoose.model<ISale>('Sales', SalesSchema);
 
 export default Sale;
 
@@ -37187,7 +37313,17 @@ LOCATION: server\db\mongodb\models\stocks.ts
 
 import mongoose from "mongoose";
 
-const StocksSchema = new mongoose.Schema({
+export interface IStock {
+    name: string;
+    description: string;
+    img: string;
+    category: 'food' | 'drink' | 'snacks' | 'suplement';
+    cost: number;
+    price: number;
+    qty?: number;
+}
+
+const StocksSchema = new mongoose.Schema<IStock>({
     name: { type: String, required: true },
     description: { type: String, required: true },
     img: { type: String, required: true },
@@ -37197,18 +37333,7 @@ const StocksSchema = new mongoose.Schema({
     qty: {type: Number},
 }, {timestamps: true});
 
-
-let Stock
-
-  try {
-      // users = mongoose.model('User')  //always make sure that the name of the model is correct and this only works only if the model is already in the database, else redefinine the model and schema
-      console.log ("about to get or create stock")
-      Stock = mongoose.models.Stocks as unknown as null || mongoose.model('Stocks', StocksSchema)
-      console.log ("stock model now active")
-  } catch (error) {
-      // users = mongoose.model('users', userSchema)
-      console.log("error in getting stock model")
-  }
+const Stock: mongoose.Model<IStock> = mongoose.models.Stocks || mongoose.model<IStock>('Stocks', StocksSchema);
 
 export default Stock;
 
@@ -37292,7 +37417,17 @@ LOCATION: server\db\mongodb\models\users.ts
 import mongoose from "mongoose";
 
 
-export const userSchema = new mongoose.Schema({
+export interface IUser {
+    userName: string;
+    email: string;
+    password?: string;
+    role?: 'admin' | 'user' | 'staff';
+    address?: mongoose.Types.ObjectId;
+    image?: string;
+    authProviderId?: string;
+}
+
+export const userSchema = new mongoose.Schema<IUser>({
     userName: { type: String, unique: true, required: true },
     email: { type: String, unique: true, required: true },
     password: { type: String},
@@ -37302,19 +37437,7 @@ export const userSchema = new mongoose.Schema({
     authProviderId: { type: String},
   }, {timestamps: true});
 
-  let User
-
-  try {
-      // users = mongoose.model('User')  //always make sure that the name of the model is correct and this only works only if the model is already in the database, else redefinine the model and schema
-      console.log ("about to get or create model")
-      User = mongoose.models.User as unknown as null || mongoose.model('Users', userSchema)
-      console.log ("user model now active")
-  } catch (error) {
-      // users = mongoose.model('users', userSchema)
-      console.log("error in getting model")
-  }
-
-
+const User: mongoose.Model<IUser> = mongoose.models.Users || mongoose.model<IUser>('Users', userSchema);
 
 export default User;
 
@@ -38110,5 +38233,5 @@ export const normalizeDateTime = (dateTime?: string): string => {
 
 
 ================================================================================
-TOTAL FILES CONSOLIDATED: 332
+TOTAL FILES CONSOLIDATED: 333
 ================================================================================

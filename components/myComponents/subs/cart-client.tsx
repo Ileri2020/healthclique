@@ -16,6 +16,9 @@ import Link from "next/link";
 import * as React from "react";
 import { useAppContext } from '@/hooks/useAppContext';
 import { PRICE_MARKUPS } from "@/lib/stock-pricing";
+import { Login, Signup } from "./index";
+import MonnifyPaymentButton from "../../payment/monnify";
+import FlutterWaveButtonHook from "../../payment/flutterwavehook";
 
 
 
@@ -29,20 +32,40 @@ export interface CartItem {
   quantity: number;
 }
 
+interface Address {
+  id: string;
+  address?: string | null;
+  city?: string | null;
+  state?: string | null;
+  country?: string | null;
+  zip?: string | null;
+  phone?: string | null;
+}
+
 interface CartProps {
   className?: string;
-  cart: any;//CartItem[];
+  cart: any;
 }
+
+const normalizeState = (state?: string | null): string | null => {
+  if (!state) return null;
+  return state.replace(/state/i, "").replace(/[-\s]/g, "_").trim();
+};
 
 export function CartClient({ className, cart }: CartProps) { 
   const [isOpen, setIsOpen] = React.useState(false);
-  // const [cartItems, setCartItems] = React.useState<any[]>(cart);//React.useState<CartItem[]>(mockCart);
   const [isMounted, setIsMounted] = React.useState(false);
   const isDesktop = useMediaQuery("(min-width: 768px)");
 
-  const { items, addItem, removeItem, clearCart, subtotal, updateQuantity, itemCount } = useCart();
-  const {user } = useAppContext();
+  const { items, removeItem, clearCart, subtotal, updateQuantity, itemCount } = useCart();
+  const { user, checkoutData, setCheckoutData } = useAppContext();
   
+  const [selectedAddressId, setSelectedAddressId] = React.useState<string | null>(
+    user?.addresses?.[0]?.id ?? null
+  );
+  const [dbDeliveryFee, setDbDeliveryFee] = React.useState<number>(0);
+  const [loadingFee, setLoadingFee] = React.useState(false);
+
   const role = user?.role || "customer";
   const markup = PRICE_MARKUPS[role as keyof typeof PRICE_MARKUPS] || 1.3;
 
@@ -50,15 +73,57 @@ export function CartClient({ className, cart }: CartProps) {
     setIsMounted(true);
   }, []);
 
+  React.useEffect(() => {
+    if (!selectedAddressId && user?.addresses?.length) {
+      setSelectedAddressId(user.addresses[0].id);
+    }
+  }, [user?.addresses, selectedAddressId]);
 
+  const selectedAddress: Address | undefined = user?.addresses?.find(
+    (a: Address) => a.id === selectedAddressId
+  );
 
+  React.useEffect(() => {
+    const fetchDeliveryFee = async () => {
+      if (!selectedAddress) {
+        setDbDeliveryFee(0);
+        return;
+      }
 
+      setLoadingFee(true);
+      try {
+        const res = await axios.get('/api/dbhandler?model=deliveryFee');
+        const fees: any[] = res.data;
 
+        if (!Array.isArray(fees)) return;
 
+        const { country, state, city } = selectedAddress;
+        const normalizedState = normalizeState(state);
 
+        const match = fees.find(f =>
+          f.country === (country || 'Nigeria') &&
+          f.state === normalizedState &&
+          f.city === city
+        ) || fees.find(f =>
+          f.country === (country || 'Nigeria') &&
+          f.state === normalizedState &&
+          !f.city
+        ) || fees.find(f =>
+          f.country === (country || 'Nigeria') &&
+          !f.state
+        );
 
+        setDbDeliveryFee(match ? match.price : 6500); 
+      } catch (err) {
+        console.error("Failed to fetch delivery fee", err);
+        setDbDeliveryFee(6500);
+      } finally {
+        setLoadingFee(false);
+      }
+    };
 
-
+    fetchDeliveryFee();
+  }, [selectedAddress]);
 
   
   // const totalItems = items.reduce((acc, item) => acc + item.quantity, 0);
@@ -88,44 +153,39 @@ export function CartClient({ className, cart }: CartProps) {
 
 
 
-  const handleCheckout = async () => {
-    if (items.length === 0) return;
+  const deliveryFee = items.length > 0 ? dbDeliveryFee : 0;
+  const totalAmount = Number(subtotal || 0) + Number(deliveryFee || 0);
+
+  const prepareCheckout = async () => {
+    if (!user?.id || user.id === 'nil' || items.length === 0) return;
 
     try {
-      // Prepare payload
       const payload = {
-        userId: user.id, // replace with actual logged-in user ID
-        products: items.map((item) => ({
-          productId: item.id,
-          quantity: item.quantity,
-          bulkPriceId: (item as any).bulkPriceId,
-          bulkName: (item as any).bulkName,
-          customName: (item as any).customName,
-          customPrice: (item as any).customPrice,
-          isSpecial: (item as any).isSpecial,
+        userId: user.id,
+        items: items.map((i) => ({
+          productId: i.id,
+          quantity: i.quantity,
+          bulkPriceId: (i as any).bulkPriceId,
+          customName: (i as any).customName,
+          customPrice: (i as any).customPrice,
+          isSpecial: (i as any).isSpecial,
         })),
-        total: subtotal,
-        status: "pending", // or "paid" depending on your logic
+        deliveryFee,
+        deliveryAddressId: selectedAddressId,
+        ...(checkoutData?.cartId ? { cartId: checkoutData.cartId } : {}),
       };
 
-      console.log("Checkout payload:", payload);
-
-      // POST to your API route
-      const res = await axios.post("/api/dbhandler?model=cart", payload);
-
-      if (res.status === 200) {
-        console.log("Checkout successful:", res.data);
-        clearCart(); // empty local cart
-        alert("Checkout successful!");
-        // Optionally redirect to order summary page
-        // window.location.href = `/orders/${res.data.id}`;
-      }
-    } catch (err) {
-      // console.error("Checkout failed:", err);
+      const res = await axios.post("/api/payment", payload);
+      setCheckoutData(res.data);
+      return res.data;
+    } catch (err: any) {
+      console.error("Checkout initiation failed:", err);
       alert("Checkout failed, please try again.");
-      alert("Checkout failed, please try again.");
+      return null;
     }
   };
+
+  const handleCheckout = prepareCheckout;
 
 
 
@@ -313,7 +373,40 @@ export function CartClient({ className, cart }: CartProps) {
         </div>
 
         {items.length > 0 && (
-          <div className="border-t px-6 py-4">
+          <div className="border-t px-6 py-4 space-y-3 w-full flex flex-col bg-background">
+            
+            {/* DELIVERY ADDRESS OR LOGIN */}
+            {user?.id !== 'nil' ? (
+              <div className="space-y-1">
+                <label className="text-sm font-medium">Delivery Address</label>
+                {user.addresses && user.addresses.length > 0 ? (
+                  <select
+                    className="w-full rounded-md border px-3 py-2 text-sm"
+                    value={selectedAddressId ?? ""}
+                    onChange={(e) => setSelectedAddressId(e.target.value)}
+                  >
+                    {user.addresses.map((address: any) => (
+                      <option key={address.id} value={address.id}>
+                        {[address.address, address.city, address.state].filter(Boolean).join(", ")}
+                      </option>
+                    ))}
+                  </select>
+                ) : (
+                  <p className="text-sm text-red-500">No addresses found. Please add one in settings.</p>
+                )}
+              </div>
+            ) : (
+              <div className="w-full flex flex-col justify-center items-center space-y-4 py-2">
+                <p className="font-medium text-red-500 text-center text-sm">
+                  Please log in to proceed with checkout.
+                </p>
+                <div className="flex flex-row gap-5">
+                  <Login />
+                  <Signup />
+                </div>
+              </div>
+            )}
+
             <div className="space-y-3">
               <div className="flex items-center justify-between text-sm">
                 <span className="text-muted-foreground">Subtotal</span>
@@ -321,23 +414,71 @@ export function CartClient({ className, cart }: CartProps) {
               </div>
               <div className="flex items-center justify-between text-sm">
                 <span className="text-muted-foreground">Shipping</span>
-                <span className="font-medium">Calculated at checkout</span>
+                <span className="font-medium">₦{deliveryFee.toFixed(2)}</span>
               </div>
               <Separator />
               <div className="flex items-center justify-between">
                 <span className="text-base font-semibold">Total</span>
                 <span className="text-base font-semibold">
-                ₦{subtotal.toFixed(2)}
+                  ₦{totalAmount.toFixed(2)}
                 </span>
               </div>
-              <Button className="w-full" size="lg" onClick={handleCheckout}>
-                Checkout
-              </Button>
+
+              {/* CHECKOUT / PAYMENT BUTTONS */}
+              {user?.id !== 'nil' && (
+                <div className="space-y-3 pt-2">
+                  {!checkoutData ? (
+                    <Button 
+                      className="w-full" 
+                      size="lg" 
+                      onClick={prepareCheckout}
+                      disabled={!selectedAddressId}
+                    >
+                      Proceed to Checkout
+                    </Button>
+                  ) : (
+                    <div className="grid grid-cols-2 gap-2">
+                      <FlutterWaveButtonHook
+                        tx_ref={checkoutData.tx_ref}
+                        amount={totalAmount}
+                        currency="NGN"
+                        email={user?.email ?? ""}
+                        phone_number={user?.contact ?? ""}
+                        name={user?.name ?? ""}
+                        onSuccess={async (response: any) => {
+                          await axios.post(`/api/payment?action=confirm`, { tx_ref: checkoutData.tx_ref, method: 'flutterwave' });
+                          clearCart();
+                          setCheckoutData(null);
+                          setIsOpen(false);
+                          alert("Payment Successful!");
+                        }}
+                      />
+                      <MonnifyPaymentButton
+                        reference={checkoutData.tx_ref}
+                        amount={totalAmount}
+                        currency="NGN"
+                        email={user?.email ?? ""}
+                        phoneNumber={user?.contact ?? ""}
+                        name={user?.name ?? ""}
+                        onSuccess={async (response: any) => {
+                          await axios.post(`/api/payment?action=confirm`, { tx_ref: checkoutData.tx_ref, method: 'monnify' });
+                          clearCart();
+                          setCheckoutData(null);
+                          setIsOpen(false);
+                          alert("Payment Successful!");
+                        }}
+                      />
+                    </div>
+                  )}
+                </div>
+              )}
+
               <Link href="/cart" onClick={() => setIsOpen(false)}>
                 <Button className="w-full mt-2" variant="secondary" size="lg">
                   View Full Cart
                 </Button>
               </Link>
+              
               <div className="flex items-center justify-between">
                 {isDesktop ? (
                   <SheetClose asChild>
@@ -350,7 +491,10 @@ export function CartClient({ className, cart }: CartProps) {
                 )}
                 <Button
                   className="ml-2"
-                  onClick={clearCart}
+                  onClick={() => {
+                    clearCart();
+                    setCheckoutData(null);
+                  }}
                   variant="outline"
                 >
                   Clear Cart

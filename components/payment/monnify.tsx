@@ -11,6 +11,7 @@ type MonnifyPaymentButtonProps = {
   email: string;
   phoneNumber?: string;
   name: string;
+  reference: string;
   disabled?: boolean;
   onSuccess?: (response: any) => void;
   onFailure?: (error: any) => void;
@@ -22,6 +23,7 @@ export default function MonnifyPaymentButton({
   email,
   phoneNumber = '',
   name,
+  reference,
   disabled = false,
   onSuccess,
   onFailure,
@@ -29,7 +31,7 @@ export default function MonnifyPaymentButton({
   const config = {
     amount,
     currency,
-    reference: `healthclique_${Date.now()}`,
+    reference,
     customerFullName: name,
     customerEmail: email,
     customerMobileNumber: phoneNumber,
