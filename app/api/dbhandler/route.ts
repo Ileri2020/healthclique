@@ -367,7 +367,7 @@ export async function PUT(req: NextRequest) {
     }
   }
 
-  const id = parseId(body.id, model);
+  const id = parseId(body.id || searchParams.get("id"), model);
   if (!id) return NextResponse.json({ error: "Missing ID" }, { status: 400 });
 
   const { id: _, ...updatedData } = body;

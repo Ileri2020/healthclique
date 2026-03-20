@@ -32,6 +32,7 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
 
         const user = await prisma.user.findUnique({
           where: { email },
+          include: { addresses: true },
         });
 
         if (!user) {
@@ -55,6 +56,7 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
           contact: user.contact,
           role: user.role,
           avatarUrl: user.avatarUrl,
+          addresses: user.addresses,
         };
 
         return userData;
@@ -73,6 +75,9 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
       if (token?.avatarUrl) {
         session.user.avatarUrl = token.avatarUrl;
       }
+      if (token?.addresses) {
+        session.user.addresses = token.addresses;
+      }
       return session;
     },
 
@@ -88,6 +93,7 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
             token.id = dbUser.id;
             token.role = dbUser.role ?? "customer";
             token.avatarUrl = dbUser.avatarUrl;
+            token.addresses = await prisma.shippingAddress.findMany({ where: { userId: dbUser.id } });
           }
         }
       }
@@ -97,6 +103,7 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
         token.id = user.id;
         token.role = user.role;
         token.avatarUrl = user.avatarUrl;
+        token.addresses = user.addresses;
       }
 
       return token;
