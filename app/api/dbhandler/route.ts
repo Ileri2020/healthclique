@@ -161,7 +161,14 @@ export async function GET(req: NextRequest) {
         }));
       }
 
-      return NextResponse.json(await prismaModel.findMany({ take: limit }));
+      const userId = searchParams.get("userId");
+      const where: any = {};
+      if (userId) where.userId = userId;
+
+      return NextResponse.json(await prismaModel.findMany({ 
+        where, 
+        take: limit 
+      }));
     } else {
       // Single item fetch
       const include: any = {};
