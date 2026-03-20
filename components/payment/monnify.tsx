@@ -29,7 +29,7 @@ const MonnifyPaymentButton = React.forwardRef<HTMLButtonElement, MonnifyPaymentB
   onSuccess,
   onFailure,
 }, ref) => {
-  const config = {
+  const config = React.useMemo(() => ({
     amount,
     currency,
     reference,
@@ -40,7 +40,7 @@ const MonnifyPaymentButton = React.forwardRef<HTMLButtonElement, MonnifyPaymentB
     contractCode: process.env.NEXT_PUBLIC_MONNIFY_CONTRACT_CODE as string,
     isTestMode: process.env.NEXT_PUBLIC_MONNIFY_IS_TEST_MODE === 'true',
     paymentDescription: 'Health Clique cart payment',
-  };
+  }), [amount, currency, reference, name, email, phoneNumber]);
 
   const initializePayment = useMonnifyPayment(config);
 
