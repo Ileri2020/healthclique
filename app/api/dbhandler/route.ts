@@ -44,6 +44,7 @@ const modelMap: Record<string, any> = {
   brand: prisma.brand,
   // @ts-ignore
   priceFeedback: prisma.priceFeedback,
+  deliveryFee: prisma.deliveryFee,
 };
 
 // =====================
@@ -162,8 +163,12 @@ export async function GET(req: NextRequest) {
       }
 
       const userId = searchParams.get("userId");
+      const code = searchParams.get("code");
+      const state = searchParams.get("state");
       const where: any = {};
       if (userId) where.userId = userId;
+      if (model === "coupon" && code) where.code = code;
+      if (model === "deliveryFee" && state) where.state = state;
 
       return NextResponse.json(await prismaModel.findMany({ 
         where, 

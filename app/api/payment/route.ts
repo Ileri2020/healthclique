@@ -81,7 +81,7 @@ export async function POST(req: NextRequest) {
         if (payment) {
           await prisma.cart.update({
             where: { id: payment.cartId },
-            data: { status: "pending_verification" },
+            data: { status: "unconfirmed" },
           });
           await prisma.payment.update({
             where: { tx_ref: confirm_tx_ref },
@@ -198,6 +198,7 @@ export async function POST(req: NextRequest) {
           total,
           deliveryFee: Number(deliveryFee),
           deliveryAddressId,
+          status: body.status || "pending",
           products: {
             create: items.map((i: any) => ({
               productId: i.productId,
@@ -218,7 +219,7 @@ export async function POST(req: NextRequest) {
           total,
           deliveryFee: Number(deliveryFee),
           deliveryAddressId,
-          status: "pending",
+          status: body.status || "pending",
           products: {
             create: items.map((i: any) => ({
               productId: i.productId,

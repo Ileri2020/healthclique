@@ -151,3 +151,94 @@ export const sendPaymentConfirmationEmail = async (to: string, data: {
         return null;
     }
 };
+
+export const sendAdminCustomEmail = async (to: string, data: {
+    customerName: string;
+    message: string;
+    cartId: string;
+    tx_ref: string;
+    products: any[];
+    total: number;
+}) => {
+    try {
+        console.log('Sending admin custom email to:', to);
+        const productRows = data.products.map((p: any) => `
+            <tr style="border-bottom: 1px solid #f3f4f6;">
+                <td style="padding: 12px 8px; font-size: 14px; color: #374151;">${p.product?.name || p.customName}</td>
+                <td style="padding: 12px 8px; font-size: 14px; text-align: center; color: #6b7280;">${p.quantity}</td>
+                <td style="padding: 12px 8px; font-size: 14px; text-align: right; font-weight: bold; color: #111827;">₦${(p.customPrice || p.product?.price || 0).toLocaleString()}</td>
+            </tr>
+        `).join('');
+
+        const mailOptions = {
+            from: email,
+            to,
+            subject: `Update on your Order #${data.cartId}`,
+            html: `
+                <div style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; background: #f4f7fa; padding: 40px 20px;">
+                    <div style="max-width: 600px; margin: 0 auto; background: #ffffff; border-radius: 16px; overflow: hidden; box-shadow: 0 10px 25px rgba(0,0,0,0.05);">
+                        
+                        <div style="background: #10b981; padding: 32px; text-align: center;">
+                            <h1 style="color: #ffffff; margin: 0; font-size: 24px; font-weight: 800; letter-spacing: -0.025em;">HEALTH CLIQUE</h1>
+                            <p style="color: rgba(255,255,255,0.9); margin-top: 4px; font-size: 14px; font-weight: 500;">Status Update Notification</p>
+                        </div>
+
+                        <div style="padding: 32px;">
+                            <p style="font-size: 18px; font-weight: 700; color: #111827; margin-bottom: 24px;">Hi ${data.customerName},</p>
+                            
+                            <div style="background: #fef2f2; border-radius: 12px; padding: 24px; border-left: 5px solid #ef4444; margin-bottom: 32px;">
+                                <p style="margin: 0; color: #dc2626; font-size: 12px; font-weight: 900; text-transform: uppercase; letter-spacing: 0.05em; padding-bottom: 8px;">Message from Support</p>
+                                <p style="margin: 0; color: #1f2937; font-size: 16px; font-weight: 600; line-height: 1.6;">${data.message}</p>
+                            </div>
+
+                            <div style="background: #f9fafb; border-radius: 8px; padding: 16px; display: grid; grid-template-columns: 1fr 1fr; gap: 16px; margin-bottom: 32px;">
+                                <div style="display: inline-block; width: 48%; margin-right: 2%;">
+                                    <p style="font-size: 11px; text-transform: uppercase; color: #6b7280; font-weight: 800; margin: 0;">Order Ref</p>
+                                    <p style="font-size: 13px; color: #111827; font-weight: 700; margin-top: 2px; font-family: monospace;">${data.tx_ref}</p>
+                                </div>
+                                <div style="display: inline-block; width: 48%;">
+                                    <p style="font-size: 11px; text-transform: uppercase; color: #6b7280; font-weight: 800; margin: 0;">Cart ID</p>
+                                    <p style="font-size: 13px; color: #111827; font-weight: 700; margin-top: 2px;">#${data.cartId}</p>
+                                </div>
+                            </div>
+
+                            <h3 style="font-size: 16px; font-weight: 800; color: #111827; border-bottom: 2px solid #f3f4f6; padding-bottom: 12px; margin-top: 0; margin-bottom: 16px;">Order Summary</h3>
+                            <table style="width: 100%; border-collapse: collapse;">
+                                <thead>
+                                    <tr>
+                                        <th style="text-align: left; padding: 0 8px 8px 8px; font-size: 11px; font-weight: 900; color: #9ca3af; text-transform: uppercase;">Product</th>
+                                        <th style="text-align: center; padding: 0 8px 8px 8px; font-size: 11px; font-weight: 900; color: #9ca3af; text-transform: uppercase;">Qty</th>
+                                        <th style="text-align: right; padding: 0 8px 8px 8px; font-size: 11px; font-weight: 900; color: #9ca3af; text-transform: uppercase;">Price</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    ${productRows}
+                                </tbody>
+                                <tfoot>
+                                    <tr>
+                                        <td colspan="2" style="padding-top: 24px; text-align: right; font-weight: 800; font-size: 14px; color: #4b5563;">Final Total:</td>
+                                        <td style="padding-top: 24px; text-align: right; font-weight: 900; font-size: 20px; color: #10b981;">₦${data.total.toLocaleString()}</td>
+                                    </tr>
+                                </tfoot>
+                            </table>
+
+                            <div style="margin-top: 48px; padding-top: 32px; border-top: 1px solid #f3f4f6; text-align: center;">
+                                <p style="font-size: 12px; color: #9ca3af; margin-bottom: 8px;">
+                                    This is a system-generated message. Please do not reply directly to this email.
+                                </p>
+                                <p style="font-size: 14px; font-weight: 800; color: #10b981;">© 2026 HEALTH CLIQUE PHARMA LTD</p>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            `,
+        };
+
+        const info = await transporter.sendMail(mailOptions);
+        console.log('Admin custom email sent:', info.messageId);
+        return info;
+    } catch (error) {
+        console.error('Error sending admin custom email:', error);
+        return null;
+    }
+};

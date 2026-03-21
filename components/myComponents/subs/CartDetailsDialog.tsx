@@ -11,7 +11,10 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Separator } from "@/components/ui/separator";
 import { formatPrice } from "@/lib/stock-pricing";
-import { Loader2, CheckCircle2, User, Mail, Phone, ShoppingCart, CreditCard } from "lucide-react";
+import { Loader2, CheckCircle2, User, Mail, Phone, ShoppingCart, CreditCard, Send } from "lucide-react";
+import { useState } from "react";
+import { toast } from "sonner";
+import { Textarea } from "@/components/ui/textarea";
 
 export function CartDetailsDialog({
     open,
@@ -26,9 +29,43 @@ export function CartDetailsDialog({
     onConfirmPayment: () => void;
     loading?: boolean;
 }) {
+    const [emailMessage, setEmailMessage] = useState("");
+    const [sendingEmail, setSendingEmail] = useState(false);
+
     if (!cart) return null;
 
     const subtotal = cart.products?.reduce((acc: number, item: any) => acc + ((item.customPrice || item.product?.price || 0) * item.quantity), 0) || 0;
+
+    const handleSendEmail = async () => {
+        if (!emailMessage.trim()) {
+            toast.error("Please enter a message");
+            return;
+        }
+
+        setSendingEmail(true);
+        try {
+            const res = await fetch("/api/admin/send-email", {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({
+                    cartId: cart.id,
+                    message: emailMessage
+                })
+            });
+
+            if (res.ok) {
+                toast.success("Notification sent to customer");
+                setEmailMessage("");
+            } else {
+                throw new Error("Failed to send");
+            }
+        } catch (err) {
+            console.error(err);
+            toast.error("Could not send email notification");
+        } finally {
+            setSendingEmail(false);
+        }
+    };
 
     return (
         <Dialog open={open} onOpenChange={onOpenChange}>
@@ -134,6 +171,32 @@ export function CartDetailsDialog({
                     <div className="flex justify-between w-full max-w-[200px] text-lg font-black text-primary py-2 border-t border-dashed mt-2">
                         <span>Total:</span>
                         <span>₦{formatPrice(cart.total)}</span>
+                    </div>
+                </div>
+
+                <Separator className="my-8" />
+
+                {/* ADMIN EMAIL TOOLS */}
+                <div className="space-y-4">
+                    <h4 className="text-xs font-black uppercase tracking-widest text-muted-foreground flex items-center gap-2">
+                        <Mail className="h-3 w-3" /> Send Status Update Email
+                    </h4>
+                    <div className="p-4 rounded-xl border bg-muted/20 space-y-3">
+                        <Textarea 
+                            placeholder="Type a message to the customer (e.g., 'We have received your payment and are processing it', 'Your order is out for delivery')..."
+                            value={emailMessage}
+                            onChange={(e) => setEmailMessage(e.target.value)}
+                            className="bg-background min-h-[100px] resize-none border-dashed"
+                        />
+                        <Button 
+                            variant="secondary" 
+                            className="w-full font-bold gap-2"
+                            onClick={handleSendEmail}
+                            disabled={sendingEmail}
+                        >
+                            {sendingEmail ? <Loader2 className="h-4 w-4 animate-spin" /> : <Send className="h-4 w-4" />}
+                            Send Manual Notification
+                        </Button>
                     </div>
                 </div>
 

@@ -12,12 +12,14 @@ import {
   Landmark, 
   LayoutList,
   MapPin,
-  AlertCircle
+  AlertCircle,
+  Ticket
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Separator } from '@/components/ui/separator';
+import { Input } from '@/components/ui/input';
 import { 
   Sheet, 
   SheetContent, 
@@ -58,6 +60,11 @@ export function CartClient({ className, cart: _unusedCart }: CartClientProps) {
   const [isOpen, setIsOpen] = React.useState(false);
   const [isMounted, setIsMounted] = React.useState(false);
   const [isCheckingOut, setIsCheckingOut] = React.useState(false);
+  const [isSaving, setIsSaving] = React.useState(false);
+  const [couponInput, setCouponInput] = React.useState("");
+  const [appliedCoupon, setAppliedCoupon] = React.useState<any>(null);
+  const [isValidatingCoupon, setIsValidatingCoupon] = React.useState(false);
+  const [deliveryFee, setDeliveryFee] = React.useState(100);
   const [pendingAutoMethod, setPendingAutoMethod] = React.useState<'monnify' | 'manual' | 'test' | null>(null);
 
   const monnifyRef = React.useRef<HTMLButtonElement>(null);
@@ -72,8 +79,40 @@ export function CartClient({ className, cart: _unusedCart }: CartClientProps) {
     user?.addresses?.[0]?.id ?? null
   );
 
-  const deliveryFee = 1500;
-  const totalAmount = subtotal + deliveryFee;
+  React.useEffect(() => {
+    const fetchDeliveryFee = async () => {
+      if (!selectedAddressId || !user?.addresses) return;
+      const addr = user.addresses.find((a: any) => a.id === selectedAddressId);
+      if (!addr?.state) return;
+      
+      try {
+        const res = await axios.get(`/api/dbhandler?model=deliveryFee&state=${addr.state}`);
+        const fees = Array.isArray(res.data) ? res.data : [];
+        if (fees.length > 0) {
+            setDeliveryFee(fees[0].price);
+        } else {
+            setDeliveryFee(100); // Default NGN 100 as requested for now
+        }
+      } catch (err) {
+        console.error("Failed to fetch delivery fee", err);
+        setDeliveryFee(100);
+      }
+    };
+    fetchDeliveryFee();
+  }, [selectedAddressId, user?.addresses]);
+
+  // The delivery fee is already in the state
+  
+  let discountAmount = 0;
+  if (appliedCoupon) {
+    if (appliedCoupon.type === 'percentage') {
+      discountAmount = (subtotal * appliedCoupon.discount) / 100;
+    } else {
+      discountAmount = appliedCoupon.discount;
+    }
+  }
+
+  const totalAmount = Math.max(0, (subtotal - discountAmount) + deliveryFee);
   const markup = 1.0; 
 
   React.useEffect(() => {
@@ -155,7 +194,9 @@ export function CartClient({ className, cart: _unusedCart }: CartClientProps) {
         })),
         deliveryFee,
         deliveryAddressId: selectedAddressId,
-        forcedAmount 
+        forcedAmount,
+        couponCode: appliedCoupon?.code || null,
+        discountAmount: discountAmount
       };
 
       const res = await axios.post('/api/payment', payload);
@@ -178,6 +219,66 @@ export function CartClient({ className, cart: _unusedCart }: CartClientProps) {
   const handleAdminTest = async () => {
     setPendingAutoMethod('test');
     await initiateCheckout(100);
+  };
+
+  const handleApplyCoupon = async () => {
+    if (!couponInput) return;
+    setIsValidatingCoupon(true);
+    try {
+      const res = await axios.get(`/api/dbhandler?model=coupon&code=${couponInput}`);
+      const coupon = Array.isArray(res.data) ? res.data[0] : res.data;
+      
+      if (!coupon || !coupon.active) {
+        toast.error("Invalid or inactive promo code");
+        setAppliedCoupon(null);
+      } else if (coupon.expiresAt && new Date(coupon.expiresAt) < new Date()) {
+        toast.error("This promo code has expired");
+        setAppliedCoupon(null);
+      } else {
+        setAppliedCoupon(coupon);
+        toast.success(`Coupon Applied: ${coupon.type === 'percentage' ? coupon.discount + '%' : '₦' + coupon.discount} off!`);
+      }
+    } catch (err) {
+      console.error("Coupon validation error", err);
+      toast.error("Failed to validate coupon");
+    } finally {
+      setIsValidatingCoupon(false);
+    }
+  };
+
+  const handleSaveCart = async () => {
+    if (!user?.id || user.id === 'nil') {
+      toast.error("Please log in to save cart");
+      return;
+    }
+    setIsSaving(true);
+    try {
+      const payload = {
+        userId: user.id,
+        items: items.map(i => ({
+          productId: i.id,
+          quantity: i.quantity,
+          bulkPriceId: (i as any).bulkPriceId,
+          isSpecial: !!(i as any).isSpecial,
+          customPrice: (i as any).customPrice,
+          customName: (i as any).customName
+        })),
+        deliveryFee,
+        deliveryAddressId: selectedAddressId,
+        status: "saved"
+      };
+
+      await axios.post('/api/payment', payload);
+      toast.success("Cart saved for later!");
+      clearCart();
+      setIsOpen(false);
+      window.location.reload();
+    } catch (err) {
+      console.error("Save cart failed:", err);
+      toast.error("Failed to save cart");
+    } finally {
+      setIsSaving(false);
+    }
   };
 
   const CartTrigger = (
@@ -322,7 +423,7 @@ export function CartClient({ className, cart: _unusedCart }: CartClientProps) {
             <div className="space-y-2">
               <div className="flex justify-between items-center px-1">
                 <label className="text-[10px] font-black uppercase text-muted-foreground tracking-widest">Delivery Address</label>
-                <AddressEdit />
+                <AddressEdit triggerClassName={(!user.addresses || user.addresses.length === 0) ? "border-2 border-green-500 animate-pulse bg-transparent" : ""} />
               </div>
               {user.addresses && user.addresses.length > 0 ? (
                 <select
@@ -352,12 +453,47 @@ export function CartClient({ className, cart: _unusedCart }: CartClientProps) {
             </div>
           )}
 
+          {/* Promo Code Input */}
+          <div className="space-y-2 mt-4">
+             <label className="text-[10px] font-black uppercase text-muted-foreground tracking-widest flex items-center gap-2">
+                <Ticket className="w-3 h-3 text-primary" /> Have a Promo Code?
+             </label>
+             <div className="flex gap-2">
+                <Input 
+                    placeholder="Enter code..." 
+                    value={couponInput}
+                    onChange={(e) => setCouponInput(e.target.value.toUpperCase())}
+                    className="h-10 text-xs font-black uppercase tracking-widest"
+                />
+                <Button 
+                    size="sm" 
+                    className="h-10 px-4 font-black"
+                    onClick={handleApplyCoupon}
+                    disabled={isValidatingCoupon || !couponInput}
+                >
+                    {isValidatingCoupon ? <Loader2 className="w-4 h-4 animate-spin" /> : 'APPLY'}
+                </Button>
+             </div>
+             {appliedCoupon && (
+                <div className="flex items-center justify-between bg-green-500/10 border border-green-500/20 px-3 py-1.5 rounded-lg">
+                    <span className="text-[10px] font-black text-green-700 uppercase">Code {appliedCoupon.code} Applied!</span>
+                    <button onClick={() => setAppliedCoupon(null)} className="text-[10px] font-black text-red-500 hover:scale-110 transition-transform">REMOVE</button>
+                </div>
+             )}
+          </div>
+
           {/* Pricing Summary */}
           <div className="space-y-2 py-3 border-t border-b border-dashed">
              <div className="flex justify-between text-xs font-bold text-muted-foreground">
                 <span>Subtotal</span>
                 <span>₦{formatPrice(subtotal)}</span>
              </div>
+             {appliedCoupon && (
+                 <div className="flex justify-between text-xs font-bold text-green-600">
+                    <span>Discount ({appliedCoupon.code})</span>
+                    <span>-₦{formatPrice(discountAmount)}</span>
+                 </div>
+             )}
              <div className="flex justify-between text-xs font-bold text-muted-foreground">
                 <span>Delivery Charge</span>
                 <span>₦{formatPrice(deliveryFee)}</span>
@@ -369,17 +505,25 @@ export function CartClient({ className, cart: _unusedCart }: CartClientProps) {
           </div>
 
           {/* Buttons Block */}
-          {user?.id !== 'nil' && !isCheckingOut && (
+          {user?.id !== 'nil' && !isCheckingOut && !isSaving && (
             <div className="space-y-2">
-              {/* Checkout Only */}
-              <Button 
-                className="w-full h-11 rounded-xl text-lg font-black shadow-lg shadow-primary/10 hover:shadow-primary/20 transition-all gap-2"
-                disabled={!selectedAddressId}
-                onClick={() => handlePaymentMethod(null)}
-              >
-                  <LayoutList className="w-5 h-5" />
-                  Checkout
-              </Button>
+              <div className="grid grid-cols-2 gap-2">
+                  <Button 
+                    className="w-full h-11 rounded-xl font-black shadow-lg shadow-primary/10 hover:shadow-primary/20 transition-all gap-2"
+                    disabled={!selectedAddressId}
+                    onClick={() => handlePaymentMethod(null)}
+                  >
+                      <LayoutList className="w-4 h-4" />
+                      Checkout
+                  </Button>
+                  <Button 
+                    variant="outline"
+                    className="w-full h-11 rounded-xl font-black border-2 border-primary/20 hover:bg-primary/5 transition-all gap-2"
+                    onClick={handleSaveCart}
+                  >
+                      Save Order
+                  </Button>
+              </div>
 
               <div className="grid grid-cols-2 gap-2">
                  <Button 
@@ -405,22 +549,22 @@ export function CartClient({ className, cart: _unusedCart }: CartClientProps) {
 
               {user.role === 'admin' && (
                 <Button 
-                  className="w-full h-9 rounded-xl font-black border-dashed border-2 border-amber-500 text-amber-600 hover:bg-amber-100 transition-all gap-2 text-xs"
+                  className="w-full h-10 rounded-xl font-black border-dashed border-2 border-amber-500 text-amber-600 hover:bg-amber-100 transition-all gap-2 text-xs"
                   disabled={!selectedAddressId}
                   onClick={handleAdminTest}
                   variant="outline"
                 >
                   <div className="w-4 h-4 bg-amber-500 rounded-full flex items-center justify-center text-white text-[10px]">₦</div>
-                  Admin Test (₦100)
+                  Admin Test (₦100) Payment
                 </Button>
               )}
             </div>
           )}
 
-          {isCheckingOut && (
+          {(isCheckingOut || isSaving) && (
             <div className="flex flex-col items-center justify-center py-6 gap-2 text-primary animate-pulse">
                <Loader2 className="w-8 h-8 animate-spin" />
-               <p className="text-xs font-black uppercase tracking-widest">Applying Checkout...</p>
+               <p className="text-xs font-black uppercase tracking-widest">{isSaving ? 'Saving Order...' : 'Applying Checkout...'}</p>
             </div>
           )}
         </div>

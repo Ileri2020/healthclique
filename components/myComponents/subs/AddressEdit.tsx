@@ -24,6 +24,7 @@ import UserShippingAddressForm from "@/prisma/forms/userShippingAddressForm";
 import { CheckCircle, AlertCircle, MapPin } from "lucide-react";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { useMediaQuery } from "@/hooks/use-media-query";
+import { cn } from "@/lib/utils";
 
 type ShippingAddress = {
   id?: string;
@@ -35,7 +36,7 @@ type ShippingAddress = {
   phone?: string;
 };
 
-export const AddressEdit = ({ children }: { children?: React.ReactNode }) => {
+export const AddressEdit = ({ children, triggerClassName }: { children?: React.ReactNode, triggerClassName?: string }) => {
   const { user, setUser } = useAppContext();
   const isDesktop = useMediaQuery("(min-width: 768px)");
   const [isOpen, setIsOpen] = useState(false);
@@ -148,7 +149,7 @@ export const AddressEdit = ({ children }: { children?: React.ReactNode }) => {
   );
 
   const trigger = children || (
-    <Button variant="outline" size="sm" className="gap-2">
+    <Button variant="outline" size="sm" className={cn("gap-2", triggerClassName)}>
       <MapPin className="h-4 w-4" />
       {user?.addresses?.length ? "Change Address" : "Add Address"}
     </Button>

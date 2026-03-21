@@ -19,6 +19,7 @@ import CartForm from "@/prisma/forms/CartForm";
 import CouponForm from "@/prisma/forms/CouponForm";
 import ShippingAddressForm from "@/prisma/forms/ShippingAddressForm";
 import PostForm from "@/prisma/forms/PostForm";
+import DeliveryFeeForm from "@/prisma/forms/DeliveryFeeForm";
 import { Badge } from "@/components/ui/badge";
 import { Separator } from "@/components/ui/separator";
 import { ShoppingCart } from "lucide-react";
@@ -57,6 +58,7 @@ const forms = [
   { name: "Refund", component: RefundForm },
   { name: "Cart", component: CartForm },
   { name: "Coupon", component: CouponForm },
+  { name: "DeliveryFee", component: DeliveryFeeForm },
   { name: "ShippingAddress", component: ShippingAddressForm },
   { name: "Post", component: PostForm },
 ];
@@ -76,6 +78,7 @@ const Admin = () => {
     const [cartDialogOpen, setCartDialogOpen] = useState(false);
     const [loadingCart, setLoadingCart] = useState(false);
     const [isConfirming, setIsConfirming] = useState(false);
+    const [showAllStatus, setShowAllStatus] = useState(false);
 
   const toggleForm = (name: string) => {
     setSelectedForms((prev) =>
@@ -173,18 +176,20 @@ const Admin = () => {
 
     const fetchCarts = async () => {
         try {
-            const res = await fetch(`/api/dbhandler?model=cart&status=paid,unconfirmed,pending&search=${cartSearch}`);
+            const statusFilter = showAllStatus ? "paid,unconfirmed,pending,saved" : "paid,unconfirmed";
+            const res = await fetch(`/api/dbhandler?model=cart&status=${statusFilter}&search=${cartSearch}`);
             let carts = await res.json();
             if (!Array.isArray(carts)) carts = [];
 
-            carts.sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
+            // Sort by most recent first
+            carts.sort((a: any, b: any) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
 
             // Weekly grouping
             const finalCarts: any[] = [];
             let currentWeek: number | null = null;
 
             carts.forEach((c: any) => {
-                const deliveryDate = new Date(c.createdAt); // Using createdAt as delivery date proxy for Health Clique
+                const deliveryDate = new Date(c.createdAt); 
                 const weekNum = getWeekNumber(deliveryDate);
                 
                 if (currentWeek !== weekNum) {
@@ -218,7 +223,7 @@ const Admin = () => {
 
     const debounce = setTimeout(fetchCarts, 500);
     return () => clearTimeout(debounce);
-  }, [isAdmin, isStaff, cartSearch]);
+  }, [isAdmin, isStaff, cartSearch, showAllStatus]);
 
   const handleCartRowClick = (row: any) => {
     if (row.status === 'separator') return;
@@ -296,12 +301,18 @@ const Admin = () => {
             </h3>
             <p className="text-sm text-muted-foreground mt-1">Manage processing, paid, and unconfirmed customer carts</p>
           </div>
-          <Input 
-            placeholder="Search customer orders..." 
-            value={cartSearch}
-            onChange={(e) => setCartSearch(e.target.value)}
-            className="max-w-xs h-10 rounded-lg"
-          />
+          <div className="flex flex-wrap items-center gap-3">
+             <div className="flex items-center space-x-2 bg-muted/50 px-3 py-1 rounded-lg border">
+                <label htmlFor="show-all" className="text-xs font-bold cursor-pointer">Show Drafts/Saved</label>
+                <Checkbox id="show-all" checked={showAllStatus} onCheckedChange={(val: boolean) => setShowAllStatus(val)} />
+             </div>
+             <Input 
+                placeholder="Search customer orders..." 
+                value={cartSearch}
+                onChange={(e) => setCartSearch(e.target.value)}
+                className="max-w-xs h-10 rounded-lg shadow-sm"
+             />
+          </div>
         </div>
         
         <DataTableDemo
