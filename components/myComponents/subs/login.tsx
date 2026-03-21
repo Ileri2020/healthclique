@@ -15,7 +15,8 @@ import { Label } from '@/components/ui/label'
 import axios from 'axios'
 import { useAppContext } from '@/hooks/useAppContext'
 import { FcGoogle } from 'react-icons/fc'
-import { googleSignIn } from './googlesignin'
+import { FaFacebook } from 'react-icons/fa'
+import { googleSignIn, facebookSignIn } from './googlesignin'
 import Signup, { SignupForm } from './signup'
 
 import { Loader2, Mail, Lock, CheckCircle, AlertCircle } from 'lucide-react'
@@ -285,12 +286,21 @@ export const LoginForm = ({ onSignupClick }: { onSignupClick?: () => void }) => 
         <div className="w-full my-4 flex flex-col gap-2">
           <form action={googleSignIn}>
             <Button
-              className="border-2 border-primary relative w-full max-w-[300px] mx-auto flex items-center justify-center rounded-md h-10 font-medium gap-2"
+              className="border-2 border-primary relative w-full max-w-[300px] mx-auto flex items-center justify-center rounded-md h-10 font-medium gap-2 shadow-sm"
               type="submit"
               variant='outline'
             >
               <FcGoogle className="h-4 w-4" />
               <span className="text-sm">Continue with Google</span>
+            </Button>
+          </form>
+          <form action={facebookSignIn}>
+            <Button
+              className="border-2 border-sky-600 relative w-full max-w-[300px] mx-auto flex items-center justify-center rounded-md h-10 font-medium gap-2 bg-sky-600 text-white hover:bg-sky-700 shadow-sm transition-colors mt-2"
+              type="submit"
+            >
+              <FaFacebook className="h-4 w-4 scale-110" />
+              <span className="text-sm">Continue with Facebook</span>
             </Button>
           </form>
           {onSignupClick ? (

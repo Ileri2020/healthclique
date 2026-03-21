@@ -9,12 +9,42 @@ import { ShoppingBag } from "lucide-react";
 import { useEffect, useState } from "react";
 import { CartSummary, getColumns } from "./columns";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { Badge } from "@/components/ui/badge";
+import { Input } from "@/components/ui/input";
+import { formatPrice } from "@/lib/stock-pricing";
+import { CartDetailsDialog } from "@/components/myComponents/subs/CartDetailsDialog";
+import { toast } from "sonner";
+
+function getWeekNumber(d: Date) {
+  d = new Date(Date.UTC(d.getFullYear(), d.getMonth(), d.getDate()));
+  d.setUTCDate(d.getUTCDate() + 4 - (d.getUTCDay() || 7));
+  var yearStart = new Date(Date.UTC(d.getUTCFullYear(), 0, 1));
+  var weekNo = Math.ceil((((d.getTime() - yearStart.getTime()) / 86400000) + 1) / 7);
+  return weekNo;
+}
+
+function getFirstDayOfWeek(d: Date) {
+  const date = new Date(d);
+  const day = date.getDay();
+  const diff = date.getDate() - day + (day === 0 ? -6 : 1); 
+  return new Date(date.setDate(diff));
+}
 
 export default function CartPage() {
   const { user } = useAppContext();
+  const isAdmin = user?.role === "admin";
+  const isStaff = user?.role === "staff";
+
   const [carts, setCarts] = useState<CartSummary[]>([]);
   const [selectedCartId, setSelectedCartId] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
+
+  // System-wide orders for admin
+  const [allUserCarts, setAllUserCarts] = useState<any[]>([]);
+  const [cartSearch, setCartSearch] = useState("");
+  const [selectedAdminCart, setSelectedAdminCart] = useState<any | null>(null);
+  const [adminDialogOpen, setAdminDialogOpen] = useState(false);
+  const [isConfirming, setIsConfirming] = useState(false);
 
   const fetchCarts = async () => {
     if (!user?.id || user.id === 'nil') return;
@@ -49,6 +79,89 @@ export default function CartPage() {
   useEffect(() => {
     fetchCarts();
   }, [user?.id]);
+
+  /* ================= ADMIN ORDER FETCH ================= */
+  useEffect(() => {
+    if (!isAdmin && !isStaff) return;
+
+    const fetchAllCarts = async () => {
+        try {
+            const res = await axios.get(`/api/dbhandler?model=cart&status=paid,unconfirmed,pending&search=${cartSearch}`);
+            let carts = Array.isArray(res.data) ? res.data : [];
+            carts.sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
+            
+            // Weekly grouping
+            const finalCarts: any[] = [];
+            let currentWeek: number | null = null;
+            carts.forEach((c: any) => {
+                const deliveryDate = new Date(c.createdAt);
+                const weekNum = getWeekNumber(deliveryDate);
+                if (currentWeek !== weekNum) {
+                    currentWeek = weekNum;
+                    const firstDay = getFirstDayOfWeek(new Date(deliveryDate));
+                    finalCarts.push({
+                        id: `week-${weekNum}`,
+                        userName: `WEEK ${weekNum} - Starts ${firstDay.toLocaleDateString()}`,
+                        total: 0,
+                        status: "separator",
+                        createdAt: ""
+                    });
+                }
+                finalCarts.push(c);
+            });
+            setAllUserCarts(finalCarts);
+        } catch (err) {
+            console.error("Failed to fetch all user carts", err);
+        }
+    };
+
+    const debounce = setTimeout(fetchAllCarts, 500);
+    return () => clearTimeout(debounce);
+  }, [isAdmin, isStaff, cartSearch]);
+
+  const handleAdminCartClick = (row: any) => {
+    if (row.status === 'separator') return;
+    setSelectedAdminCart(row);
+    setAdminDialogOpen(true);
+  };
+
+  const handleConfirmOrder = async () => {
+    if (!selectedAdminCart) return;
+    setIsConfirming(true);
+    try {
+        const res = await fetch("/api/dbhandler?model=cart", {
+            method: "PUT",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ id: selectedAdminCart.id, status: "paid" })
+        });
+        if (res.ok) {
+            toast.success("Order confirmed successfully");
+            setAdminDialogOpen(false);
+            setCartSearch(prev => prev + " ");
+            setTimeout(() => setCartSearch(prev => prev.trim()), 100);
+        }
+    } catch (err) {
+        toast.error("Confirmation failed");
+    } finally {
+        setIsConfirming(false);
+    }
+  };
+
+  const adminCartColumns = [
+    { accessorKey: "user.name", header: "Customer/Week", cell: ({ row }: any) => {
+        if (row.original.status === 'separator') return <Badge className="bg-primary/20 text-primary border-none font-black">{row.original.userName}</Badge>;
+        return <span>{row.original.user?.name || "Guest"}</span>;
+    }},
+    { accessorKey: "total", header: "Total", cell: ({ row }: any) => {
+        if (row.original.status === 'separator') return null;
+        return <span className="font-bold">₦{formatPrice(row.original.total)}</span>;
+    }},
+    { accessorKey: "status", header: "Status", cell: ({ row }: any) => {
+        if (row.original.status === 'separator') return null;
+        return <Badge variant={row.original.status === 'paid' ? 'default' : 'secondary'} className="uppercase font-black">{row.original.status}</Badge>;
+    }},
+    { accessorKey: "createdAt", header: "Date", cell: ({ row }: any) => row.original.status !== 'separator' ? <span>{new Date(row.original.createdAt).toLocaleDateString()}</span> : null },
+  ];
 
   const handleViewDetails = (id: string) => {
     setSelectedCartId(id);
@@ -135,6 +248,45 @@ export default function CartPage() {
 
           </div>
         </section>
+
+        {/* ADMIN SYSTEM-WIDE ORDERS */}
+        {(isAdmin || isStaff) && (
+            <section className="space-y-4 pt-10 border-t-4 border-dashed">
+                <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
+                    <div>
+                        <h2 className="text-3xl font-black tracking-tight text-primary">System-wide Orders</h2>
+                        <p className="text-muted-foreground font-medium">As Admin/Staff, you can process orders from all users here.</p>
+                    </div>
+                    <Input 
+                        placeholder="Search all user carts..." 
+                        value={cartSearch}
+                        onChange={(e) => setCartSearch(e.target.value)}
+                        className="max-w-xs h-12 shadow-sm"
+                    />
+                </div>
+
+                <Card className="border-2 border-primary/20 shadow-xl overflow-hidden">
+                    <CardHeader className="bg-primary/5">
+                        <CardTitle className="text-lg">Pending & Paid Carts Queue</CardTitle>
+                    </CardHeader>
+                    <CardContent className="p-0">
+                        <DataTableDemo
+                            data={allUserCarts}
+                            columns={adminCartColumns}
+                            onRowClick={handleAdminCartClick}
+                        />
+                    </CardContent>
+                </Card>
+
+                <CartDetailsDialog 
+                    open={adminDialogOpen}
+                    onOpenChange={setAdminDialogOpen}
+                    cart={selectedAdminCart}
+                    onConfirmPayment={handleConfirmOrder}
+                    loading={isConfirming}
+                />
+            </section>
+        )}
       </div>
     </div>
   );

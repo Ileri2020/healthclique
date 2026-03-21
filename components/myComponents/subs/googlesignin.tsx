@@ -31,3 +31,10 @@ export const googleSignIn = async () => {
   "use server";
   await signIn("google");
 };
+
+/* ================= FACEBOOK ================= */
+
+export const facebookSignIn = async () => {
+  "use server";
+  await signIn("facebook");
+};

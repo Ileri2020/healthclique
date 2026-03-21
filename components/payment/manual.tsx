@@ -22,11 +22,11 @@ export const ManualTransfer = React.forwardRef<HTMLButtonElement, { tx_ref: stri
   const { clearCart } = useCart();
   const { setCheckoutData } = useAppContext();
 
-  // Mock account details - usually these would come from an environment variable or a config
+  // Account details from environment variables
   const accountInfo = {
-    bankName: "Providus Bank",
-    accountNumber: "1234567890",
-    accountName: "Health Clique Pharma Limited",
+    bankName: process.env.NEXT_PUBLIC_BANK_NAME || "Moniepoint MFB",
+    accountNumber: process.env.NEXT_PUBLIC_BANK_ACCOUNT_NUMBER || "8065933700",
+    accountName: process.env.NEXT_PUBLIC_BANK_ACCOUNT_NAME || "Health Clique Limited",
   };
 
   const copyToClipboard = (text: string) => {

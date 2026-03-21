@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import crypto from "crypto";
 import { PrismaClient } from "@prisma/client";
 import axios from "axios";
+import { sendOrderNotification, sendPaymentConfirmationEmail } from "@/lib/nodemailer";
 
 const prisma = new PrismaClient();
 
@@ -51,7 +52,16 @@ export async function POST(req: NextRequest) {
             });
 
             if (verifyRes.data.responseBody.paymentStatus === 'PAID') {
-              isVerified = true;
+              const payment = await prisma.payment.findUnique({ where: { tx_ref: confirm_tx_ref } });
+              const paidAmount = verifyRes.data.responseBody.amount;
+              const expectedAmount = payment?.amount || 0;
+              
+              if (paidAmount >= expectedAmount) {
+                isVerified = true;
+              } else {
+                console.error(`Amount mismatch: Paid ₦${paidAmount}, Expected ₦${expectedAmount}`);
+                return NextResponse.json({ success: false, message: "Amount mismatch detected" });
+              }
             }
           } else {
             // Fallback for dev if keys missing
@@ -77,13 +87,37 @@ export async function POST(req: NextRequest) {
             where: { tx_ref: confirm_tx_ref },
             data: { method: "manual_transfer" }
           });
+
+          // Notify Admin
+          const adminEmail = process.env.GOOGLE_EMAIL ?? 'adepojuololade2020@gmail.com';
+          await sendOrderNotification(adminEmail, {
+            status: "unconfirmed",
+            tx_ref: confirm_tx_ref,
+            amount: payment.amount,
+            method: "Bank Transfer",
+            payeeName: "Customer"
+          });
+
           return NextResponse.json({ success: true, message: "Manual transfer noted" });
         }
       }
 
       if (isVerified) {
-        const payment = await prisma.payment.findUnique({ where: { tx_ref: confirm_tx_ref } });
-        if (payment) {
+        const payment = await prisma.payment.findUnique({ 
+          where: { tx_ref: confirm_tx_ref },
+          include: { 
+            cart: {
+              include: {
+                user: true,
+                products: {
+                  include: { product: true }
+                }
+              }
+            }
+          }
+        });
+
+        if (payment && payment.cart) {
           await prisma.cart.update({
             where: { id: payment.cartId },
             data: { status: "paid" },
@@ -92,6 +126,20 @@ export async function POST(req: NextRequest) {
             where: { tx_ref: confirm_tx_ref },
             data: { method: method || "online" }
           });
+
+          // Send confirmation email to user
+          if (payment.cart.user?.email) {
+            await sendPaymentConfirmationEmail(payment.cart.user.email, {
+              customerName: payment.cart.user.name || "Customer",
+              contact: payment.cart.user.contact || "N/A",
+              address: payment.cart.deliveryAddressId || "N/A", // Usually need to fetch address string, but using ID for now as fallback
+              products: payment.cart.products,
+              total: payment.cart.total,
+              deliveryFee: payment.cart.deliveryFee || 0,
+              orderId: payment.cart.id
+            });
+          }
+
           return NextResponse.json({ success: true, message: "Payment confirmed" });
         }
       }
