@@ -108,7 +108,13 @@ export function CartClient({ className, cart: _unusedCart }: CartClientProps) {
       const timer = setTimeout(() => {
         let triggered = false;
         if ((pendingAutoMethod === 'monnify' || pendingAutoMethod === 'test') && monnifyRef.current) {
-          monnifyRef.current.click();
+          console.log("Auto-launching Monnify for:", checkoutData.tx_ref);
+          // CLOSE the cart dialog first to release body pointer-events block
+          setIsOpen(false); 
+          // Slight further delay to let the Sheet/Drawer close transition finish
+          setTimeout(() => {
+            monnifyRef.current?.click();
+          }, 300);
           triggered = true;
         } else if (pendingAutoMethod === 'manual' && manualRef.current) {
           manualRef.current.click();
@@ -489,8 +495,13 @@ export function CartClient({ className, cart: _unusedCart }: CartClientProps) {
         </Drawer>
       )}
 
-      {/* STABLE POSITION TRIGGERS OUTSIDE DIALOG CONTENT TO PREVENT Z-INDEX/IFRAME ISSUES */}
-      <div className="fixed bottom-0 left-0 h-0 w-0 pointer-events-none opacity-0 invisible" aria-hidden="true">
+      {/* STABLE POSITION TRIGGERS OUTSIDE DIALOG CONTENT */}
+      {/* We REMOVED pointer-events-none because it can interfere with the Monnify iframe interactivity */}
+      <div 
+        id="payment-trigger-container"
+        className="fixed bottom-0 left-0 w-1 h-1 overflow-hidden opacity-0 invisible z-[-1]" 
+        aria-hidden="true"
+      >
         {checkoutData && (
           <>
             <MonnifyPaymentButton
