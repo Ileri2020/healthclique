@@ -298,9 +298,11 @@ export function CartClient({ className, cart: _unusedCart }: CartClientProps) {
         )}
       </div>
 
-      {/* 2. Items Area */}
-      <div className="flex-1 overflow-y-auto px-6 py-4 no-scrollbar min-h-0 bg-secondary/5">
-        {items.length === 0 ? (
+      {/* 2 & 3. Scrollable Middle Area (Items + Actions) */}
+      <div className="flex-1 overflow-y-auto no-scrollbar min-h-0 flex flex-col">
+        {/* Items Area */}
+        <div className="px-6 py-4 bg-secondary/5 grow">
+          {items.length === 0 ? (
           <div className="flex flex-col items-center justify-center py-20 text-center opacity-60">
             <ShoppingCart className="h-16 w-16 text-muted-foreground mb-4" />
             <h3 className="text-lg font-bold">Your cart is empty</h3>
@@ -386,9 +388,9 @@ export function CartClient({ className, cart: _unusedCart }: CartClientProps) {
         )}
       </div>
 
-      {/* 3. Actions Section */}
+      {/* Actions Section (Now scrolls with items) */}
       {items.length > 0 && (
-        <div className="border-t px-6 py-4 bg-background space-y-4 shadow-top z-20">
+        <div className="border-t px-6 py-4 bg-background space-y-4 shadow-top shrink-0">
           {/* Address */}
           {user?.id !== 'nil' ? (
             <div className="space-y-2">
@@ -533,9 +535,10 @@ export function CartClient({ className, cart: _unusedCart }: CartClientProps) {
           )}
         </div>
       )}
+      </div>
 
-      {/* 4. Footer Links */}
-      <div className="p-6 pt-2 space-y-3 bg-background border-t mt-auto shadow-inner text-center z-20">
+      {/* 4. Footer Links (Fixed at bottom) */}
+      <div className="p-6 pt-2 space-y-3 bg-background border-t shrink-0 shadow-inner text-center z-20">
         <Link href="/cart" onClick={() => setIsOpen(false)} className="inline-block w-full">
           <Button className="w-full h-11 rounded-xl font-black" variant="secondary">
              VIEW ALL SAVED CARTS
