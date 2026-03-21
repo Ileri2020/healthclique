@@ -53,11 +53,8 @@ export default function CartPage() {
     try {
       setLoading(true);
       // Fetches user's cart from MongoDB
-      const res = await axios.get(`/api/dbhandler?model=cart`);
-      const allCarts = res.data;
-      
-      // Filter for this user's carts explicitly if user-specific query is not built in dbhandler
-      const userCarts = allCarts.filter((c: any) => c.userId === user.id);
+      const res = await axios.get(`/api/dbhandler?model=cart&userId=${user.id}`);
+      const userCarts = res.data;
       
       // Compute lengths if needed by columns (like _count.products limit to length)
       const modeledCarts = userCarts.map((c: any) => ({

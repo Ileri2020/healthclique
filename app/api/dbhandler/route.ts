@@ -165,14 +165,34 @@ export async function GET(req: NextRequest) {
       const userId = searchParams.get("userId");
       const code = searchParams.get("code");
       const state = searchParams.get("state");
+      const status = searchParams.get("status"); // CSV support
       const where: any = {};
+
       if (userId) where.userId = userId;
       if (model === "coupon" && code) where.code = code;
       if (model === "deliveryFee" && state) where.state = state;
+      
+      if (model === "cart" && status) {
+          where.status = { in: status.split(",").map(s => s.trim()) };
+      }
+
+      if (model === "cart") {
+          return NextResponse.json(await prisma.cart.findMany({
+              where,
+              include: {
+                  user: { select: { id: true, email: true, name: true, contact: true } },
+                  products: { include: { product: true } },
+                  payment: true
+              },
+              take: limit,
+              orderBy: { createdAt: 'desc' }
+          }));
+      }
 
       return NextResponse.json(await prismaModel.findMany({ 
         where, 
-        take: limit 
+        take: limit,
+        orderBy: { createdAt: 'desc' }
       }));
     } else {
       // Single item fetch
@@ -185,6 +205,12 @@ export async function GET(req: NextRequest) {
         include.healthConcerns = true;
         include.bulkPrices = true;
         include.reviews = { include: { user: { select: { name: true, avatarUrl: true } } } };
+      }
+
+      if (model === "cart") {
+          include.user = { select: { id: true, email: true, name: true, contact: true, addresses: true } };
+          include.products = { include: { product: true } };
+          include.payment = true;
       }
       
       const item = await prismaModel.findUnique({ 
