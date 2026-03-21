@@ -41,7 +41,11 @@ model User {
   sentMessages       Message[]         @relation("SentMessages")
   receivedMessages   Message[]         @relation("ReceivedMessages")
   heavilyDiscountedProducts HeavilyDiscountedProduct[]
+  acceptedTerms      Boolean           @default(false)
+  acceptedPrivacy    Boolean           @default(false)
+  acceptedReturns    Boolean           @default(false)
 }
+
 
 model Post {
   id          String   @id @default(auto()) @map("_id") @db.ObjectId

@@ -7,6 +7,8 @@ import { Button } from "@/components/ui/button";
 import { useAppContext } from "@/hooks/useAppContext";
 import { toast } from "sonner";
 import { CheckCircle, AlertCircle, Loader2 } from "lucide-react";
+import { Separator } from "@/components/ui/separator";
+import { TermsAgreements } from "@/components/myComponents/subs/TermsAgreements";
 import axios from "axios";
 
 const TermsPage = () => {
@@ -72,41 +74,92 @@ const TermsPage = () => {
         </section>
 
         <div className="prose prose-slate dark:prose-invert max-w-none space-y-8">
-          {/* ... existing sections transformed into reusable components if needed, or kept as is ... */}
-          <section className="bg-muted/30 p-8 rounded-3xl border border-border/50">
-            <h2 className="text-2xl font-bold mb-4 flex items-center gap-2">
-              <span className="bg-primary text-primary-foreground w-8 h-8 rounded-full flex items-center justify-center text-sm">1</span>
-              General Policy
-            </h2>
-            <p className="text-muted-foreground leading-relaxed">
-              By using Health Clique, you agree to comply with and be bound by the following terms and conditions of use. 
-              These terms govern the relationship between Health Clique and its customers (individual and wholesale).
-            </p>
+          <section className="bg-card p-8 rounded-3xl border shadow-sm space-y-8">
+            <div>
+              <h2 className="text-2xl font-bold mb-4 text-primary">1. Eligibility</h2>
+              <ul className="list-disc pl-6 space-y-2 text-muted-foreground">
+                <li>You are at least 18 years old, or are using the Platform under the supervision of a parent or legal guardian</li>
+                <li>You have the legal capacity to enter into a binding agreement</li>
+                <li>All information you provide is accurate, current, and complete</li>
+              </ul>
+              <p className="mt-4 text-muted-foreground italic">We reserve the right to refuse service, terminate accounts, or cancel orders at our sole discretion.</p>
+            </div>
+
+            <Separator />
+
+            <div>
+              <h2 className="text-2xl font-bold mb-4 text-primary">2. Nature of Services</h2>
+              <p className="text-muted-foreground mb-4">Healthclique Limited provides a technology-enabled pharmaceutical access platform that facilitates:</p>
+              <ul className="list-disc pl-6 space-y-2 text-muted-foreground mb-4">
+                <li>Prescription fulfillment</li>
+                <li>Medication sourcing and supply</li>
+                <li>Healthcare product distribution</li>
+                <li>Logistics coordination for doorstep delivery</li>
+              </ul>
+              <p className="font-semibold text-destructive">We do not replace your healthcare provider. All medical advice, diagnosis, and prescriptions must originate from a licensed healthcare professional.</p>
+            </div>
+
+            <Separator />
+
+            <div>
+              <h2 className="text-2xl font-bold mb-4 text-primary">3. User Responsibilities & Prescription Policy</h2>
+              <p className="text-muted-foreground mb-4">You agree that you will:</p>
+              <ul className="list-disc pl-6 space-y-2 text-muted-foreground mb-4">
+                <li>Provide valid and authentic prescriptions issued by licensed practitioners</li>
+                <li>Use the Platform only for lawful purposes</li>
+                <li>Not misuse, duplicate, or fraudulently alter prescriptions</li>
+                <li>Not attempt to gain unauthorized access to our systems</li>
+              </ul>
+              <p className="text-muted-foreground mb-4">
+                Prescription-only medications will only be dispensed upon receipt and validation of a legitimate prescription. We may contact prescribing practitioners or regulatory bodies for verification. Suspicious, altered, or expired prescriptions will be rejected. 
+              </p>
+            </div>
+
+            <Separator />
+
+            <div>
+              <h2 className="text-2xl font-bold mb-4 text-primary">4. Orders, Payments and Fulfillment</h2>
+              <ul className="list-disc pl-6 space-y-2 text-muted-foreground">
+                <li>All orders are subject to availability and regulatory clearance.</li>
+                <li>Prices displayed are subject to change without notice. Payments must be made through approved channels.</li>
+                <li>We do not store sensitive payment details; transactions are handled by third-party processors.</li>
+                <li>We reserve the right to cancel or modify orders due to stock limitations, legal restrictions, or safety concerns.</li>
+                <li>Estimated delivery timelines are indicative and not guaranteed.</li>
+              </ul>
+            </div>
+            
+            <Separator />
+            
+            <div>
+              <h2 className="text-2xl font-bold mb-4 text-primary">5. AI-Powered Features & Third Parties</h2>
+              <p className="text-muted-foreground mb-4">
+                Our Platform integrates with third-party providers (Logistics, Payment processors). Healthclique Limited does not control and assumes no liability for the actions, omissions, or service quality of these third parties.
+              </p>
+              <p className="text-muted-foreground mb-4">
+                Our Platform may utilize artificial intelligence (AI) to assist with prescription processing and order management. You acknowledge that AI outputs are assistive and not a substitute for professional judgment.
+              </p>
+            </div>
+            
+            <Separator />
+            
+            <div>
+              <h2 className="text-2xl font-bold mb-4 text-primary">6. Returns, Refunds & Delivery</h2>
+              <p className="text-muted-foreground mb-4">
+                Due to the sensitive nature of pharmaceutical products, medicines are generally non-returnable once dispensed. Refunds may only be issued in cases of incorrect delivery, damaged products, or verified fulfillment errors.
+              </p>
+              <p className="text-muted-foreground">
+                Deliveries are made to the address provided. Users must ensure availability. Identification may be required upon delivery.
+              </p>
+            </div>
+            <div className="pt-6">
+              <TermsAgreements />
+            </div>
           </section>
 
-          <section className="bg-muted/30 p-8 rounded-3xl border border-border/50">
-            <h2 className="text-2xl font-bold mb-4 flex items-center gap-2">
-              <span className="bg-primary text-primary-foreground w-8 h-8 rounded-full flex items-center justify-center text-sm">2</span>
-              Purchase & Shipping
-            </h2>
-            <ul className="space-y-4 text-muted-foreground">
-              <li className="flex gap-3">
-                <span className="text-primary font-bold">•</span>
-                <span><strong>Individual Customers:</strong> Shipping is provided for all individual retail orders.</span>
-              </li>
-              <li className="flex gap-3">
-                <span className="text-primary font-bold">•</span>
-                <span><strong>Wholesale/Professional Buyers:</strong> Shipping may be restricted if the order volume is small or if the delivery location is outside our standard logistics range.</span>
-              </li>
-              <li className="flex gap-3">
-                <span className="text-primary font-bold">•</span>
-                <span><strong>Personal Supply:</strong> We personally supply and deliver directly for verified wholesalers to ensure quality and safety.</span>
-              </li>
-            </ul>
-          </section>
 
           <section className="bg-primary/5 p-8 rounded-3xl border border-primary/20 ring-1 ring-primary/10">
             <h2 className="text-2xl font-bold mb-4 text-primary flex items-center gap-2">
+
               <span className="bg-primary text-primary-foreground w-8 h-8 rounded-full flex items-center justify-center text-sm">3</span>
               Credit Facility (Wholesale Only)
             </h2>

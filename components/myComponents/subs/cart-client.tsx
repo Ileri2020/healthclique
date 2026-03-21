@@ -50,6 +50,7 @@ import { ManualTransfer } from "../../payment/manual";
 import { AddressEdit } from "./AddressEdit";
 import Login from "./login";
 import Signup from "./signup";
+import { TermsAgreements } from './TermsAgreements';
 
 type CartClientProps = {
   className?: string;
@@ -65,6 +66,7 @@ export function CartClient({ className, cart: _unusedCart }: CartClientProps) {
   const [isValidatingCoupon, setIsValidatingCoupon] = React.useState(false);
   const [deliveryFee, setDeliveryFee] = React.useState(100);
   const [pendingAutoMethod, setPendingAutoMethod] = React.useState<'monnify' | 'manual' | 'test' | null>(null);
+  const [termsAccepted, setTermsAccepted] = React.useState(false);
 
   const monnifyRef = React.useRef<HTMLButtonElement>(null);
   const manualRef = React.useRef<HTMLButtonElement>(null);
@@ -473,12 +475,14 @@ export function CartClient({ className, cart: _unusedCart }: CartClientProps) {
              </div>
           </div>
 
+          <TermsAgreements onAllAcceptedChange={setTermsAccepted} />
+
           {/* Buttons Block */}
           {user?.id !== 'nil' && !isCheckingOut && (
             <div className="space-y-2">
               <Button 
                 className="w-full h-11 rounded-xl font-black shadow-lg shadow-primary/10 hover:shadow-primary/20 transition-all gap-2"
-                disabled={!selectedAddressId}
+                disabled={!selectedAddressId || !termsAccepted}
                 onClick={() => handlePaymentMethod(null)}
               >
                   <LayoutList className="w-4 h-4" />
@@ -488,7 +492,7 @@ export function CartClient({ className, cart: _unusedCart }: CartClientProps) {
               <div className="grid grid-cols-2 gap-2">
                  <Button 
                     className="w-full h-10 rounded-xl font-black border-2 border-primary/20 hover:bg-primary/5 transition-all gap-2 text-xs"
-                    disabled={!selectedAddressId}
+                    disabled={!selectedAddressId || !termsAccepted}
                     onClick={() => handlePaymentMethod('monnify')}
                     variant="outline"
                   >
@@ -498,7 +502,7 @@ export function CartClient({ className, cart: _unusedCart }: CartClientProps) {
 
                  <Button 
                     className="w-full h-10 rounded-xl font-black border-2 border-primary/20 hover:bg-primary/5 transition-all gap-2 text-xs"
-                    disabled={!selectedAddressId}
+                    disabled={!selectedAddressId || !termsAccepted}
                     onClick={() => handlePaymentMethod('manual')}
                     variant="outline"
                   >
@@ -510,7 +514,7 @@ export function CartClient({ className, cart: _unusedCart }: CartClientProps) {
               {user.role === 'admin' && (
                 <Button 
                   className="w-full h-10 rounded-xl font-black border-dashed border-2 border-amber-500 text-amber-600 hover:bg-amber-100 transition-all gap-2 text-xs"
-                  disabled={!selectedAddressId}
+                  disabled={!selectedAddressId || !termsAccepted}
                   onClick={handleAdminTest}
                   variant="outline"
                 >
