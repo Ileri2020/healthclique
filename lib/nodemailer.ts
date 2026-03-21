@@ -5,9 +5,17 @@ const email = process.env.GOOGLE_EMAIL ?? 'adepojuololade2020@gmail.com';
 const transporter = nodemailer.createTransport({
     service: 'gmail',
     auth: {
-        user: process.env.GMAIL,
+        user: process.env.GMAIL || process.env.GOOGLE_EMAIL,
         pass: process.env.GOOGLE_APP_PASSWORD, 
     },
+});
+
+transporter.verify((error, success) => {
+    if (error) {
+        console.error('SMTP Connection Error:', error);
+    } else {
+        console.log('SMTP Server is ready to take our messages');
+    }
 });
 
 export const sendOrderNotification = async (to: string, orderDetails: any) => {

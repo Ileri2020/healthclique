@@ -40,7 +40,7 @@ import { useCart } from '@/hooks/use-cart';
 import { useMediaQuery } from '@/hooks/use-media-query';
 import { useAppContext } from '@/hooks/useAppContext';
 import { cn } from '@/lib/utils';
-import { formatPrice } from '@/lib/stock-pricing';
+import { formatPrice, roundUpToNearest5 } from '@/lib/stock-pricing';
 import axios from 'axios';
 import { toast } from 'sonner';
 
@@ -60,7 +60,6 @@ export function CartClient({ className, cart: _unusedCart }: CartClientProps) {
   const [isOpen, setIsOpen] = React.useState(false);
   const [isMounted, setIsMounted] = React.useState(false);
   const [isCheckingOut, setIsCheckingOut] = React.useState(false);
-  const [isSaving, setIsSaving] = React.useState(false);
   const [couponInput, setCouponInput] = React.useState("");
   const [appliedCoupon, setAppliedCoupon] = React.useState<any>(null);
   const [isValidatingCoupon, setIsValidatingCoupon] = React.useState(false);
@@ -103,16 +102,20 @@ export function CartClient({ className, cart: _unusedCart }: CartClientProps) {
 
   // The delivery fee is already in the state
   
+  const subtotalRounded = roundUpToNearest5(subtotal);
+  const deliveryFeeRounded = roundUpToNearest5(deliveryFee);
+
   let discountAmount = 0;
   if (appliedCoupon) {
     if (appliedCoupon.type === 'percentage') {
-      discountAmount = (subtotal * appliedCoupon.discount) / 100;
+      discountAmount = (subtotalRounded * appliedCoupon.discount) / 100;
     } else {
       discountAmount = appliedCoupon.discount;
     }
   }
+  const discountAmountRounded = roundUpToNearest5(discountAmount);
 
-  const totalAmount = Math.max(0, (subtotal - discountAmount) + deliveryFee);
+  const totalAmount = Math.max(0, (subtotalRounded - discountAmountRounded) + deliveryFeeRounded);
   const markup = 1.0; 
 
   React.useEffect(() => {
@@ -196,7 +199,7 @@ export function CartClient({ className, cart: _unusedCart }: CartClientProps) {
         deliveryAddressId: selectedAddressId,
         forcedAmount,
         couponCode: appliedCoupon?.code || null,
-        discountAmount: discountAmount
+        discountAmount: discountAmountRounded
       };
 
       const res = await axios.post('/api/payment', payload);
@@ -246,40 +249,6 @@ export function CartClient({ className, cart: _unusedCart }: CartClientProps) {
     }
   };
 
-  const handleSaveCart = async () => {
-    if (!user?.id || user.id === 'nil') {
-      toast.error("Please log in to save cart");
-      return;
-    }
-    setIsSaving(true);
-    try {
-      const payload = {
-        userId: user.id,
-        items: items.map(i => ({
-          productId: i.id,
-          quantity: i.quantity,
-          bulkPriceId: (i as any).bulkPriceId,
-          isSpecial: !!(i as any).isSpecial,
-          customPrice: (i as any).customPrice,
-          customName: (i as any).customName
-        })),
-        deliveryFee,
-        deliveryAddressId: selectedAddressId,
-        status: "saved"
-      };
-
-      await axios.post('/api/payment', payload);
-      toast.success("Cart saved for later!");
-      clearCart();
-      setIsOpen(false);
-      window.location.reload();
-    } catch (err) {
-      console.error("Save cart failed:", err);
-      toast.error("Failed to save cart");
-    } finally {
-      setIsSaving(false);
-    }
-  };
 
   const CartTrigger = (
     <Button
@@ -486,17 +455,17 @@ export function CartClient({ className, cart: _unusedCart }: CartClientProps) {
           <div className="space-y-2 py-3 border-t border-b border-dashed">
              <div className="flex justify-between text-xs font-bold text-muted-foreground">
                 <span>Subtotal</span>
-                <span>₦{formatPrice(subtotal)}</span>
+                <span>₦{formatPrice(subtotalRounded)}</span>
              </div>
              {appliedCoupon && (
                  <div className="flex justify-between text-xs font-bold text-green-600">
                     <span>Discount ({appliedCoupon.code})</span>
-                    <span>-₦{formatPrice(discountAmount)}</span>
+                    <span>-₦{formatPrice(discountAmountRounded)}</span>
                  </div>
              )}
              <div className="flex justify-between text-xs font-bold text-muted-foreground">
                 <span>Delivery Charge</span>
-                <span>₦{formatPrice(deliveryFee)}</span>
+                <span>₦{formatPrice(deliveryFeeRounded)}</span>
              </div>
              <div className="flex justify-between text-lg font-black text-primary pt-1">
                 <span>Total Amount</span>
@@ -505,25 +474,16 @@ export function CartClient({ className, cart: _unusedCart }: CartClientProps) {
           </div>
 
           {/* Buttons Block */}
-          {user?.id !== 'nil' && !isCheckingOut && !isSaving && (
+          {user?.id !== 'nil' && !isCheckingOut && (
             <div className="space-y-2">
-              <div className="grid grid-cols-2 gap-2">
-                  <Button 
-                    className="w-full h-11 rounded-xl font-black shadow-lg shadow-primary/10 hover:shadow-primary/20 transition-all gap-2"
-                    disabled={!selectedAddressId}
-                    onClick={() => handlePaymentMethod(null)}
-                  >
-                      <LayoutList className="w-4 h-4" />
-                      Checkout
-                  </Button>
-                  <Button 
-                    variant="outline"
-                    className="w-full h-11 rounded-xl font-black border-2 border-primary/20 hover:bg-primary/5 transition-all gap-2"
-                    onClick={handleSaveCart}
-                  >
-                      Save Order
-                  </Button>
-              </div>
+              <Button 
+                className="w-full h-11 rounded-xl font-black shadow-lg shadow-primary/10 hover:shadow-primary/20 transition-all gap-2"
+                disabled={!selectedAddressId}
+                onClick={() => handlePaymentMethod(null)}
+              >
+                  <LayoutList className="w-4 h-4" />
+                  Checkout
+              </Button>
 
               <div className="grid grid-cols-2 gap-2">
                  <Button 
@@ -561,10 +521,10 @@ export function CartClient({ className, cart: _unusedCart }: CartClientProps) {
             </div>
           )}
 
-          {(isCheckingOut || isSaving) && (
+          {isCheckingOut && (
             <div className="flex flex-col items-center justify-center py-6 gap-2 text-primary animate-pulse">
                <Loader2 className="w-8 h-8 animate-spin" />
-               <p className="text-xs font-black uppercase tracking-widest">{isSaving ? 'Saving Order...' : 'Applying Checkout...'}</p>
+               <p className="text-xs font-black uppercase tracking-widest">Applying Checkout...</p>
             </div>
           )}
         </div>

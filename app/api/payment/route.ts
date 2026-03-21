@@ -148,7 +148,7 @@ export async function POST(req: NextRequest) {
     }
 
     // ---------------- INITIATE CHECKOUT ----------------
-    const { userId, items, cartId, deliveryFee = 0, deliveryAddressId } = body;
+    const { userId, items, cartId, deliveryFee = 0, deliveryAddressId, couponCode, discountAmount = 0 } = body;
 
     if (!userId || !items?.length) {
       return NextResponse.json({ error: "Invalid payload" }, { status: 400 });
@@ -181,7 +181,11 @@ export async function POST(req: NextRequest) {
       subtotal += (Number(price) * Number(markup)) * Number(item.quantity);
     }
 
-    let total = Math.round((subtotal + Number(deliveryFee)) * 100) / 100;
+    const subtotalRounded = Math.ceil(subtotal / 5) * 5;
+    const deliveryFeeRounded = Math.ceil(Number(deliveryFee) / 5) * 5;
+    const discAmountRounded = Math.ceil(Number(discountAmount) / 5) * 5;
+
+    let total = Math.max(0, (subtotalRounded - discAmountRounded) + deliveryFeeRounded);
     
     // Support for admin test payments
     if (user.role === 'admin' && body.forcedAmount) {
@@ -199,6 +203,8 @@ export async function POST(req: NextRequest) {
           deliveryFee: Number(deliveryFee),
           deliveryAddressId,
           status: body.status || "pending",
+          couponCode: couponCode || null,
+          discountAmount: discAmountRounded,
           products: {
             create: items.map((i: any) => ({
               productId: i.productId,
@@ -220,6 +226,8 @@ export async function POST(req: NextRequest) {
           deliveryFee: Number(deliveryFee),
           deliveryAddressId,
           status: body.status || "pending",
+          couponCode: couponCode || null,
+          discountAmount: discAmountRounded,
           products: {
             create: items.map((i: any) => ({
               productId: i.productId,

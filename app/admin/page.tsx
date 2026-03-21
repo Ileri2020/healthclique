@@ -176,7 +176,7 @@ const Admin = () => {
 
     const fetchCarts = async () => {
         try {
-            const statusFilter = showAllStatus ? "paid,unconfirmed,pending,saved" : "paid,unconfirmed";
+            const statusFilter = "paid,unconfirmed";
             const res = await fetch(`/api/dbhandler?model=cart&status=${statusFilter}&search=${cartSearch}`);
             let carts = await res.json();
             if (!Array.isArray(carts)) carts = [];
@@ -223,7 +223,7 @@ const Admin = () => {
 
     const debounce = setTimeout(fetchCarts, 500);
     return () => clearTimeout(debounce);
-  }, [isAdmin, isStaff, cartSearch, showAllStatus]);
+  }, [isAdmin, isStaff, cartSearch]);
 
   const handleCartRowClick = (row: any) => {
     if (row.status === 'separator') return;
@@ -302,10 +302,6 @@ const Admin = () => {
             <p className="text-sm text-muted-foreground mt-1">Manage processing, paid, and unconfirmed customer carts</p>
           </div>
           <div className="flex flex-wrap items-center gap-3">
-             <div className="flex items-center space-x-2 bg-muted/50 px-3 py-1 rounded-lg border">
-                <label htmlFor="show-all" className="text-xs font-bold cursor-pointer">Show Drafts/Saved</label>
-                <Checkbox id="show-all" checked={showAllStatus} onCheckedChange={(val: boolean) => setShowAllStatus(val)} />
-             </div>
              <Input 
                 placeholder="Search customer orders..." 
                 value={cartSearch}

@@ -88,7 +88,7 @@ export default function CartPage() {
 
     const fetchAllCarts = async () => {
         try {
-            const statusFilter = showAllStatus ? "paid,unconfirmed,pending,saved" : "paid,unconfirmed";
+            const statusFilter = "paid,unconfirmed";
             const res = await axios.get(`/api/dbhandler?model=cart&status=${statusFilter}&search=${cartSearch}`);
             let carts = Array.isArray(res.data) ? res.data : [];
             carts.sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
@@ -120,7 +120,7 @@ export default function CartPage() {
 
     const debounce = setTimeout(fetchAllCarts, 500);
     return () => clearTimeout(debounce);
-  }, [isAdmin, isStaff, cartSearch, showAllStatus]);
+  }, [isAdmin, isStaff, cartSearch]);
 
   const handleAdminCartClick = (row: any) => {
     if (row.status === 'separator') return;
@@ -261,10 +261,6 @@ export default function CartPage() {
                         <p className="text-muted-foreground font-medium">As Admin/Staff, you can process orders from all users here.</p>
                     </div>
                     <div className="flex flex-wrap items-center gap-3">
-                         <div className="flex items-center space-x-2 bg-muted/50 px-3 py-1 rounded-lg border">
-                            <label htmlFor="show-all-admin" className="text-xs font-bold cursor-pointer">Show Drafts/Saved</label>
-                            <Checkbox id="show-all-admin" checked={showAllStatus} onCheckedChange={(val: boolean) => setShowAllStatus(val)} />
-                         </div>
                          <Input 
                             placeholder="Search all user carts..." 
                             value={cartSearch}

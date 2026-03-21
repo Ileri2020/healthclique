@@ -10,8 +10,8 @@ import {
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Separator } from "@/components/ui/separator";
-import { formatPrice } from "@/lib/stock-pricing";
-import { Loader2, CheckCircle2, User, Mail, Phone, ShoppingCart, CreditCard, Send } from "lucide-react";
+import { formatPrice, roundUpToNearest5 } from "@/lib/stock-pricing";
+import { Loader2, CheckCircle2, User, Mail, Phone, ShoppingCart, CreditCard, Send, Ticket } from "lucide-react";
 import { useState } from "react";
 import { toast } from "sonner";
 import { Textarea } from "@/components/ui/textarea";
@@ -35,6 +35,9 @@ export function CartDetailsDialog({
     if (!cart) return null;
 
     const subtotal = cart.products?.reduce((acc: number, item: any) => acc + ((item.customPrice || item.product?.price || 0) * item.quantity), 0) || 0;
+    const subtotalRounded = roundUpToNearest5(subtotal);
+    const deliveryFeeRounded = roundUpToNearest5(cart.deliveryFee || 0);
+    const discountAmountRounded = roundUpToNearest5(cart.discountAmount || 0);
 
     const handleSendEmail = async () => {
         if (!emailMessage.trim()) {
@@ -162,11 +165,17 @@ export function CartDetailsDialog({
                 <div className="mt-6 flex flex-col items-end space-y-2 px-2">
                     <div className="flex justify-between w-full max-w-[200px] text-xs font-medium text-muted-foreground">
                         <span>Subtotal:</span>
-                        <span>₦{formatPrice(subtotal)}</span>
+                        <span>₦{formatPrice(subtotalRounded)}</span>
                     </div>
+                    {discountAmountRounded > 0 && (
+                        <div className="flex justify-between w-full max-w-[200px] text-xs font-medium text-green-600">
+                            <span className="flex items-center gap-1"><Ticket className="h-3 w-3" /> Discount:</span>
+                            <span>-₦{formatPrice(discountAmountRounded)}</span>
+                        </div>
+                    )}
                     <div className="flex justify-between w-full max-w-[200px] text-xs font-medium text-muted-foreground">
                         <span>Delivery:</span>
-                        <span>₦{formatPrice(cart.deliveryFee || 0)}</span>
+                        <span>₦{formatPrice(deliveryFeeRounded)}</span>
                     </div>
                     <div className="flex justify-between w-full max-w-[200px] text-lg font-black text-primary py-2 border-t border-dashed mt-2">
                         <span>Total:</span>
