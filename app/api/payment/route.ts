@@ -130,10 +130,10 @@ export async function POST(req: NextRequest) {
         price = item.customPrice;
       }
       
-      subtotal += (price * markup) * item.quantity;
+      subtotal += (Number(price) * Number(markup)) * Number(item.quantity);
     }
 
-    let total = subtotal + Number(deliveryFee);
+    let total = Math.round((subtotal + Number(deliveryFee)) * 100) / 100;
     
     // Support for admin test payments
     if (user.role === 'admin' && body.forcedAmount) {

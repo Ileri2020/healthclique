@@ -30,7 +30,7 @@ const MonnifyPaymentButton = React.forwardRef<HTMLButtonElement, MonnifyPaymentB
   onFailure,
 }, ref) => {
   const config = React.useMemo(() => ({
-    amount,
+    amount: Number(amount),
     currency,
     reference,
     customerFullName: name,
@@ -73,11 +73,11 @@ const MonnifyPaymentButton = React.forwardRef<HTMLButtonElement, MonnifyPaymentB
       disabled={disabled}
       onClick={handlePayment}
       type="button"
-      className="w-full h-12 rounded-xl font-bold border-2 hover:scale-[1.02] transition-transform shadow-lg shadow-blue-500/10"
+      className="w-full h-12 rounded-xl font-bold border-2 z-50 hover:scale-[1.02] transition-transform shadow-lg shadow-blue-500/10"
       variant="outline"
     >
       <CreditCard className="mr-2 h-4 w-4 text-blue-600" />
-      Pay with Monnify
+      Payment Gateway
     </Button>
   );
 });

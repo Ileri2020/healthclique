@@ -7,6 +7,7 @@ import { Separator } from "@/components/ui/separator";
 import { Input } from "@/components/ui/input";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { cn } from "@/lib/utils";
+import { formatPrice } from "@/lib/stock-pricing";
 import axios from "axios";
 import { Loader2, RefreshCcw, ShoppingCart, Plus, Search, ArrowLeftRight, Shield } from "lucide-react";
 import React, { useEffect, useState } from "react";
@@ -133,7 +134,7 @@ export function CartDetails({ cartId, onPaymentSuccess }: CartDetailsProps) {
                 await axios.put(`/api/dbhandler?model=user&id=${cart.userId}`, {
                     walletBalance: newBalance
                 });
-                toast.success(`₦${diff.toFixed(2)} refunded to user's wallet`);
+                toast.success(`₦${formatPrice(diff)} refunded to user's wallet`);
             }
 
             // 4. Update cart total if NOT locked (so price change reflects in what they see to pay)
@@ -145,7 +146,7 @@ export function CartDetails({ cartId, onPaymentSuccess }: CartDetailsProps) {
             }
 
             // 5. Send message to user
-            const messageContent = `[HEALTH CLIQUE PHARMACY] Your order (ID: ${cart.id.slice(-6)}) has been updated by a pharmacist. Replaced "${replacingItem.product.name}" with "${newProduct.name}". ${diff > 0 && isLocked ? `A surplus of ₦${diff.toFixed(2)} has been credited to your Health Wallet.` : diff < 0 ? `Please note the balance difference of ₦${Math.abs(diff).toFixed(2)} added to your total.` : `Total price adjusted.`}`;
+            const messageContent = `[HEALTH CLIQUE PHARMACY] Your order (ID: ${cart.id.slice(-6)}) has been updated by a pharmacist. Replaced "${replacingItem.product.name}" with "${newProduct.name}". ${diff > 0 && isLocked ? `A surplus of ₦${formatPrice(diff)} has been credited to your Health Wallet.` : diff < 0 ? `Please note the balance difference of ₦${formatPrice(Math.abs(diff))} added to your total.` : `Total price adjusted.`}`;
             
             await axios.post(`/api/dbhandler?model=message`, {
                 content: messageContent,
@@ -487,11 +488,11 @@ export function CartDetails({ cartId, onPaymentSuccess }: CartDetailsProps) {
                                                     <div className="flex items-center text-[10px] font-bold text-muted-foreground bg-secondary/80 px-2 py-0.5 rounded-full">
                                                         Qty: {item.quantity}
                                                     </div>
-                                                    <div className="text-right">
+                                                     <div className="text-right">
                                                         <span className="text-sm font-black text-primary">
-                                                            {currentPrice > 0 ? `₦${(currentPrice * item.quantity).toLocaleString()}` : "Price Awaiting"}
+                                                            {currentPrice > 0 ? `₦${formatPrice(currentPrice * item.quantity)}` : "Price Awaiting"}
                                                         </span>
-                                                    </div>
+                                                     </div>
                                                 </div>
                                             </div>
                                         </div>
@@ -528,8 +529,8 @@ export function CartDetails({ cartId, onPaymentSuccess }: CartDetailsProps) {
                                                                 customPrice: item.customPrice
                                                             });
                                                             
-                                                            // Notify User
-                                                            const message = `[PRICE UPDATE] Pharmacist has set the price for your request "${displayName}" to ₦${item.customPrice.toLocaleString()}. Your total order has been updated.`;
+                                                             // Notify User
+                                                            const message = `[PRICE UPDATE] Pharmacist has set the price for your request "${displayName}" to ₦${formatPrice(item.customPrice)}. Your total order has been updated.`;
                                                             await axios.post(`/api/dbhandler?model=message`, {
                                                                 content: message,
                                                                 senderId: user.id,
@@ -586,9 +587,9 @@ export function CartDetails({ cartId, onPaymentSuccess }: CartDetailsProps) {
                                         >
                                             <div className="flex items-center gap-3">
                                                 <img src={p.images?.[0]} className="w-10 h-10 rounded object-cover" />
-                                                <div>
+                                                 <div>
                                                     <p className="text-xs font-bold">{p.name}</p>
-                                                    <p className="text-[10px] text-muted-foreground">₦{p.price}</p>
+                                                    <p className="text-[10px] text-muted-foreground">₦{formatPrice(p.price)}</p>
                                                 </div>
                                             </div>
                                             <Button size="sm" variant="ghost">Select</Button>
@@ -632,7 +633,7 @@ export function CartDetails({ cartId, onPaymentSuccess }: CartDetailsProps) {
 
                         <div className="flex justify-between text-sm">
                             <span>Subtotal</span>
-                            <span>₦{subtotal.toFixed(2)}</span>
+                            <span>₦{formatPrice(subtotal)}</span>
                         </div>
 
                         <div className="flex justify-between text-sm">
@@ -640,14 +641,14 @@ export function CartDetails({ cartId, onPaymentSuccess }: CartDetailsProps) {
                                 Delivery Fee
                                 {!isLocked && <span className="text-xs text-muted-foreground">({selectedAddress?.state || "Standard"})</span>}
                             </span>
-                            <span>₦{deliveryFee.toFixed(2)}</span>
+                            <span>₦{formatPrice(deliveryFee)}</span>
                         </div>
 
                         <Separator />
 
                         <div className="flex justify-between font-semibold text-lg">
                             <span>Total</span>
-                            <span>₦{totalAmount.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
+                            <span>₦{formatPrice(totalAmount)}</span>
                         </div>
 
                         {!isLocked && user && selectedAddressId && (

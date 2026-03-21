@@ -9,7 +9,7 @@ import { useCart } from "@/hooks/use-cart"
 import { toast } from "sonner"
 import { HeartPulse, Loader2, MessageCircle, ShoppingCart } from "lucide-react"
 import { useAppContext } from "@/hooks/useAppContext"
-import { getProductPrice } from "@/lib/stock-pricing"
+import { getProductPrice, formatPrice } from "@/lib/stock-pricing"
 
 const Description = () => {
   const [product, setProduct] = useState<any>(null);
@@ -99,7 +99,7 @@ const Description = () => {
           </div>
 
           <div className="text-3xl font-black text-foreground">
-            ₦ {getProductPrice(product, user?.role)?.toLocaleString()}
+            ₦ {formatPrice(getProductPrice(product, user?.role))}
           </div>
 
           <div className="prose prose-sm max-w-none text-muted-foreground">

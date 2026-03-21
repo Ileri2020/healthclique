@@ -5,6 +5,7 @@ import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import { format } from "date-fns"
 import { Eye } from "lucide-react"
+import { formatPrice } from "@/lib/stock-pricing"
 
 export type CartSummary = {
     id: string
@@ -54,7 +55,7 @@ export const getColumns = (): ColumnDef<CartSummary>[] => [
         header: () => <div className="text-right">Total</div>,
         cell: ({ row }) => {
             const amount = parseFloat(row.getValue("total"))
-            return <div className="text-right font-medium">₦{amount.toLocaleString()}</div>
+            return <div className="text-right font-medium">₦{formatPrice(amount)}</div>
         },
     },
 ]

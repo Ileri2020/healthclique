@@ -38,6 +38,7 @@ import { useCart } from '@/hooks/use-cart';
 import { useMediaQuery } from '@/hooks/use-media-query';
 import { useAppContext } from '@/hooks/useAppContext';
 import { cn } from '@/lib/utils';
+import { formatPrice } from '@/lib/stock-pricing';
 import axios from 'axios';
 import { toast } from 'sonner';
 
@@ -303,7 +304,7 @@ export function CartClient({ className, cart: _unusedCart }: CartClientProps) {
                       </button>
                     </div>
                     <p className="text-sm font-black text-primary">
-                      ₦{(item.price * markup * item.quantity).toFixed(2)}
+                      ₦{formatPrice(item.price * markup * item.quantity)}
                     </p>
                   </div>
                 </div>
@@ -355,15 +356,15 @@ export function CartClient({ className, cart: _unusedCart }: CartClientProps) {
           <div className="space-y-2 py-3 border-t border-b border-dashed">
              <div className="flex justify-between text-xs font-bold text-muted-foreground">
                 <span>Subtotal</span>
-                <span>₦{subtotal.toFixed(2)}</span>
+                <span>₦{formatPrice(subtotal)}</span>
              </div>
              <div className="flex justify-between text-xs font-bold text-muted-foreground">
                 <span>Delivery Charge</span>
-                <span>₦{deliveryFee.toFixed(2)}</span>
+                <span>₦{formatPrice(deliveryFee)}</span>
              </div>
              <div className="flex justify-between text-lg font-black text-primary pt-1">
                 <span>Total Amount</span>
-                <span>₦{totalAmount.toFixed(2)}</span>
+                <span>₦{formatPrice(totalAmount)}</span>
              </div>
           </div>
 

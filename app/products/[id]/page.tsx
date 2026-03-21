@@ -10,7 +10,7 @@ import { useCart } from "@/hooks/use-cart"
 import { toast } from "sonner"
 import { HeartPulse, Loader2, MessageCircle, ShoppingCart } from "lucide-react"
 import { useAppContext } from "@/hooks/useAppContext"
-import { getProductPrice, PRICE_MARKUPS } from "@/lib/stock-pricing"
+import { getProductPrice, PRICE_MARKUPS, formatPrice } from "@/lib/stock-pricing"
 import { Badge } from "@/components/ui/badge"
 import { FileText, AlertCircle, Star } from "lucide-react"
 import { ProductReviews } from "@/components/myComponents/subs/productReviews"
@@ -161,7 +161,7 @@ const Description = () => {
 
           <div className="flex items-baseline gap-3">
             <span className="text-4xl font-black text-foreground">
-                ₦ {((selectedBulk ? selectedBulk.price : getProductPrice(product, user?.role)) * (selectedBulk ? (PRICE_MARKUPS[user?.role as keyof typeof PRICE_MARKUPS] || 1.3) : 1)).toLocaleString()}
+                ₦ {formatPrice((selectedBulk ? selectedBulk.price : getProductPrice(product, user?.role)) * (selectedBulk ? (PRICE_MARKUPS[user?.role as keyof typeof PRICE_MARKUPS] || 1.3) : 1))}
             </span>
             {selectedBulk && (
                 <span className="text-sm font-bold text-muted-foreground">
@@ -182,7 +182,7 @@ const Description = () => {
                     >
                         <div className="text-[10px] font-black uppercase text-muted-foreground">Single Unit</div>
                         <div className="text-sm font-bold">1 {product.weight || 'Piece'}</div>
-                        <div className="text-xs font-black mt-1 text-primary">₦ {getProductPrice(product, user?.role).toLocaleString()}</div>
+                        <div className="text-xs font-black mt-1 text-primary">₦ {formatPrice(getProductPrice(product, user?.role))}</div>
                     </button>
                     {product.bulkPrices.map((bp: any) => (
                         <button 
@@ -192,7 +192,7 @@ const Description = () => {
                         >
                             <div className="text-[10px] font-black uppercase text-muted-foreground">{bp.name}</div>
                             <div className="text-sm font-bold">{bp.quantity} {product.weight || 'Units'}</div>
-                            <div className="text-xs font-black mt-1 text-primary">₦ {(bp.price * (PRICE_MARKUPS[user?.role as keyof typeof PRICE_MARKUPS] || 1.3)).toLocaleString()}</div>
+                            <div className="text-xs font-black mt-1 text-primary">₦ {formatPrice(bp.price * (PRICE_MARKUPS[user?.role as keyof typeof PRICE_MARKUPS] || 1.3))}</div>
                         </button>
                     ))}
                 </div>
