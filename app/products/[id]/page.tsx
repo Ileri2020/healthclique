@@ -3,7 +3,7 @@ import { motion } from "framer-motion"
 import { Button } from "@/components/ui/button"
 import { Skeleton } from "@/components/ui/skeleton"
 import { useParams } from "next/navigation"
-import { useEffect, useState } from "react"
+import { useEffect, useRef, useState } from "react"
 import { ProductCard } from "@/components/myComponents/subs/productCard"
 import { GlobalSearch } from "@/components/myComponents/subs"
 import { useCart } from "@/hooks/use-cart"
@@ -29,7 +29,8 @@ const Description = () => {
   const { addItem } = useCart();
   const { user } = useAppContext();
   
-  const [emblaRef] = useEmblaCarousel({ loop: true }, [Autoplay({ delay: 3000, stopOnInteraction: false })] as any);
+  const plugin = useRef(Autoplay({ delay: 3000, stopOnInteraction: false }));
+  const [emblaRef] = useEmblaCarousel({ loop: true }, [plugin.current]);
 
   const regClass = product?.regulatoryClassification || "OTC";
   const isPrescription = regClass === "Prescription Medicine";
@@ -85,10 +86,64 @@ const Description = () => {
 
   if (loading) {
     return (
-      <div className="flex h-[60vh] w-full items-center justify-center">
-        <Skeleton className="h-10 w-10 rounded-full bg-muted/40" />
-        <Skeleton className="h-6 w-[200px] bg-muted/30 ml-4" />
-      </div>
+      <motion.section
+        initial={{ opacity: 0 }}
+        animate={{ opacity: 1 }}
+        className="container mx-auto max-w-7xl px-4 py-8 md:py-16"
+      >
+        <div className="mb-12 max-w-2xl">
+          <Skeleton className="h-12 w-full rounded-full" />
+        </div>
+
+        <div className="grid grid-cols-1 gap-12 lg:grid-cols-2">
+          {/* Product Image Skeleton */}
+          <div className="relative aspect-square overflow-hidden rounded-3xl border bg-white p-8 shadow-sm">
+             <Skeleton className="h-full w-full rounded-2xl" />
+          </div>
+
+          {/* Product Info Skeleton */}
+          <div className="flex flex-col space-y-6">
+            <Skeleton className="h-6 w-32 rounded-md" />
+            <Skeleton className="h-12 w-3/4 rounded-md" />
+            <Skeleton className="h-6 w-48 rounded-md" />
+            <Skeleton className="h-10 w-1/3 rounded-md mt-4" />
+
+            {/* Description Lines */}
+            <div className="space-y-2 py-4">
+               <Skeleton className="h-4 w-full rounded-md" />
+               <Skeleton className="h-4 w-full rounded-md" />
+               <Skeleton className="h-4 w-5/6 rounded-md" />
+               <Skeleton className="h-4 w-2/3 rounded-md" />
+            </div>
+
+            {/* Action Buttons */}
+            <div className="flex flex-wrap gap-4 pt-4">
+               <Skeleton className="h-14 w-full rounded-xl" />
+            </div>
+            
+            <div className="grid grid-cols-1 gap-4 mt-4 rounded-2xl bg-muted/30 p-4 sm:grid-cols-2">
+               <Skeleton className="h-8 w-full rounded-md" />
+               <Skeleton className="h-8 w-full rounded-md" />
+            </div>
+          </div>
+        </div>
+
+        <Skeleton className="h-40 w-full rounded-3xl mt-12" />
+
+        {/* Carousel Skeleton */}
+        <div className="mt-16">
+           <Skeleton className="h-8 w-64 mb-6" />
+           <div className="flex gap-4 p-2 overflow-hidden">
+             {[...Array(4)].map((_, i) => (
+                <div key={i} className="flex-[0_0_auto] w-[260px] flex flex-col space-y-3">
+                  <Skeleton className="h-48 w-full rounded-2xl" />
+                  <Skeleton className="h-4 w-3/4 rounded-md" />
+                  <Skeleton className="h-4 w-1/2 rounded-md" />
+                </div>
+             ))}
+           </div>
+        </div>
+      </motion.section>
     );
   }
 
@@ -270,14 +325,15 @@ const Description = () => {
 
       {/* Closely Similar Carousel */}
       {similarProducts.length > 0 && (
-        <div className="mt-16 overflow-hidden" ref={emblaRef}>
+        <div className="mt-16">
           <div className="mb-6 px-2">
             <h2 className="text-xl font-bold text-primary flex items-center gap-2">
               <HeartPulse className="h-5 w-5" /> Recommended for You
             </h2>
           </div>
-          <div className="flex gap-4 p-2">
-            {similarProducts.map((simProd) => (
+          <div className="overflow-hidden" ref={emblaRef}>
+            <div className="flex gap-4 p-2">
+              {similarProducts.map((simProd) => (
               <div key={`carousel-${simProd.id}`} className="flex-[0_0_auto] w-[260px]">
                 <ProductCard
                   className="w-full"
@@ -295,6 +351,7 @@ const Description = () => {
                 />
               </div>
             ))}
+            </div>
           </div>
         </div>
       )}

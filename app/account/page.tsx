@@ -33,7 +33,8 @@ import {
   CheckCircle,
   AlertCircle,
   CreditCard,
-  Plus
+  Plus,
+  Database
 } from "lucide-react"
 
 const Account = () => {
@@ -172,6 +173,19 @@ const Account = () => {
           <>
             <AdminBulkManager />
             <AdminUserManager />
+            <div className="rounded-xl border bg-card shadow-sm overflow-hidden">
+              <div className="px-5 py-3 bg-muted/40 border-b">
+                <h2 className="text-sm font-semibold text-muted-foreground uppercase tracking-wide">Admin Tools</h2>
+              </div>
+              <div className="p-5">
+                <Link href="/sheet">
+                  <Button className="w-full gap-2 bg-indigo-600 hover:bg-indigo-700 shadow-lg shadow-indigo-200">
+                    <Database className="h-4 w-4" />
+                    Data Sheet Manager
+                  </Button>
+                </Link>
+              </div>
+            </div>
           </>
         ) : user.role === "customer" ? (
           <AccountUpgrade />

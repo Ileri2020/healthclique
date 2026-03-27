@@ -21,7 +21,9 @@ export async function GET(req: NextRequest) {
                 include: {
                     category: { select: { name: true } },
                     brand: { select: { name: true } },
-                    activeIngredients: { select: { name: true } }
+                    activeIngredients: { select: { name: true } },
+                    stock: { select: { addedQuantity: true } },
+                    bulkPrices: { select: { name: true, quantity: true, price: true } }
                 }
             });
 
@@ -32,9 +34,11 @@ export async function GET(req: NextRequest) {
                 price: p.price,
                 category: p.category?.name || "",
                 brand: p.brand?.name || "",
-                ingredients: p.activeIngredients.map(i => i.name).join(", "),
+                ingredients: p.activeIngredients.map(i => i.name).join("; "),
+                stockCount: p.stock.reduce((acc, s) => acc + s.addedQuantity, 0),
+                bulkPrices: p.bulkPrices.map(b => `${b.name}(${b.quantity}x @ ₦${b.price})`).join("; "),
                 scarce: p.scarce || false,
-                requiresPrescription: false // Placeholder if not in model yet, but keeping structure
+                requiresPrescription: p.requiresPrescription || false
             }));
             return NextResponse.json(data);
         }
@@ -60,9 +64,22 @@ export async function GET(req: NextRequest) {
                 product: s.product?.name || "",
                 quantity: s.addedQuantity,
                 costPrice: s.costPerProduct,
-                sellingPrice: s.pricePerProduct,
+                sellingPrice: (s as any).pricePerProduct,
             }));
             return NextResponse.json(data);
+        }
+
+        if (model === "all") {
+            const [products, categories, brands, ingredients, stocks, bulkPrices, users] = await Promise.all([
+                prisma.product.findMany({ include: { category: true, brand: true, activeIngredients: true, stock: true, bulkPrices: true } }),
+                prisma.category.findMany({ include: { _count: { select: { products: true } } } }),
+                prisma.brand.findMany({ include: { _count: { select: { products: true } } } }),
+                prisma.activeIngredient.findMany({ include: { _count: { select: { products: true } } } }),
+                prisma.stock.findMany({ include: { product: { select: { name: true } } } }),
+                prisma.bulkPrice.findMany({ include: { product: { select: { name: true } } } }),
+                prisma.user.findMany({ select: { id: true, name: true, email: true, role: true, createdAt: true } })
+            ]);
+            return NextResponse.json({ products, categories, brands, ingredients, stocks, bulkPrices, users });
         }
 
         return NextResponse.json({ error: "Model not supported for export" }, { status: 400 });
@@ -111,7 +128,7 @@ export async function POST(req: NextRequest) {
                         create: { name: brand }
                     }) : null;
 
-                    const ingredientList = ingredients ? ingredients.split(",").map((i: string) => i.trim()).filter(Boolean) : [];
+                    const ingredientList = ingredients ? ingredients.split(";").map((i: string) => i.trim()).filter(Boolean) : [];
                     const ingredientIds = [];
                     for (const ingName of ingredientList) {
                         const ing = await prisma.activeIngredient.upsert({

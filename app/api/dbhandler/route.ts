@@ -42,6 +42,9 @@ const modelMap: Record<string, any> = {
   user: prisma.user,
   message: prisma.message,
   brand: prisma.brand,
+  activeIngredient: prisma.activeIngredient,
+  healthConcern: prisma.healthConcern,
+  bulkPrice: prisma.bulkPrice,
   // @ts-ignore
   priceFeedback: prisma.priceFeedback,
   deliveryFee: prisma.deliveryFee,
@@ -159,6 +162,30 @@ export async function GET(req: NextRequest) {
           take: limit,
           include: { _count: { select: { products: true } } },
           orderBy: { order: 'asc' }
+        }));
+      }
+
+      if (model === "activeIngredient") {
+        return NextResponse.json(await prisma.activeIngredient.findMany({
+          take: limit,
+          include: { _count: { select: { products: true } } },
+          orderBy: { name: 'asc' }
+        }));
+      }
+
+      if (model === "healthConcern") {
+        return NextResponse.json(await prisma.healthConcern.findMany({
+          take: limit,
+          include: { _count: { select: { products: true } } },
+          orderBy: { name: 'asc' }
+        }));
+      }
+
+      if (model === "bulkPrice") {
+        return NextResponse.json(await prisma.bulkPrice.findMany({
+          take: limit,
+          include: { product: { select: { name: true } } },
+          orderBy: { createdAt: 'desc' }
         }));
       }
 
@@ -419,6 +446,13 @@ export async function PUT(req: NextRequest) {
         updatedData.brand = { connectOrCreate: { where: { name: updatedData.brand }, create: { name: updatedData.brand } } };
       } else {
         updatedData.brand = { disconnect: true };
+      }
+    }
+    if (updatedData.category !== undefined) {
+      if (updatedData.category) {
+        updatedData.category = { connectOrCreate: { where: { name: updatedData.category }, create: { name: updatedData.category } } };
+      } else {
+        updatedData.category = { disconnect: true };
       }
     }
     if (Array.isArray(updatedData.activeIngredients)) {

@@ -2,7 +2,7 @@
 
 import React, { useState } from "react";
 import axios from "axios";
-import { Download, Upload, Loader2, FileSpreadsheet, CheckCircle2, AlertCircle, RefreshCcw } from "lucide-react";
+import { Download, Upload, Loader2, FileSpreadsheet, CheckCircle2, AlertCircle, RefreshCcw, Database } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
@@ -33,6 +33,25 @@ export const AdminBulkManager = () => {
         } catch (err) {
             console.error(err);
             toast.error("Failed to download CSV");
+        } finally {
+            setLoading(false);
+        }
+    };
+
+    const handleDownloadAllData = async () => {
+        setLoading(true);
+        try {
+            const res = await axios.get(`/api/admin/bulk?model=all`);
+            const dataStr = "data:text/json;charset=utf-8," + encodeURIComponent(JSON.stringify(res.data, null, 2));
+            const downloadAnchorNode = document.createElement('a');
+            downloadAnchorNode.setAttribute("href", dataStr);
+            downloadAnchorNode.setAttribute("download", `full_database_backup_${new Date().toISOString().split('T')[0]}.json`);
+            document.body.appendChild(downloadAnchorNode);
+            downloadAnchorNode.click();
+            downloadAnchorNode.remove();
+            toast.success("Full database backup downloaded");
+        } catch (err) {
+            toast.error("Failed to download database backup");
         } finally {
             setLoading(false);
         }
@@ -109,6 +128,15 @@ export const AdminBulkManager = () => {
                         >
                             {loading ? <Loader2 className="w-4 h-4 animate-spin" /> : <Download className="w-4 h-4" />}
                             Export
+                        </Button>
+                        <Button 
+                            variant="secondary" 
+                            className="h-12 rounded-xl px-6 gap-2 border-2 border-indigo-200 bg-indigo-50 text-indigo-700 hover:bg-indigo-100 font-black text-xs min-w-[140px]" 
+                            onClick={handleDownloadAllData}
+                            disabled={loading}
+                        >
+                            {loading ? <Loader2 className="w-4 h-4 animate-spin" /> : <Database className="w-4 h-4" />}
+                            Backup All
                         </Button>
                     </div>
                 </div>

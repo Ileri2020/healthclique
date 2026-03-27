@@ -40,7 +40,7 @@ import { useCart } from '@/hooks/use-cart';
 import { useMediaQuery } from '@/hooks/use-media-query';
 import { useAppContext } from '@/hooks/useAppContext';
 import { cn } from '@/lib/utils';
-import { formatPrice, roundUpToNearest5 } from '@/lib/stock-pricing';
+import { formatPrice, roundUpToNearest5, PRICE_MARKUPS } from '@/lib/stock-pricing';
 import axios from 'axios';
 import { toast } from 'sonner';
 
@@ -118,7 +118,8 @@ export function CartClient({ className, cart: _unusedCart }: CartClientProps) {
   const discountAmountRounded = roundUpToNearest5(discountAmount);
 
   const totalAmount = Math.max(0, (subtotalRounded - discountAmountRounded) + deliveryFeeRounded);
-  const markup = 1.0; 
+  const role = user?.role || "customer";
+  const markup = PRICE_MARKUPS[role as keyof typeof PRICE_MARKUPS] || 1.3;
 
   React.useEffect(() => {
     setIsMounted(true);

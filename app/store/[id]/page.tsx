@@ -56,10 +56,42 @@ const Description = () => {
 
   if (loading) {
     return (
-      <div className="flex h-[60vh] w-full items-center justify-center">
-        <Skeleton className="h-10 w-10 rounded-full bg-muted/40" />
-        <Skeleton className="h-6 w-[200px] bg-muted/30 ml-4" />
-      </div>
+      <motion.section
+        initial={{ opacity: 0 }}
+        animate={{ opacity: 1 }}
+        className="container mx-auto max-w-7xl px-4 py-8 md:py-16"
+      >
+        <div className="grid grid-cols-1 gap-12 lg:grid-cols-2">
+          {/* Product Image Skeleton */}
+          <div className="relative aspect-square overflow-hidden rounded-3xl border bg-white p-8 shadow-sm">
+             <Skeleton className="h-full w-full rounded-2xl" />
+          </div>
+
+          {/* Product Info Skeleton */}
+          <div className="flex flex-col space-y-6">
+            <Skeleton className="h-6 w-32 rounded-md" />
+            <Skeleton className="h-12 w-3/4 rounded-md" />
+            <Skeleton className="h-6 w-48 rounded-md" />
+            <Skeleton className="h-10 w-1/3 rounded-md mt-4" />
+
+            <div className="space-y-2 py-4">
+               <Skeleton className="h-4 w-full rounded-md" />
+               <Skeleton className="h-4 w-full rounded-md" />
+               <Skeleton className="h-4 w-5/6 rounded-md" />
+               <Skeleton className="h-4 w-2/3 rounded-md" />
+            </div>
+
+            <div className="flex flex-wrap gap-4 pt-4">
+               <Skeleton className="h-14 w-full rounded-xl" />
+            </div>
+            
+            <div className="grid grid-cols-1 gap-4 mt-4 rounded-2xl bg-muted/30 p-4 sm:grid-cols-2">
+               <Skeleton className="h-8 w-full rounded-md" />
+               <Skeleton className="h-8 w-full rounded-md" />
+            </div>
+          </div>
+        </div>
+      </motion.section>
     );
   }
 

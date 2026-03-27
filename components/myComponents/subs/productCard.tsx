@@ -73,6 +73,7 @@ export function ProductCard({
 
   const handleAddToCart = (e: React.MouseEvent) => {
     e.preventDefault();
+    e.stopPropagation();
     if (onAddToCart) {
       setIsAddingToCart(true);
       setTimeout(() => {
@@ -84,6 +85,7 @@ export function ProductCard({
 
   const handleAddToWishlist = async (e: React.MouseEvent) => {
     e.preventDefault();
+    e.stopPropagation();
     const startState = isInWishlist;
     setIsInWishlist(!startState);
     try {
@@ -376,6 +378,7 @@ export function ProductCard({
                   onClick={(e) => {
                     if (isControlled) {
                       e.preventDefault();
+                      e.stopPropagation();
                       window.open(speakToRepUrl, "_blank");
                     } else {
                       handleAddToCart(e);
@@ -420,6 +423,7 @@ export function ProductCard({
                     onClick={(e) => {
                       if (isControlled) {
                         e.preventDefault();
+                        e.stopPropagation();
                         window.open(speakToRepUrl, "_blank");
                       } else {
                         handleAddToCart(e);

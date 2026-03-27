@@ -11,41 +11,40 @@ datasource db {
 }
 
 model User {
-  id                 String            @id @default(auto()) @map("_id") @db.ObjectId
-  name               String?
-  email              String            @unique
-  password           String? // Optional — OAuth users (Google, etc.) have no password
-  providerid         String?
-  role               String            @default("customer") // customer, professional, wholesaler, admin, staff
-  professionalType   String? // pharmacist, doctor, nurse
-  regNumber          String? // professional registration number
-  licenseImage       String? // practice licence image URL
-  facilityName       String? // For wholesalers/reps
-  facilityAddress    String? // For wholesalers/reps
-  facilityRegNumber  String? // For wholesalers/reps
-  verificationStatus String            @default("unverified") // unverified, pending, verified, rejected
-  cart               Cart[]
+  id                        String                     @id @default(auto()) @map("_id") @db.ObjectId
+  name                      String?
+  email                     String                     @unique
+  password                  String? // Optional — OAuth users (Google, etc.) have no password
+  providerid                String?
+  role                      String                     @default("customer") // customer, professional, wholesaler, admin, staff
+  professionalType          String? // pharmacist, doctor, nurse
+  regNumber                 String? // professional registration number
+  licenseImage              String? // practice licence image URL
+  facilityName              String? // For wholesalers/reps
+  facilityAddress           String? // For wholesalers/reps
+  facilityRegNumber         String? // For wholesalers/reps
+  verificationStatus        String                     @default("unverified") // unverified, pending, verified, rejected
+  cart                      Cart[]
   //orders   Order[]
-  reviews            Review[]
-  priceFeedbacks     PriceFeedback[]
-  addresses          ShippingAddress[]
-  post               Post[]
-  notification       Notification[]
-  avatarUrl          String?           @default("https://res.cloudinary.com/dc5khnuiu/image/upload/v1752627019/uxokaq0djttd7gsslwj9.png")
-  contact            String?           @default("xxxx-xxx-xxxx")
-  walletBalance      Float             @default(0.0)
-  walletCurrency     String            @default("NGN")
-  createdAt          DateTime          @default(now())
-  updatedAt          DateTime          @updatedAt
-  wishlist           Wishlist[]
-  sentMessages       Message[]         @relation("SentMessages")
-  receivedMessages   Message[]         @relation("ReceivedMessages")
+  reviews                   Review[]
+  priceFeedbacks            PriceFeedback[]
+  addresses                 ShippingAddress[]
+  post                      Post[]
+  notification              Notification[]
+  avatarUrl                 String?                    @default("https://res.cloudinary.com/dc5khnuiu/image/upload/v1752627019/uxokaq0djttd7gsslwj9.png")
+  contact                   String?                    @default("xxxx-xxx-xxxx")
+  walletBalance             Float                      @default(0.0)
+  walletCurrency            String                     @default("NGN")
+  createdAt                 DateTime                   @default(now())
+  updatedAt                 DateTime                   @updatedAt
+  wishlist                  Wishlist[]
+  sentMessages              Message[]                  @relation("SentMessages")
+  receivedMessages          Message[]                  @relation("ReceivedMessages")
   heavilyDiscountedProducts HeavilyDiscountedProduct[]
-  acceptedTerms      Boolean           @default(false)
-  acceptedPrivacy    Boolean           @default(false)
-  acceptedReturns    Boolean           @default(false)
+  acceptedTerms             Boolean                    @default(false)
+  acceptedPrivacy           Boolean                    @default(false)
+  acceptedReturns           Boolean                    @default(false)
 }
-
 
 model Post {
   id          String   @id @default(auto()) @map("_id") @db.ObjectId
@@ -83,36 +82,36 @@ model Category {
 }
 
 model Product {
-  id                       String             @id @default(auto()) @map("_id") @db.ObjectId
-  name                     String
-  description              String?
-  category                 Category           @relation(fields: [categoryId], references: [id])
-  categoryId               String             @db.ObjectId
-  activeIngredientIds      String[]           @db.ObjectId
-  activeIngredients        ActiveIngredient[] @relation(fields: [activeIngredientIds], references: [id])
-  scarce                   Boolean?
-  for                      String[] //patients like oncology/cancer, hiv, etc
-  brandId                  String?            @db.ObjectId
-  brand                    Brand?             @relation(fields: [brandId], references: [id])
-  price                    Float
+  id                        String                     @id @default(auto()) @map("_id") @db.ObjectId
+  name                      String
+  description               String?
+  category                  Category                   @relation(fields: [categoryId], references: [id])
+  categoryId                String                     @db.ObjectId
+  activeIngredientIds       String[]                   @db.ObjectId
+  activeIngredients         ActiveIngredient[]         @relation(fields: [activeIngredientIds], references: [id])
+  scarce                    Boolean?
+  for                       String[] //patients like oncology/cancer, hiv, etc
+  brandId                   String?                    @db.ObjectId
+  brand                     Brand?                     @relation(fields: [brandId], references: [id])
+  price                     Float
   /// Health concerns this product addresses e.g. ["Pain Relief", "Gut Health"]
-  healthConcernIds         String[]           @db.ObjectId
-  healthConcerns           HealthConcern[]    @relation(fields: [healthConcernIds], references: [id])
-  stock                    Stock[] //@relation(fields: [stockId], references: [id])
+  healthConcernIds          String[]                   @db.ObjectId
+  healthConcerns            HealthConcern[]            @relation(fields: [healthConcernIds], references: [id])
+  stock                     Stock[] //@relation(fields: [stockId], references: [id])
   //stockId  String?   @db.ObjectId
-  reviews                  Review[]
-  priceFeedbacks           PriceFeedback[]
-  cartItems                CartItem[]
-  Featured                 FeaturedProduct?
-  images                   String[]
+  reviews                   Review[]
+  priceFeedbacks            PriceFeedback[]
+  cartItems                 CartItem[]
+  Featured                  FeaturedProduct?
+  images                    String[]
   //orderItems OrderItem[]
-  regulatoryClassification String?            @default("OTC") // "Prescription Medicine", "OTC", "Pharmacy Only Medicine", "Controlled Medicine"
-  requiresPrescription     Boolean            @default(false)
-  weight                   String? // e.g. "500mg", "10 caps", "100ml"
-  bulkPrices               BulkPrice[]
-  createdAt                DateTime           @default(now())
-  updatedAt                DateTime           @updatedAt
-  wishlist                 Wishlist[]
+  regulatoryClassification  String?                    @default("OTC") // "Prescription Medicine", "OTC", "Pharmacy Only Medicine", "Controlled Medicine"
+  requiresPrescription      Boolean                    @default(false)
+  weight                    String? // e.g. "500mg", "10 caps", "100ml"
+  bulkPrices                BulkPrice[]
+  createdAt                 DateTime                   @default(now())
+  updatedAt                 DateTime                   @updatedAt
+  wishlist                  Wishlist[]
   heavilyDiscountedProducts HeavilyDiscountedProduct[]
 }
 
@@ -338,16 +337,15 @@ model Advertext {
   updatedAt DateTime @updatedAt
 }
 
-
 model HeavilyDiscountedProduct {
-  id          String   @id @default(auto()) @map("_id") @db.ObjectId
-  product     Product  @relation(fields: [productId], references: [id])
-  productId   String   @db.ObjectId
-  creator     User     @relation(fields: [creatorId], references: [id])
-  creatorId   String   @db.ObjectId
-  approved    Boolean  @default(false)
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
+  id        String   @id @default(auto()) @map("_id") @db.ObjectId
+  product   Product  @relation(fields: [productId], references: [id])
+  productId String   @db.ObjectId
+  creator   User     @relation(fields: [creatorId], references: [id])
+  creatorId String   @db.ObjectId
+  approved  Boolean  @default(false)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 }
 
 // model Comment {

@@ -95,10 +95,22 @@ const Stocks = () => {
 
   if (loading) {
     return (
-      <div className='w-full max-w-7xl flex gap-5 flex-wrap p-4 justify-center mx-auto'>
-            {[1, 2, 3, 4, 5, 6, 7, 8].map((_, index) => (
-              <Skeleton key={index} className="h-40 w-40 rounded-xl bg-muted/30" />
-        ))}
+      <div className="w-full flex flex-col items-center py-8">
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6 px-4 max-w-7xl w-full">
+          {[...Array(8)].map((_, index) => (
+            <div key={index} className="flex flex-col space-y-4 w-full p-2 border rounded-xl shadow-sm">
+              <Skeleton className="h-48 md:h-64 w-full rounded-lg" />
+              <div className="space-y-2 flex-1 px-2">
+                <Skeleton className="h-5 w-3/4" />
+                <Skeleton className="h-4 w-1/2" />
+                <Skeleton className="h-8 w-1/3 mt-2" />
+              </div>
+              <div className="pt-2 px-2 pb-2">
+                <Skeleton className="h-10 w-full rounded-md" />
+              </div>
+            </div>
+          ))}
+        </div>
       </div>
     );
   }

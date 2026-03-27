@@ -37,12 +37,12 @@ export default function Similar(props: {similar : stockCategory[]}) {
   const { addItem } = useCart()
   // const navigate = useRouter()
 
-  const cart = (name : string, id : string, price : number, img : any) => {
+  const cart = (name : string, id : string, price : number, image : any) => {
     addItem({
       name,
       id,
       price,
-      img,
+      img: image,
     }, 1);
   }
   
@@ -66,7 +66,7 @@ export default function Similar(props: {similar : stockCategory[]}) {
             <CarouselItem key={index} className="basis-1/3 md:basis-1/5 lg:basis-1/7 flex flex-col overflow-clip justify-center items-center w-full ml-2 /bg-green-500">
               <Link href={`/products/${stockId}`}>
                 <div className="h-[100px] w-full mx-2 md:mx-0 flex justify-center items-center">
-                    <img src={stock.img} alt="" className="h-full rounded-sm"/>
+                    <img src={stock.img || (stock as any).images?.[0] || "/placeholder.png"} alt="" className="h-full rounded-sm"/>
                 </div>
               </Link>
               
@@ -82,7 +82,7 @@ export default function Similar(props: {similar : stockCategory[]}) {
                           </div>
                         </Link>
                         <div className="flex flex-row w-full max-w-[1000px] gap-1">
-                          <Button onClick={() => cart(stock.name, stockId, stock.price, stock.img)} variant={"outline"} className="rounded-lg flex-1 w-full h-6 font-semibold text-accent-secondary border-accent-secondary hover:bg-accent-secondary/60 hover:text-background border-2"><CiShoppingCart /></Button>
+                          <Button onClick={() => cart(stock.name, stockId, stock.price, stock.img || (stock as any).images?.[0])} variant={"outline"} className="rounded-lg flex-1 w-full h-6 font-semibold text-accent-secondary border-accent-secondary hover:bg-accent-secondary/60 hover:text-background border-2"><CiShoppingCart /></Button>
                         </div>
                       </>
                     );

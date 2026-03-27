@@ -27,13 +27,12 @@ export async function GET() {
     
     for (const stock of stocks) {
       // If pricePerProduct exists, update it to cost
-      if (stock.pricePerProduct) {
-        const cost = (stock.pricePerProduct || 0) / 1.1;
+      if ((stock as any).pricePerProduct) {
+        const cost = ((stock as any).pricePerProduct || 0) / 1.1;
         await prisma.stock.update({
           where: { id: stock.id },
           data: { 
-            pricePerProduct: cost,
-            costPerProduct: cost // Ensure costPerProduct is also set
+            costPerProduct: cost // Ensure costPerProduct is set
           }
         });
         stockCount++;
