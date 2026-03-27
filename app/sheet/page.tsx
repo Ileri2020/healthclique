@@ -1,6 +1,6 @@
 "use client"
 
-import { useState, useEffect, useRef } from "react"
+import { useState, useEffect, useRef, useMemo } from "react"
 import { useAppContext } from "@/hooks/useAppContext"
 import { Button } from "@/components/ui/button"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
@@ -102,6 +102,12 @@ interface BulkPrice {
   product?: { name: string }
 }
 
+interface ColumnFilter {
+  field: string;
+  operator: 'contains' | 'equals' | 'greaterThan' | 'lessThan';
+  value: any;
+}
+
 const Sheet = () => {
   const { user } = useAppContext()
   const router = useRouter()
@@ -114,16 +120,50 @@ const Sheet = () => {
   const [bulkPrices, setBulkPrices] = useState<BulkPrice[]>([])
   const [loading, setLoading] = useState(true)
   const [editingCell, setEditingCell] = useState<{ rowId: string, field: string } | null>(null)
-  const [saving, setSaving] = useState<string | null>(null)
   const [searchQuery, setSearchQuery] = useState("")
+  const [selectedRows, setSelectedRows] = useState<Set<string>>(new Set())
+  const [history, setHistory] = useState<any[]>([])
+  const [historyIndex, setHistoryIndex] = useState(-1)
+  const [validationErrors, setValidationErrors] = useState<Record<string, string>>({})
+  const [filters, setFilters] = useState<ColumnFilter[]>([])
+  const [sortConfig, setSortConfig] = useState<{ field: string; direction: 'asc' | 'desc' } | null>(null)
+  const [saving, setSaving] = useState<string | null>(null)
 
   useEffect(() => {
-    if (user.role !== "admin") {
+    // Only proceed once user data is loaded from context
+    if (user.loading) return;
+    
+    if (!user || user.role !== "admin") {
       router.push("/account")
       return
     }
     loadData()
-  }, [user])
+  }, [user, user.loading, router])
+
+  // Copy/paste functionality
+  useEffect(() => {
+    const handlePaste = async (e: ClipboardEvent) => {
+      if (editingCell) {
+        const text = e.clipboardData?.getData('text');
+        if (text) {
+          // Parse tabular data and update multiple cells if it's CSV-like
+          const lines = text.split('\n').map(line => line.split('\t'));
+          if (lines.length > 1 && lines[0].length > 1) {
+            // Multi-cell paste
+            e.preventDefault();
+            // For now, just paste the first cell
+            updateCell(editingCell.rowId, editingCell.field, text.trim());
+          } else {
+            // Single cell paste
+            updateCell(editingCell.rowId, editingCell.field, text.trim());
+          }
+        }
+      }
+    };
+
+    document.addEventListener('paste', handlePaste);
+    return () => document.removeEventListener('paste', handlePaste);
+  }, [editingCell]);
 
   const loadData = async () => {
     setLoading(true)
@@ -136,13 +176,14 @@ const Sheet = () => {
         stocksRes,
         bulkPricesRes
       ] = await Promise.all([
-        axios.get("/api/sheet?model=product"),
-        axios.get("/api/sheet?model=category"),
-        axios.get("/api/sheet?model=brand"),
-        axios.get("/api/sheet?model=activeIngredient"),
-        axios.get("/api/sheet?model=stock"),
-        axios.get("/api/sheet?model=bulkPrice")
+        axios.get("/api/sheet?model=product").catch(e => ({ data: [] })),
+        axios.get("/api/sheet?model=category").catch(e => ({ data: [] })),
+        axios.get("/api/sheet?model=brand").catch(e => ({ data: [] })),
+        axios.get("/api/sheet?model=activeIngredient").catch(e => ({ data: [] })),
+        axios.get("/api/sheet?model=stock").catch(e => ({ data: [] })),
+        axios.get("/api/sheet?model=bulkPrice").catch(e => ({ data: [] }))
       ])
+      
       setProducts(productsRes.data)
       setCategories(categoriesRes.data)
       setBrands(brandsRes.data)
@@ -150,12 +191,40 @@ const Sheet = () => {
       setStocks(stocksRes.data)
       setBulkPrices(bulkPricesRes.data)
     } catch (error) {
-      toast.error("Failed to load data")
+      console.error("Critical Data Load Error:", error)
+      toast.error("Failed to sync some data tables")
+    } finally {
+      setLoading(false)
     }
-    setLoading(false)
   }
 
   const updateCell = async (id: string, field: string, value: any, model: string = "product") => {
+    // Validate cell value
+    const validationError = validateCell(model, field, value);
+    if (validationError) {
+      setValidationErrors(prev => ({ ...prev, [`${id}-${field}`]: validationError }));
+      return;
+    }
+
+    // Clear validation error
+    setValidationErrors(prev => {
+      const newErrors = { ...prev };
+      delete newErrors[`${id}-${field}`];
+      return newErrors;
+    });
+
+    // Save to history for undo
+    const previousValue = getCurrentValue(id, field, model);
+    setHistory(prev => [...prev.slice(0, historyIndex + 1), {
+      id,
+      field,
+      model,
+      previousValue,
+      newValue: value,
+      timestamp: Date.now()
+    }]);
+    setHistoryIndex(prev => prev + 1);
+
     try {
       const response = await axios.put("/api/sheet", { model, id, field, value })
       // Update local state with server response
@@ -167,6 +236,10 @@ const Sheet = () => {
         setBrands(prev => prev.map(b => b.id === id ? response.data : b));
       } else if (model === "activeIngredient") {
         setIngredients(prev => prev.map(i => i.id === id ? response.data : i));
+      } else if (model === "stock") {
+        setStocks(prev => prev.map(s => s.id === id ? response.data : s));
+      } else if (model === "bulkPrice") {
+        setBulkPrices(prev => prev.map(b => b.id === id ? response.data : b));
       }
       toast.success("Updated successfully")
     } catch (error) {
@@ -174,6 +247,200 @@ const Sheet = () => {
       loadData() // Reload on error
     }
   }
+
+  const validateCell = (model: string, field: string, value: any): string | null => {
+    if (model === 'product') {
+      if (field === 'price' && (isNaN(value) || value < 0)) {
+        return 'Price must be a positive number';
+      }
+      if (field === 'name' && (!value || value.length < 3)) {
+        return 'Name must be at least 3 characters';
+      }
+    } else if (model === 'stock') {
+      if (field === 'addedQuantity' && (isNaN(value) || value < 0)) {
+        return 'Quantity must be a positive number';
+      }
+      if (field === 'costPerProduct' && (isNaN(value) || value < 0)) {
+        return 'Cost must be a positive number';
+      }
+    } else if (model === 'bulkPrice') {
+      if (field === 'quantity' && (isNaN(value) || value < 1)) {
+        return 'Quantity must be at least 1';
+      }
+      if (field === 'price' && (isNaN(value) || value < 0)) {
+        return 'Price must be a positive number';
+      }
+    }
+    return null;
+  }
+
+  const getCurrentValue = (id: string, field: string, model: string) => {
+    let data;
+    switch (model) {
+      case 'product': data = products; break;
+      case 'category': data = categories; break;
+      case 'brand': data = brands; break;
+      case 'activeIngredient': data = ingredients; break;
+      case 'stock': data = stocks; break;
+      case 'bulkPrice': data = bulkPrices; break;
+      default: return null;
+    }
+    return data.find(item => item.id === id)?.[field];
+  }
+
+  const undo = () => {
+    if (historyIndex >= 0) {
+      const change = history[historyIndex];
+      updateCell(change.id, change.field, change.previousValue, change.model);
+      setHistoryIndex(prev => prev - 1);
+    }
+  }
+
+  const redo = () => {
+    if (historyIndex < history.length - 1) {
+      const change = history[historyIndex + 1];
+      updateCell(change.id, change.field, change.newValue, change.model);
+      setHistoryIndex(prev => prev + 1);
+    }
+  }
+
+  const handleKeyDown = (e: React.KeyboardEvent, rowId: string, field: string) => {
+    if (e.key === 'Enter') {
+      e.preventDefault();
+      moveToCell(rowId, field, 'down');
+    } else if (e.key === 'Tab') {
+      e.preventDefault();
+      moveToCell(rowId, field, e.shiftKey ? 'left' : 'right');
+    } else if (e.key === 'Escape') {
+      setEditingCell(null);
+    }
+  }
+
+  const moveToCell = (rowId: string, field: string, direction: 'up' | 'down' | 'left' | 'right') => {
+    const fieldsMap: Record<string, string[]> = {
+      products: ["name", "price"],
+      categories: ["name"],
+      brands: ["name", "order"],
+      ingredients: ["name"],
+      stocks: ["addedQuantity", "costPerProduct"],
+      bulkprices: ["name", "quantity", "price"]
+    };
+
+    const currentFields = fieldsMap[activeTab] || [];
+    const currentIndex = sortedData.findIndex(item => item.id === rowId);
+    if (currentIndex === -1) return;
+
+    let nextRowId = rowId;
+    let nextField = field;
+
+    if (direction === 'down' && currentIndex < sortedData.length - 1) {
+      nextRowId = sortedData[currentIndex + 1].id;
+    } else if (direction === 'up' && currentIndex > 0) {
+      nextRowId = sortedData[currentIndex - 1].id;
+    } else if (direction === 'right') {
+      const fieldIndex = currentFields.indexOf(field);
+      if (fieldIndex < currentFields.length - 1) {
+        nextField = currentFields[fieldIndex + 1];
+      } else if (currentIndex < sortedData.length - 1) {
+        nextRowId = sortedData[currentIndex + 1].id;
+        nextField = currentFields[0];
+      }
+    } else if (direction === 'left') {
+      const fieldIndex = currentFields.indexOf(field);
+      if (fieldIndex > 0) {
+        nextField = currentFields[fieldIndex - 1];
+      } else if (currentIndex > 0) {
+        nextRowId = sortedData[currentIndex - 1].id;
+        nextField = currentFields[currentFields.length - 1];
+      }
+    }
+
+    if (nextRowId !== rowId || nextField !== field) {
+      setEditingCell({ rowId: nextRowId, field: nextField });
+    }
+  }
+
+  const bulkDelete = async () => {
+    if (selectedRows.size === 0) return;
+    if (!confirm(`Delete ${selectedRows.size} records?`)) return;
+
+    try {
+      await Promise.all(
+        Array.from(selectedRows).map(id =>
+          axios.delete(`/api/sheet?model=${activeTab}&id=${id}`)
+        )
+      );
+      setSelectedRows(new Set());
+      loadData();
+      toast.success(`Deleted ${selectedRows.size} records`);
+    } catch (error) {
+      toast.error("Bulk delete failed");
+    }
+  }
+
+  const exportToCSV = () => {
+    let data;
+    switch (activeTab) {
+      case 'products': data = products; break;
+      case 'categories': data = categories; break;
+      case 'brands': data = brands; break;
+      case 'ingredients': data = ingredients; break;
+      case 'stocks': data = stocks; break;
+      case 'bulkprices': data = bulkPrices; break;
+      default: return;
+    }
+
+    if (data.length === 0) return;
+
+    const headers = Object.keys(data[0]).join(',');
+    const rows = data.map(row =>
+      Object.values(row).map(v => `"${v}"`).join(',')
+    ).join('\n');
+    const csv = `${headers}\n${rows}`;
+    const blob = new Blob([csv], { type: 'text/csv' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `${activeTab}_export_${new Date().toISOString().split('T')[0]}.csv`;
+    a.click();
+  }
+
+  const filteredData = useMemo(() => {
+    let data;
+    switch (activeTab) {
+      case 'products': data = products; break;
+      case 'categories': data = categories; break;
+      case 'brands': data = brands; break;
+      case 'ingredients': data = ingredients; break;
+      case 'stocks': data = stocks; break;
+      case 'bulkprices': data = bulkPrices; break;
+      default: data = [];
+    }
+
+    return data.filter(row =>
+      filters.every(filter => {
+        const cellValue = row[filter.field];
+        switch (filter.operator) {
+          case 'contains': return cellValue?.toString().toLowerCase().includes(filter.value.toLowerCase());
+          case 'equals': return cellValue === filter.value;
+          case 'greaterThan': return cellValue > filter.value;
+          case 'lessThan': return cellValue < filter.value;
+          default: return true;
+        }
+      })
+    );
+  }, [activeTab, products, categories, brands, ingredients, stocks, bulkPrices, filters]);
+
+  const sortedData = useMemo(() => {
+    if (!sortConfig) return filteredData;
+    return [...filteredData].sort((a, b) => {
+      const aVal = a[sortConfig.field];
+      const bVal = b[sortConfig.field];
+      if (aVal < bVal) return sortConfig.direction === 'asc' ? -1 : 1;
+      if (aVal > bVal) return sortConfig.direction === 'asc' ? 1 : -1;
+      return 0;
+    });
+  }, [filteredData, sortConfig]);
 
   const deleteRow = async (id: string, model: string) => {
     if (!confirm("Are you sure? This is permanent.")) return;
@@ -198,17 +465,23 @@ const Sheet = () => {
 
   const renderCell = (item: any, field: string, model: string) => {
     const isEditing = editingCell?.rowId === item.id && editingCell?.field === field
-    const isSaving = saving === `${item.id}-${field}`
+    const validationError = validationErrors[`${item.id}-${field}`]
 
     return (
-      <div className={cn("relative min-h-[40px] flex items-center px-1", isSaving && "bg-primary/5")}>
-        {isSaving && <div className="absolute right-1 top-1"><Loader2 className="h-2 w-2 animate-spin text-primary" /></div>}
-        {model === "product" && renderProductCell(item as Product, field, isEditing)}
-        {model === "category" && renderCategoryCell(item as Category, field, isEditing)}
-        {model === "brand" && renderBrandCell(item as Brand, field, isEditing)}
-        {model === "activeIngredient" && renderActiveIngredientCell(item as ActiveIngredient, field, isEditing)}
-        {model === "stock" && renderStockCell(item as Stock, field, isEditing)}
-        {model === "bulkPrice" && renderBulkPriceCell(item as BulkPrice, field, isEditing)}
+      <div className="relative min-h-[40px] flex flex-col">
+        <div className="flex items-center px-1">
+          {model === "product" && renderProductCell(item as Product, field, isEditing)}
+          {model === "category" && renderCategoryCell(item as Category, field, isEditing)}
+          {model === "brand" && renderBrandCell(item as Brand, field, isEditing)}
+          {model === "activeIngredient" && renderActiveIngredientCell(item as ActiveIngredient, field, isEditing)}
+          {model === "stock" && renderStockCell(item as Stock, field, isEditing)}
+          {model === "bulkPrice" && renderBulkPriceCell(item as BulkPrice, field, isEditing)}
+        </div>
+        {validationError && (
+          <div className="absolute -bottom-6 left-0 text-[10px] text-destructive bg-white px-1 rounded shadow-sm border">
+            {validationError}
+          </div>
+        )}
       </div>
     )
   }
@@ -219,12 +492,13 @@ const Sheet = () => {
         return isEditing ? (
           <Input
             defaultValue={product.name}
+            id={`cell-${product.id}-name`}
             className="h-8 text-xs border-primary"
             onBlur={(e) => {
                 if (e.target.value !== product.name) updateCell(product.id, field, e.target.value);
                 setEditingCell(null);
             }}
-            onKeyDown={(e) => e.key === "Enter" && (e.target as any).blur()}
+            onKeyDown={(e) => handleKeyDown(e, product.id, field)}
             autoFocus
           />
         ) : (
@@ -235,6 +509,7 @@ const Sheet = () => {
         return isEditing ? (
           <Input
             type="number"
+            id={`cell-${product.id}-price`}
             defaultValue={product.price}
             className="h-8 text-xs font-mono text-right"
             onBlur={(e) => {
@@ -242,6 +517,7 @@ const Sheet = () => {
                 if (val !== product.price) updateCell(product.id, field, val);
                 setEditingCell(null);
             }}
+            onKeyDown={(e) => handleKeyDown(e, product.id, field)}
             autoFocus
           />
         ) : (
@@ -422,8 +698,6 @@ const Sheet = () => {
     }
   }
 
-  const filteredProducts = products.filter(p => p.name?.toLowerCase().includes(searchQuery.toLowerCase()));
-
   return (
     <div className="min-h-screen bg-[#f8f9fa] flex flex-col select-none">
       {/* APP BAR */}
@@ -448,6 +722,45 @@ const Sheet = () => {
                     onChange={(e) => setSearchQuery(e.target.value)}
                 />
             </div>
+            <Button 
+              variant="outline" 
+              size="sm" 
+              onClick={undo} 
+              disabled={historyIndex < 0}
+              className="h-9 gap-2 border-2 text-[11px] font-bold uppercase tracking-wider"
+            >
+                <Undo size={14} />
+                Undo
+            </Button>
+            <Button 
+              variant="outline" 
+              size="sm" 
+              onClick={redo} 
+              disabled={historyIndex >= history.length - 1}
+              className="h-9 gap-2 border-2 text-[11px] font-bold uppercase tracking-wider"
+            >
+                <RefreshCcw size={14} />
+                Redo
+            </Button>
+            <Button 
+              variant="outline" 
+              size="sm" 
+              onClick={bulkDelete} 
+              disabled={selectedRows.size === 0}
+              className="h-9 gap-2 border-2 text-[11px] font-bold uppercase tracking-wider text-destructive hover:bg-destructive hover:text-white"
+            >
+                <Trash2 size={14} />
+                Delete ({selectedRows.size})
+            </Button>
+            <Button 
+              variant="outline" 
+              size="sm" 
+              onClick={exportToCSV}
+              className="h-9 gap-2 border-2 text-[11px] font-bold uppercase tracking-wider"
+            >
+                <ExternalLink size={14} />
+                Export CSV
+            </Button>
             <Button variant="outline" size="sm" onClick={loadData} className="h-9 gap-2 border-2 text-[11px] font-bold uppercase tracking-wider">
                 <RefreshCcw size={14} className={loading ? "animate-spin" : ""} />
                 Cloud Sync
@@ -494,6 +807,18 @@ const Sheet = () => {
                     <Table className="border-collapse">
                         <TableHeader className="bg-slate-50/80 sticky top-0 z-20 backdrop-blur-md">
                             <TableRow className="border-b shadow-none hover:bg-transparent">
+                                <TableHead className="w-12 text-center text-[10px] font-black border-r">
+                                  <Checkbox
+                                    checked={selectedRows.size > 0 && selectedRows.size === sortedData.length}
+                                    onCheckedChange={(checked) => {
+                                      if (checked) {
+                                        setSelectedRows(new Set(sortedData.map(item => item.id)));
+                                      } else {
+                                        setSelectedRows(new Set());
+                                      }
+                                    }}
+                                  />
+                                </TableHead>
                                 <TableHead className="w-12 text-center text-[10px] font-black border-r">#</TableHead>
                                 {activeTab === "products" && <>
                                     <TableHead className="text-[10px] font-black uppercase border-r px-4 h-12">Product Name</TableHead>
@@ -533,8 +858,24 @@ const Sheet = () => {
                             </TableRow>
                         </TableHeader>
                         <TableBody>
-                            {(activeTab === "products" ? filteredProducts : activeTab === "categories" ? categories : activeTab === "brands" ? brands : activeTab === "ingredients" ? ingredients : activeTab === "stocks" ? stocks : bulkPrices).map((item, i) => (
-                                <TableRow key={item.id} className="group hover:bg-indigo-50/20 transition-all even:bg-slate-50/30">
+                            {sortedData.map((item, i) => (
+                                <TableRow key={item.id} className={cn("group hover:bg-indigo-50/20 transition-all even:bg-slate-50/30", selectedRows.has(item.id) && "bg-indigo-100/50")}>
+                                    <TableCell className="text-center border-r">
+                                      <Checkbox
+                                        checked={selectedRows.has(item.id)}
+                                        onCheckedChange={(checked) => {
+                                          if (checked) {
+                                            setSelectedRows(prev => new Set([...prev, item.id]));
+                                          } else {
+                                            setSelectedRows(prev => {
+                                              const newSet = new Set(prev);
+                                              newSet.delete(item.id);
+                                              return newSet;
+                                            });
+                                          }
+                                        }}
+                                      />
+                                    </TableCell>
                                     <TableCell className="text-[10px] font-mono text-center border-r text-slate-400 group-hover:text-indigo-600 transition-colors">
                                         {String(i + 1).padStart(3, '0')}
                                     </TableCell>

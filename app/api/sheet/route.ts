@@ -16,6 +16,23 @@ const modelMap: Record<string, any> = {
   user: prisma.user,
 };
 
+async function logChange(model: string, operation: string, userId: string, recordId: string, changes: any) {
+  try {
+    await prisma.auditLog.create({
+      data: {
+        model,
+        operation,
+        userId,
+        recordId,
+        changes,
+        timestamp: new Date()
+      }
+    });
+  } catch (error) {
+    console.error("Audit log failed:", error);
+  }
+}
+
 export async function GET(req: NextRequest) {
   const session = await auth();
   if ((session?.user as any)?.role !== "admin") {
@@ -123,6 +140,9 @@ export async function PUT(req: NextRequest) {
       data: updateData,
     });
 
+    // Log the change
+    await logChange(model, 'update', session?.user?.id || 'unknown', id, { field, newValue: value });
+
     return NextResponse.json(updated);
   } catch (error: any) {
     console.error("Sheet Update Error:", error);
@@ -166,6 +186,10 @@ export async function DELETE(req: NextRequest) {
 
   try {
     await modelMap[model].delete({ where: { id } });
+    
+    // Log the deletion
+    await logChange(model, 'delete', session?.user?.id || 'unknown', id!, null);
+    
     return NextResponse.json({ success: true });
   } catch (error: any) {
     return NextResponse.json({ error: error.message }, { status: 500 });

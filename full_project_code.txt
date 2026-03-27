@@ -1,6 +1,6 @@
 ================================================================================
 LOIS SPICE PROJECT - SOURCE CODE CONSOLIDATION
-Generated: 2026-03-27 06:24:56
+Generated: 2026-03-27 16:00:13
 ================================================================================
 
 
@@ -1479,7 +1479,9 @@ export async function GET(req: NextRequest) {
                 include: {
                     category: { select: { name: true } },
                     brand: { select: { name: true } },
-                    activeIngredients: { select: { name: true } }
+                    activeIngredients: { select: { name: true } },
+                    stock: { select: { addedQuantity: true } },
+                    bulkPrices: { select: { name: true, quantity: true, price: true } }
                 }
             });
 
@@ -1490,9 +1492,11 @@ export async function GET(req: NextRequest) {
                 price: p.price,
                 category: p.category?.name || "",
                 brand: p.brand?.name || "",
-                ingredients: p.activeIngredients.map(i => i.name).join(", "),
+                ingredients: p.activeIngredients.map(i => i.name).join("; "),
+                stockCount: p.stock.reduce((acc, s) => acc + s.addedQuantity, 0),
+                bulkPrices: p.bulkPrices.map(b => `${b.name}(${b.quantity}x @ ₦${b.price})`).join("; "),
                 scarce: p.scarce || false,
-                requiresPrescription: false // Placeholder if not in model yet, but keeping structure
+                requiresPrescription: p.requiresPrescription || false
             }));
             return NextResponse.json(data);
         }
@@ -1518,9 +1522,22 @@ export async function GET(req: NextRequest) {
                 product: s.product?.name || "",
                 quantity: s.addedQuantity,
                 costPrice: s.costPerProduct,
-                sellingPrice: s.pricePerProduct,
+                sellingPrice: (s as any).pricePerProduct,
             }));
             return NextResponse.json(data);
+        }
+
+        if (model === "all") {
+            const [products, categories, brands, ingredients, stocks, bulkPrices, users] = await Promise.all([
+                prisma.product.findMany({ include: { category: true, brand: true, activeIngredients: true, stock: true, bulkPrices: true } }),
+                prisma.category.findMany({ include: { _count: { select: { products: true } } } }),
+                prisma.brand.findMany({ include: { _count: { select: { products: true } } } }),
+                prisma.activeIngredient.findMany({ include: { _count: { select: { products: true } } } }),
+                prisma.stock.findMany({ include: { product: { select: { name: true } } } }),
+                prisma.bulkPrice.findMany({ include: { product: { select: { name: true } } } }),
+                prisma.user.findMany({ select: { id: true, name: true, email: true, role: true, createdAt: true } })
+            ]);
+            return NextResponse.json({ products, categories, brands, ingredients, stocks, bulkPrices, users });
         }
 
         return NextResponse.json({ error: "Model not supported for export" }, { status: 400 });
@@ -1569,7 +1586,7 @@ export async function POST(req: NextRequest) {
                         create: { name: brand }
                     }) : null;
 
-                    const ingredientList = ingredients ? ingredients.split(",").map((i: string) => i.trim()).filter(Boolean) : [];
+                    const ingredientList = ingredients ? ingredients.split(";").map((i: string) => i.trim()).filter(Boolean) : [];
                     const ingredientIds = [];
                     for (const ingName of ingredientList) {
                         const ing = await prisma.activeIngredient.upsert({
@@ -3757,13 +3774,12 @@ export async function GET() {
     
     for (const stock of stocks) {
       // If pricePerProduct exists, update it to cost
-      if (stock.pricePerProduct) {
-        const cost = (stock.pricePerProduct || 0) / 1.1;
+      if ((stock as any).pricePerProduct) {
+        const cost = ((stock as any).pricePerProduct || 0) / 1.1;
         await prisma.stock.update({
           where: { id: stock.id },
           data: { 
-            pricePerProduct: cost,
-            costPerProduct: cost // Ensure costPerProduct is also set
+            costPerProduct: cost // Ensure costPerProduct is set
           }
         });
         stockCount++;
@@ -4785,6 +4801,7 @@ import { auth } from "@/auth";
 
 const prisma = new PrismaClient();
 
+// Unified Model Map for the entire Sheet System
 const modelMap: Record<string, any> = {
   product: prisma.product,
   category: prisma.category,
@@ -4803,10 +4820,11 @@ export async function GET(req: NextRequest) {
   }
 
   const { searchParams } = new URL(req.url);
-  const model = searchParams.get("model") || "product";
-  const prismaModel = modelMap[model];
+  const model = searchParams.get("model");
 
-  if (!prismaModel) return NextResponse.json({ error: "Invalid model" }, { status: 400 });
+  if (!model || !modelMap[model]) {
+    return NextResponse.json({ error: "Invalid model" }, { status: 400 });
+  }
 
   try {
     let data;
@@ -4816,19 +4834,27 @@ export async function GET(req: NextRequest) {
           category: { select: { id: true, name: true } },
           brand: { select: { id: true, name: true } },
           activeIngredients: { select: { id: true, name: true } },
-          stock: { select: { id: true, addedQuantity: true } },
-          bulkPrices: { select: { id: true, name: true, price: true } },
+          stock: { select: { id: true, addedQuantity: true, costPerProduct: true, createdAt: true } },
+          bulkPrices: { select: { id: true, name: true, quantity: true, price: true } },
         },
-        orderBy: { updatedAt: "desc" },
+        orderBy: { createdAt: 'desc' }
       });
     } else if (model === "stock") {
       data = await prisma.stock.findMany({
         include: { product: { select: { id: true, name: true } } },
-        orderBy: { createdAt: "desc" },
+        orderBy: { createdAt: 'desc' }
+      });
+    } else if (model === "bulkPrice") {
+      data = await prisma.bulkPrice.findMany({
+        include: { product: { select: { id: true, name: true } } },
+        orderBy: { createdAt: 'desc' }
       });
     } else {
-      data = await prismaModel.findMany({
-        orderBy: { updatedAt: "desc" },
+      data = await modelMap[model].findMany({
+        include: model === "category" || model === "brand" || model === "activeIngredient" 
+          ? { _count: { select: { products: true } } } 
+          : undefined,
+        orderBy: { createdAt: 'desc' }
       });
     }
 
@@ -4852,14 +4878,39 @@ export async function PUT(req: NextRequest) {
 
     let updateData: any = {};
 
-    // Handle relations
-    if (field === "categoryId") {
-      updateData.category = { connect: { id: value } };
-    } else if (field === "brandId") {
-      updateData.brand = value ? { connect: { id: value } } : { disconnect: true };
-    } else if (field === "ingredients") {
-      // Expecting array of ingredient IDs
-      updateData.activeIngredients = { set: value.map((vId: string) => ({ id: vId })) };
+    // --- Complex Relation Handling Logic ---
+    if (model === "product") {
+      if (field === "categoryId") {
+        updateData.category = { connect: { id: value } };
+      } else if (field === "brandId") {
+        updateData.brand = value ? { connect: { id: value } } : { disconnect: true };
+      } else if (field === "activeIngredients") {
+        // Value is expected to be an array of ingredient names or IDs
+        // Based on your previous logic, using names as stable identifiers for connectOrCreate
+        updateData.activeIngredients = { 
+          set: [], 
+          connectOrCreate: value.map((name: string) => ({ 
+            where: { name }, 
+            create: { name } 
+          })) 
+        };
+      } else if (field === "price") {
+        updateData.price = parseFloat(value) || 0;
+      } else {
+        updateData[field] = value;
+      }
+    } else if (model === "stock" || model === "bulkPrice") {
+      if (field === "productId") {
+        updateData.product = { connect: { id: value } };
+      } else if (field === "addedQuantity" || field === "quantity") {
+        updateData[field] = parseInt(value) || 0;
+      } else if (field === "costPerProduct" || field === "price") {
+        updateData[field] = parseFloat(value) || 0;
+      } else {
+        updateData[field] = value;
+      }
+    } else if (model === "brand" && field === "order") {
+      updateData.order = parseInt(value) || 0;
     } else {
       updateData[field] = value;
     }
@@ -4873,6 +4924,48 @@ export async function PUT(req: NextRequest) {
   } catch (error: any) {
     console.error("Sheet Update Error:", error);
     return NextResponse.json({ error: error.message || "Update failed" }, { status: 500 });
+  }
+}
+
+export async function POST(req: NextRequest) {
+  const session = await auth();
+  if ((session?.user as any)?.role !== "admin") {
+    return NextResponse.json({ error: "Unauthorized" }, { status: 403 });
+  }
+
+  try {
+    const { model, data } = await req.json();
+    const prismaModel = modelMap[model];
+    if (!prismaModel) return NextResponse.json({ error: "Invalid model" }, { status: 400 });
+
+    // Handle initial relation state for a new empty record
+    const created = await prismaModel.create({
+      data: data || {}
+    });
+
+    return NextResponse.json(created);
+  } catch (error: any) {
+    return NextResponse.json({ error: error.message }, { status: 500 });
+  }
+}
+
+export async function DELETE(req: NextRequest) {
+  const session = await auth();
+  if ((session?.user as any)?.role !== "admin") {
+    return NextResponse.json({ error: "Unauthorized" }, { status: 403 });
+  }
+
+  const { searchParams } = new URL(req.url);
+  const model = searchParams.get("model");
+  const id = searchParams.get("id");
+
+  if (!model || !id || !modelMap[model]) return NextResponse.json({ error: "Invalid parameters" }, { status: 400 });
+
+  try {
+    await modelMap[model].delete({ where: { id } });
+    return NextResponse.json({ success: true });
+  } catch (error: any) {
+    return NextResponse.json({ error: error.message }, { status: 500 });
   }
 }
 
@@ -6980,7 +7073,7 @@ LOCATION: app\sheet\page.tsx
 
 "use client"
 
-import { useState, useEffect } from "react"
+import { useState, useEffect, useRef } from "react"
 import { useAppContext } from "@/hooks/useAppContext"
 import { Button } from "@/components/ui/button"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
@@ -7011,8 +7104,18 @@ import {
   Users,
   Save,
   Undo,
-  Plus
+  Plus,
+  Search,
+  Loader2,
+  MoreVertical,
+  Trash2,
+  ExternalLink,
+  ChevronDown,
+  Database,
+  RefreshCcw
 } from "lucide-react"
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu"
+import { cn } from "@/lib/utils"
 
 interface Product {
   id: string
@@ -7020,11 +7123,11 @@ interface Product {
   description: string
   price: number
   categoryId?: string
-  category?: { name: string }
+  category?: { id: string, name: string }
   brandId?: string
-  brand?: { name: string }
+  brand?: { id: string, name: string }
   activeIngredientIds?: string[]
-  activeIngredients?: { name: string }[]
+  activeIngredients?: { id: string, name: string }[]
   stock?: { id: string, addedQuantity: number, costPerProduct?: number }[]
   bulkPrices?: { id: string, name: string, quantity: number, price: number }[]
   scarce: boolean
@@ -7069,21 +7172,7 @@ interface BulkPrice {
   name: string
   quantity: number
   price: number
-}
-
-interface Category {
-  id: string
-  name: string
-}
-
-interface Brand {
-  id: string
-  name: string
-}
-
-interface ActiveIngredient {
-  id: string
-  name: string
+  product?: { name: string }
 }
 
 const Sheet = () => {
@@ -7098,14 +7187,19 @@ const Sheet = () => {
   const [bulkPrices, setBulkPrices] = useState<BulkPrice[]>([])
   const [loading, setLoading] = useState(true)
   const [editingCell, setEditingCell] = useState<{ rowId: string, field: string } | null>(null)
+  const [saving, setSaving] = useState<string | null>(null)
+  const [searchQuery, setSearchQuery] = useState("")
 
   useEffect(() => {
-    if (user.role !== "admin") {
+    // Only proceed once user data is loaded from context
+    if (user.loading) return;
+    
+    if (!user || user.role !== "admin") {
       router.push("/account")
       return
     }
     loadData()
-  }, [user, activeTab])
+  }, [user, user.loading, router])
 
   const loadData = async () => {
     setLoading(true)
@@ -7118,13 +7212,14 @@ const Sheet = () => {
         stocksRes,
         bulkPricesRes
       ] = await Promise.all([
-        axios.get("/api/dbhandler?model=product&include=category,brand,activeIngredients,stock,bulkPrices"),
-        axios.get("/api/dbhandler?model=category"),
-        axios.get("/api/dbhandler?model=brand"),
-        axios.get("/api/dbhandler?model=activeIngredient"),
-        axios.get("/api/dbhandler?model=stock&include=product"),
-        axios.get("/api/dbhandler?model=bulkPrice&include=product")
+        axios.get("/api/sheet?model=product").catch(e => ({ data: [] })),
+        axios.get("/api/sheet?model=category").catch(e => ({ data: [] })),
+        axios.get("/api/sheet?model=brand").catch(e => ({ data: [] })),
+        axios.get("/api/sheet?model=activeIngredient").catch(e => ({ data: [] })),
+        axios.get("/api/sheet?model=stock").catch(e => ({ data: [] })),
+        axios.get("/api/sheet?model=bulkPrice").catch(e => ({ data: [] }))
       ])
+      
       setProducts(productsRes.data)
       setCategories(categoriesRes.data)
       setBrands(brandsRes.data)
@@ -7132,709 +7227,473 @@ const Sheet = () => {
       setStocks(stocksRes.data)
       setBulkPrices(bulkPricesRes.data)
     } catch (error) {
-      toast.error("Failed to load data")
+      console.error("Critical Data Load Error:", error)
+      toast.error("Failed to sync some data tables")
+    } finally {
+      setLoading(false)
     }
-    setLoading(false)
   }
 
   const updateCell = async (id: string, field: string, value: any, model: string = "product") => {
     try {
-      await axios.put(`/api/dbhandler?model=${model}&id=${id}`, { [field]: value })
+      const response = await axios.put("/api/sheet", { model, id, field, value })
+      // Update local state with server response
+      if (model === "product") {
+        setProducts(prev => prev.map(p => p.id === id ? response.data : p));
+      } else if (model === "category") {
+        setCategories(prev => prev.map(c => c.id === id ? response.data : c));
+      } else if (model === "brand") {
+        setBrands(prev => prev.map(b => b.id === id ? response.data : b));
+      } else if (model === "activeIngredient") {
+        setIngredients(prev => prev.map(i => i.id === id ? response.data : i));
+      }
       toast.success("Updated successfully")
-      loadData() // Refresh data
     } catch (error) {
       toast.error("Update failed")
+      loadData() // Reload on error
     }
   }
+
+  const deleteRow = async (id: string, model: string) => {
+    if (!confirm("Are you sure? This is permanent.")) return;
+    try {
+      await axios.delete(`/api/sheet?model=${model}&id=${id}`);
+      toast.success("Deleted");
+      loadData();
+    } catch (err) {
+      toast.error("Delete failed");
+    }
+  };
+
+  const createRow = async (model: string) => {
+    try {
+      await axios.post("/api/sheet", { model, data: {} });
+      toast.success("New record created");
+      loadData();
+    } catch (err) {
+      toast.error("Failed to create record");
+    }
+  };
 
   const renderCell = (item: any, field: string, model: string) => {
     const isEditing = editingCell?.rowId === item.id && editingCell?.field === field
+    const isSaving = saving === `${item.id}-${field}`
 
-    if (model === "product") {
-      return renderProductCell(item as Product, field, isEditing)
-    } else if (model === "category") {
-      return renderCategoryCell(item as Category, field, isEditing)
-    } else if (model === "brand") {
-      return renderBrandCell(item as Brand, field, isEditing)
-    } else if (model === "activeIngredient") {
-      return renderActiveIngredientCell(item as ActiveIngredient, field, isEditing)
-    }
-    return <div>{item[field]}</div>
+    return (
+      <div className={cn("relative min-h-[40px] flex items-center px-1", isSaving && "bg-primary/5")}>
+        {isSaving && <div className="absolute right-1 top-1"><Loader2 className="h-2 w-2 animate-spin text-primary" /></div>}
+        {model === "product" && renderProductCell(item as Product, field, isEditing)}
+        {model === "category" && renderCategoryCell(item as Category, field, isEditing)}
+        {model === "brand" && renderBrandCell(item as Brand, field, isEditing)}
+        {model === "activeIngredient" && renderActiveIngredientCell(item as ActiveIngredient, field, isEditing)}
+        {model === "stock" && renderStockCell(item as Stock, field, isEditing)}
+        {model === "bulkPrice" && renderBulkPriceCell(item as BulkPrice, field, isEditing)}
+      </div>
+    )
   }
 
   const renderProductCell = (product: Product, field: string, isEditing: boolean) => {
-
     switch (field) {
       case "name":
         return isEditing ? (
           <Input
-            value={product.name}
-            onChange={(e) => {
-              const newProducts = products.map(p =>
-                p.id === product.id ? { ...p, name: e.target.value } : p
-              )
-              setProducts(newProducts)
+            defaultValue={product.name}
+            className="h-8 text-xs border-primary"
+            onBlur={(e) => {
+                if (e.target.value !== product.name) updateCell(product.id, field, e.target.value);
+                setEditingCell(null);
             }}
-            onBlur={() => {
-              updateCell(product.id, field, product.name)
-              setEditingCell(null)
-            }}
-            onKeyDown={(e) => {
-              if (e.key === "Enter") {
-                updateCell(product.id, field, product.name)
-                setEditingCell(null)
-              }
-            }}
+            onKeyDown={(e) => e.key === "Enter" && (e.target as any).blur()}
             autoFocus
           />
         ) : (
-          <div
-            className="cursor-pointer hover:bg-muted/50 p-2 rounded"
-            onClick={() => setEditingCell({ rowId: product.id, field })}
-          >
-            {product.name}
-          </div>
+          <div className="cursor-text w-full text-xs font-bold" onClick={() => setEditingCell({ rowId: product.id, field })}>{product.name || <span className="text-muted-foreground/40 italic">New Product...</span>}</div>
         )
 
       case "price":
         return isEditing ? (
           <Input
             type="number"
-            value={product.price}
-            onChange={(e) => {
-              const newProducts = products.map(p =>
-                p.id === product.id ? { ...p, price: parseFloat(e.target.value) || 0 } : p
-              )
-              setProducts(newProducts)
-            }}
-            onBlur={() => {
-              updateCell(product.id, field, product.price)
-              setEditingCell(null)
-            }}
-            onKeyDown={(e) => {
-              if (e.key === "Enter") {
-                updateCell(product.id, field, product.price)
-                setEditingCell(null)
-              }
+            defaultValue={product.price}
+            className="h-8 text-xs font-mono text-right"
+            onBlur={(e) => {
+                const val = parseFloat(e.target.value);
+                if (val !== product.price) updateCell(product.id, field, val);
+                setEditingCell(null);
             }}
             autoFocus
           />
         ) : (
-          <div
-            className="cursor-pointer hover:bg-muted/50 p-2 rounded"
-            onClick={() => setEditingCell({ rowId: product.id, field })}
-          >
-            ₦{product.price.toLocaleString()}
-          </div>
+          <div className="cursor-text w-full text-xs font-mono text-right font-black" onClick={() => setEditingCell({ rowId: product.id, field })}>₦{product.price.toLocaleString()}</div>
         )
 
       case "category":
-        return isEditing ? (
+        return (
           <Select
-            value={product.categoryId || ""}
-            onValueChange={(value) => {
-              const categoryName = categories.find(c => c.id === value)?.name || ""
-              updateCell(product.id, "category", categoryName)
-              setEditingCell(null)
-            }}
+            value={product.categoryId || "none"}
+            onValueChange={(value) => updateCell(product.id, "categoryId", value === "none" ? null : value)}
           >
-            <SelectTrigger>
-              <SelectValue />
+            <SelectTrigger className="h-7 text-[10px] border-none bg-transparent hover:bg-muted/50 transition-colors">
+              <SelectValue placeholder="Select Category" />
             </SelectTrigger>
             <SelectContent>
-              {categories.map(cat => (
-                <SelectItem key={cat.id} value={cat.id}>{cat.name}</SelectItem>
-              ))}
+              <SelectItem value="none">Unassigned</SelectItem>
+              {categories.map(cat => <SelectItem key={cat.id} value={cat.id} className="text-[10px]">{cat.name}</SelectItem>)}
             </SelectContent>
           </Select>
-        ) : (
-          <div
-            className="cursor-pointer hover:bg-muted/50 p-2 rounded"
-            onClick={() => setEditingCell({ rowId: product.id, field })}
-          >
-            {product.category?.name || "—"}
-          </div>
         )
 
       case "brand":
-        return isEditing ? (
+        return (
           <Select
-            value={product.brandId || ""}
-            onValueChange={(value) => {
-              const brandName = brands.find(b => b.id === value)?.name || ""
-              updateCell(product.id, "brand", brandName)
-              setEditingCell(null)
-            }}
+            value={product.brandId || "none"}
+            onValueChange={(value) => updateCell(product.id, "brandId", value === "none" ? null : value)}
           >
-            <SelectTrigger>
-              <SelectValue />
+            <SelectTrigger className="h-7 text-[10px] border-none bg-transparent hover:bg-muted/50 transition-colors">
+              <SelectValue placeholder="Select Brand" />
             </SelectTrigger>
             <SelectContent>
-              {brands.map(b => (
-                <SelectItem key={b.id} value={b.id}>{b.name}</SelectItem>
-              ))}
+              <SelectItem value="none">Unassigned</SelectItem>
+              {brands.map(b => <SelectItem key={b.id} value={b.id} className="text-[10px]">{b.name}</SelectItem>)}
             </SelectContent>
           </Select>
-        ) : (
-          <div
-            className="cursor-pointer hover:bg-muted/50 p-2 rounded"
-            onClick={() => setEditingCell({ rowId: product.id, field })}
-          >
-            {product.brand?.name || "—"}
-          </div>
-        )
-
-      case "ingredients":
-        return isEditing ? (
-          <div className="space-y-2">
-            {ingredients.map(ing => (
-              <div key={ing.id} className="flex items-center space-x-2">
-                <Checkbox
-                  checked={product.activeIngredientIds?.includes(ing.id) || false}
-                  onCheckedChange={(checked) => {
-                    const currentIds = product.activeIngredientIds || []
-                    const newIds = checked
-                      ? [...currentIds, ing.id]
-                      : currentIds.filter(id => id !== ing.id)
-                    const selectedNames = ingredients.filter(i => newIds.includes(i.id)).map(i => i.name)
-                    updateCell(product.id, "activeIngredients", selectedNames)
-                  }}
-                />
-                <label className="text-sm">{ing.name}</label>
-              </div>
-            ))}
-          </div>
-        ) : (
-          <div
-            className="cursor-pointer hover:bg-muted/50 p-2 rounded"
-            onClick={() => setEditingCell({ rowId: product.id, field })}
-          >
-            {product.activeIngredients?.map(i => i.name).join(", ") || "—"}
-          </div>
         )
 
       case "scarce":
-        return (
-          <Checkbox
-            checked={product.scarce}
-            onCheckedChange={(checked) => updateCell(product.id, field, checked)}
-          />
-        )
-
       case "requiresPrescription":
         return (
-          <Checkbox
-            checked={product.requiresPrescription}
-            onCheckedChange={(checked) => updateCell(product.id, field, checked)}
-          />
+          <div className="flex justify-center w-full">
+            <Checkbox
+              checked={!!product[field]}
+              onCheckedChange={(checked) => updateCell(product.id, field, checked)}
+            />
+          </div>
         )
-
+      
       case "stock":
-        const totalStock = product.stock?.reduce((sum, s) => sum + s.addedQuantity, 0) || 0
-        return (
-          <div
-            className="cursor-pointer hover:bg-muted/50 p-2 rounded text-green-600"
-            onClick={() => setActiveTab("stocks")}
-          >
-            {totalStock} units
-          </div>
-        )
+        const total = product.stock?.reduce((s, x) => s + x.addedQuantity, 0) || 0;
+        return <Badge variant={total > 0 ? "default" : "outline"} className="text-[10px] h-5 font-mono">{total} Units</Badge>
 
-      case "bulkPrices":
-        const bulkCount = product.bulkPrices?.length || 0
-        return (
-          <div
-            className="cursor-pointer hover:bg-muted/50 p-2 rounded text-blue-600"
-            onClick={() => setActiveTab("bulkprices")}
-          >
-            {bulkCount} prices
-          </div>
-        )
+      default: return <div>{(product as any)[field]}</div>
     }
   }
 
   const renderCategoryCell = (category: Category, field: string, isEditing: boolean) => {
-    switch (field) {
-      case "name":
+    if (field === "name") {
         return isEditing ? (
-          <Input
-            value={category.name}
-            onChange={(e) => {
-              const newCategories = categories.map(c =>
-                c.id === category.id ? { ...c, name: e.target.value } : c
-              )
-              setCategories(newCategories)
-            }}
-            onBlur={() => {
-              updateCell(category.id, field, category.name, "category")
-              setEditingCell(null)
-            }}
-            onKeyDown={(e) => {
-              if (e.key === "Enter") {
-                updateCell(category.id, field, category.name, "category")
-                setEditingCell(null)
-              }
-            }}
-            autoFocus
-          />
-        ) : (
-          <div
-            className="cursor-pointer hover:bg-muted/50 p-2 rounded"
-            onClick={() => setEditingCell({ rowId: category.id, field })}
-          >
-            {category.name}
-          </div>
-        )
-
-      case "description":
-        return isEditing ? (
-          <Input
-            value={category.description || ""}
-            onChange={(e) => {
-              const newCategories = categories.map(c =>
-                c.id === category.id ? { ...c, description: e.target.value } : c
-              )
-              setCategories(newCategories)
-            }}
-            onBlur={() => {
-              updateCell(category.id, field, category.description, "category")
-              setEditingCell(null)
-            }}
-            onKeyDown={(e) => {
-              if (e.key === "Enter") {
-                updateCell(category.id, field, category.description, "category")
-                setEditingCell(null)
-              }
-            }}
-            autoFocus
-          />
-        ) : (
-          <div
-            className="cursor-pointer hover:bg-muted/50 p-2 rounded"
-            onClick={() => setEditingCell({ rowId: category.id, field })}
-          >
-            {category.description || "—"}
-          </div>
-        )
-
-      default:
-        return <div>{category[field as keyof Category] as string}</div>
+            <Input defaultValue={category.name} onBlur={(e) => { updateCell(category.id, field, e.target.value, "category"); setEditingCell(null); }} autoFocus className="h-8 text-xs" />
+        ) : <div className="w-full text-xs font-bold" onClick={() => setEditingCell({ rowId: category.id, field })}>{category.name}</div>
     }
+    return <div>{(category as any)[field]}</div>
   }
 
   const renderBrandCell = (brand: Brand, field: string, isEditing: boolean) => {
-    switch (field) {
-      case "name":
+    if (field === "name") {
         return isEditing ? (
-          <Input
-            value={brand.name}
-            onChange={(e) => {
-              const newBrands = brands.map(b =>
-                b.id === brand.id ? { ...b, name: e.target.value } : b
-              )
-              setBrands(newBrands)
-            }}
-            onBlur={() => {
-              updateCell(brand.id, field, brand.name, "brand")
-              setEditingCell(null)
-            }}
-            onKeyDown={(e) => {
-              if (e.key === "Enter") {
-                updateCell(brand.id, field, brand.name, "brand")
-                setEditingCell(null)
-              }
-            }}
-            autoFocus
-          />
-        ) : (
-          <div
-            className="cursor-pointer hover:bg-muted/50 p-2 rounded"
-            onClick={() => setEditingCell({ rowId: brand.id, field })}
-          >
-            {brand.name}
-          </div>
-        )
-
-      case "order":
-        return isEditing ? (
-          <Input
-            type="number"
-            value={brand.order}
-            onChange={(e) => {
-              const newBrands = brands.map(b =>
-                b.id === brand.id ? { ...b, order: parseInt(e.target.value) || 0 } : b
-              )
-              setBrands(newBrands)
-            }}
-            onBlur={() => {
-              updateCell(brand.id, field, brand.order, "brand")
-              setEditingCell(null)
-            }}
-            onKeyDown={(e) => {
-              if (e.key === "Enter") {
-                updateCell(brand.id, field, brand.order, "brand")
-                setEditingCell(null)
-              }
-            }}
-            autoFocus
-          />
-        ) : (
-          <div
-            className="cursor-pointer hover:bg-muted/50 p-2 rounded"
-            onClick={() => setEditingCell({ rowId: brand.id, field })}
-          >
-            {brand.order}
-          </div>
-        )
-
-      default:
-        return <div>{brand[field as keyof Brand] as string}</div>
+            <Input defaultValue={brand.name} onBlur={(e) => { updateCell(brand.id, field, e.target.value, "brand"); setEditingCell(null); }} autoFocus className="h-8 text-xs" />
+        ) : <div className="w-full text-xs font-bold" onClick={() => setEditingCell({ rowId: brand.id, field })}>{brand.name}</div>
     }
+    if (field === "order") {
+        return isEditing ? (
+            <Input type="number" defaultValue={brand.order} onBlur={(e) => { updateCell(brand.id, field, parseInt(e.target.value), "brand"); setEditingCell(null); }} autoFocus className="h-8 text-xs" />
+        ) : <div className="w-full text-xs font-mono" onClick={() => setEditingCell({ rowId: brand.id, field })}>{brand.order}</div>
+    }
+    return <div>{(brand as any)[field]}</div>
   }
 
   const renderActiveIngredientCell = (ingredient: ActiveIngredient, field: string, isEditing: boolean) => {
+    if (field === "name") {
+        return isEditing ? (
+            <Input defaultValue={ingredient.name} onBlur={(e) => { updateCell(ingredient.id, field, e.target.value, "activeIngredient"); setEditingCell(null); }} autoFocus className="h-8 text-xs" />
+        ) : <div className="w-full text-xs font-bold" onClick={() => setEditingCell({ rowId: ingredient.id, field })}>{ingredient.name}</div>
+    }
+    return <div>{(ingredient as any)[field]}</div>
+  }
+
+  const renderStockCell = (stock: Stock, field: string, isEditing: boolean) => {
     switch (field) {
-      case "name":
+      case "product":
+        return <div className="text-xs font-bold text-indigo-600">{stock.product?.name || "—"}</div>
+      case "addedQuantity":
         return isEditing ? (
           <Input
-            value={ingredient.name}
-            onChange={(e) => {
-              const newIngredients = ingredients.map(i =>
-                i.id === ingredient.id ? { ...i, name: e.target.value } : i
-              )
-              setIngredients(newIngredients)
-            }}
-            onBlur={() => {
-              updateCell(ingredient.id, field, ingredient.name, "activeIngredient")
-              setEditingCell(null)
-            }}
-            onKeyDown={(e) => {
-              if (e.key === "Enter") {
-                updateCell(ingredient.id, field, ingredient.name, "activeIngredient")
-                setEditingCell(null)
-              }
-            }}
+            type="number"
+            defaultValue={stock.addedQuantity}
+            onBlur={(e) => { updateCell(stock.id, field, parseInt(e.target.value) || 0, "stock"); setEditingCell(null); }}
             autoFocus
+            className="h-8 text-xs text-center"
           />
         ) : (
-          <div
-            className="cursor-pointer hover:bg-muted/50 p-2 rounded"
-            onClick={() => setEditingCell({ rowId: ingredient.id, field })}
-          >
-            {ingredient.name}
+          <div className="w-full text-xs font-mono text-center font-bold" onClick={() => setEditingCell({ rowId: stock.id, field })}>
+            {stock.addedQuantity}
           </div>
         )
-
+      case "costPerProduct":
+        return isEditing ? (
+          <Input
+            type="number"
+            step="0.01"
+            defaultValue={stock.costPerProduct || 0}
+            onBlur={(e) => { updateCell(stock.id, field, parseFloat(e.target.value) || 0, "stock"); setEditingCell(null); }}
+            autoFocus
+            className="h-8 text-xs text-right"
+          />
+        ) : (
+          <div className="w-full text-xs font-mono text-right font-bold" onClick={() => setEditingCell({ rowId: stock.id, field })}>
+            ₦{(stock.costPerProduct || 0).toLocaleString()}
+          </div>
+        )
+      case "createdAt":
+        return <div className="text-xs text-slate-500">{new Date(stock.createdAt).toLocaleDateString()}</div>
       default:
-        return <div>{ingredient[field as keyof ActiveIngredient] as string}</div>
+        return <div>{(stock as any)[field]}</div>
     }
   }
 
-  if (user.role !== "admin") {
-    return <div className="p-8 text-center">Access denied</div>
+  const renderBulkPriceCell = (bulkPrice: BulkPrice, field: string, isEditing: boolean) => {
+    switch (field) {
+      case "product":
+        return <div className="text-xs font-bold text-indigo-600">{bulkPrice.product?.name || "—"}</div>
+      case "name":
+        return isEditing ? (
+          <Input
+            defaultValue={bulkPrice.name}
+            onBlur={(e) => { updateCell(bulkPrice.id, field, e.target.value, "bulkPrice"); setEditingCell(null); }}
+            autoFocus
+            className="h-8 text-xs"
+          />
+        ) : (
+          <div className="w-full text-xs font-bold" onClick={() => setEditingCell({ rowId: bulkPrice.id, field })}>
+            {bulkPrice.name}
+          </div>
+        )
+      case "quantity":
+        return isEditing ? (
+          <Input
+            type="number"
+            defaultValue={bulkPrice.quantity}
+            onBlur={(e) => { updateCell(bulkPrice.id, field, parseInt(e.target.value) || 0, "bulkPrice"); setEditingCell(null); }}
+            autoFocus
+            className="h-8 text-xs text-center"
+          />
+        ) : (
+          <div className="w-full text-xs font-mono text-center font-bold" onClick={() => setEditingCell({ rowId: bulkPrice.id, field })}>
+            {bulkPrice.quantity}
+          </div>
+        )
+      case "price":
+        return isEditing ? (
+          <Input
+            type="number"
+            step="0.01"
+            defaultValue={bulkPrice.price}
+            onBlur={(e) => { updateCell(bulkPrice.id, field, parseFloat(e.target.value) || 0, "bulkPrice"); setEditingCell(null); }}
+            autoFocus
+            className="h-8 text-xs text-right"
+          />
+        ) : (
+          <div className="w-full text-xs font-mono text-right font-bold" onClick={() => setEditingCell({ rowId: bulkPrice.id, field })}>
+            ₦{bulkPrice.price.toLocaleString()}
+          </div>
+        )
+      default:
+        return <div>{(bulkPrice as any)[field]}</div>
+    }
   }
 
+  const filteredProducts = products.filter(p => p.name?.toLowerCase().includes(searchQuery.toLowerCase()));
+
   return (
-    <div className="min-h-screen bg-background p-6">
-      <div className="max-w-7xl mx-auto">
-        <div className="flex items-center justify-between mb-6">
-          <div>
-            <h1 className="text-3xl font-bold">Data Sheet Manager</h1>
-            <p className="text-muted-foreground">Manage your database records in spreadsheet style</p>
-          </div>
-          <div className="flex gap-2">
-            <Button variant="outline" size="sm">
-              <Undo className="h-4 w-4 mr-2" />
-              Undo
-            </Button>
-            <Button size="sm">
-              <Save className="h-4 w-4 mr-2" />
-              Save All
-            </Button>
-          </div>
+    <div className="min-h-screen bg-[#f8f9fa] flex flex-col select-none">
+      {/* APP BAR */}
+      <div className="bg-white border-b px-6 py-4 flex items-center justify-between sticky top-0 z-50 shadow-sm">
+        <div className="flex items-center gap-4">
+            <div className="h-10 w-10 bg-indigo-600 rounded-xl flex items-center justify-center text-white shadow-lg shadow-indigo-200">
+                <Database size={20} />
+            </div>
+            <div>
+                <h1 className="text-xl font-black tracking-tight text-slate-800">CliqueSheet <span className="text-indigo-600">Pro</span></h1>
+                <p className="text-[10px] font-bold uppercase tracking-widest text-slate-400">Database Direct Engine v2.0</p>
+            </div>
         </div>
 
-        <Tabs value={activeTab} onValueChange={setActiveTab}>
-          <TabsList className="grid w-full grid-cols-8">
-            <TabsTrigger value="products" className="flex items-center gap-2">
-              <Package className="h-4 w-4" />
-              Products
+        <div className="flex items-center gap-3">
+            <div className="relative">
+                <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-slate-400" />
+                <Input 
+                    placeholder="Search records..." 
+                    className="pl-9 h-9 w-[300px] bg-slate-50 border-none text-xs font-medium focus:ring-2 ring-indigo-500/20"
+                    value={searchQuery}
+                    onChange={(e) => setSearchQuery(e.target.value)}
+                />
+            </div>
+            <Button variant="outline" size="sm" onClick={loadData} className="h-9 gap-2 border-2 text-[11px] font-bold uppercase tracking-wider">
+                <RefreshCcw size={14} className={loading ? "animate-spin" : ""} />
+                Cloud Sync
+            </Button>
+            <Button size="sm" onClick={() => createRow(activeTab === "products" ? "product" : activeTab === "categories" ? "category" : activeTab === "brands" ? "brand" : activeTab === "ingredients" ? "activeIngredient" : "product")} className="h-9 gap-2 bg-indigo-600 hover:bg-indigo-700 shadow-lg shadow-indigo-100 uppercase text-[11px] font-bold tracking-wider">
+                <Plus size={14} />
+                New Record
+            </Button>
+        </div>
+      </div>
+
+      {/* DASHBOARD BODY */}
+      <div className="flex-1 p-6 overflow-hidden flex flex-col">
+        <Tabs value={activeTab} onValueChange={setActiveTab} className="h-full flex flex-col">
+          <TabsList className="bg-white p-1 border shadow-sm rounded-xl mb-6 w-fit mx-auto">
+            <TabsTrigger value="products" className="rounded-lg data-[state=active]:bg-indigo-600 data-[state=active]:text-white gap-2 text-xs font-bold px-5">
+              <Package size={14} /> Products
             </TabsTrigger>
-            <TabsTrigger value="categories" className="flex items-center gap-2">
-              <Tag className="h-4 w-4" />
-              Categories
+            <TabsTrigger value="categories" className="rounded-lg data-[state=active]:bg-indigo-600 data-[state=active]:text-white gap-2 text-xs font-bold px-5">
+              <Tag size={14} /> Categories
             </TabsTrigger>
-            <TabsTrigger value="brands" className="flex items-center gap-2">
-              <Building className="h-4 w-4" />
-              Brands
+            <TabsTrigger value="brands" className="rounded-lg data-[state=active]:bg-indigo-600 data-[state=active]:text-white gap-2 text-xs font-bold px-5">
+              <Building size={14} /> Brands
             </TabsTrigger>
-            <TabsTrigger value="ingredients" className="flex items-center gap-2">
-              <Pill className="h-4 w-4" />
-              Ingredients
+            <TabsTrigger value="ingredients" className="rounded-lg data-[state=active]:bg-indigo-600 data-[state=active]:text-white gap-2 text-xs font-bold px-5">
+              <Pill size={14} /> Ingredients
             </TabsTrigger>
-            <TabsTrigger value="stocks" className="flex items-center gap-2">
-              <TrendingUp className="h-4 w-4" />
-              Stocks
+            <TabsTrigger value="stocks" className="rounded-lg data-[state=active]:bg-indigo-600 data-[state=active]:text-white gap-2 text-xs font-bold px-5">
+              <TrendingUp size={14} /> Inventory
             </TabsTrigger>
-            <TabsTrigger value="bulkprices" className="flex items-center gap-2">
-              <DollarSign className="h-4 w-4" />
-              Bulk Prices
-            </TabsTrigger>
-            <TabsTrigger value="healthconcerns" className="flex items-center gap-2">
-              <Heart className="h-4 w-4" />
-              Health Concerns
-            </TabsTrigger>
-            <TabsTrigger value="users" className="flex items-center gap-2">
-              <Users className="h-4 w-4" />
-              Users
+            <TabsTrigger value="bulkprices" className="rounded-lg data-[state=active]:bg-indigo-600 data-[state=active]:text-white gap-2 text-xs font-bold px-5">
+              <DollarSign size={14} /> Bulk Pricing
             </TabsTrigger>
           </TabsList>
 
-          <TabsContent value="products" className="mt-6">
-            <Card>
-              <CardHeader>
-                <CardTitle className="flex items-center gap-2">
-                  <Package className="h-5 w-5" />
-                  Products Sheet
-                  <Badge variant="secondary">{products.length} records</Badge>
-                </CardTitle>
-              </CardHeader>
-              <CardContent>
+          <Card className="flex-1 border-none shadow-xl rounded-2xl overflow-hidden bg-white">
+            <div className="overflow-auto h-[calc(100vh-280px)] scrollbar-thin scrollbar-thumb-indigo-100">
                 {loading ? (
-                  <div className="text-center py-8">Loading...</div>
+                    <div className="h-full w-full flex flex-col items-center justify-center gap-4 bg-white/50 animate-pulse">
+                        <Loader2 className="h-10 w-10 animate-spin text-indigo-600" />
+                        <span className="text-[10px] font-black uppercase tracking-[0.2em] text-slate-400">Restoring Data Pipeline...</span>
+                    </div>
                 ) : (
-                  <div className="overflow-x-auto">
-                    <Table>
-                      <TableHeader>
-                        <TableRow>
-                          <TableHead>Name</TableHead>
-                          <TableHead>Category</TableHead>
-                          <TableHead>Brand</TableHead>
-                          <TableHead>Ingredients</TableHead>
-                          <TableHead>Price</TableHead>
-                          <TableHead>Stock</TableHead>
-                          <TableHead>Bulk Prices</TableHead>
-                          <TableHead>Scarce</TableHead>
-                          <TableHead>Prescription</TableHead>
-                        </TableRow>
-                      </TableHeader>
-                      <TableBody>
-                        {products.map((product) => (
-                          <TableRow key={product.id}>
-                            <TableCell>{renderCell(product, "name", "product")}</TableCell>
-                            <TableCell>{renderCell(product, "category", "product")}</TableCell>
-                            <TableCell>{renderCell(product, "brand", "product")}</TableCell>
-                            <TableCell>{renderCell(product, "ingredients", "product")}</TableCell>
-                            <TableCell>{renderCell(product, "price", "product")}</TableCell>
-                            <TableCell>{renderCell(product, "stock", "product")}</TableCell>
-                            <TableCell>{renderCell(product, "bulkPrices", "product")}</TableCell>
-                            <TableCell>{renderCell(product, "scarce", "product")}</TableCell>
-                            <TableCell>{renderCell(product, "requiresPrescription", "product")}</TableCell>
-                          </TableRow>
-                        ))}
-                      </TableBody>
-                    </Table>
-                  </div>
-                )}
-              </CardContent>
-            </Card>
-          </TabsContent>
+                    <Table className="border-collapse">
+                        <TableHeader className="bg-slate-50/80 sticky top-0 z-20 backdrop-blur-md">
+                            <TableRow className="border-b shadow-none hover:bg-transparent">
+                                <TableHead className="w-12 text-center text-[10px] font-black border-r">#</TableHead>
+                                {activeTab === "products" && <>
+                                    <TableHead className="text-[10px] font-black uppercase border-r px-4 h-12">Product Name</TableHead>
+                                    <TableHead className="text-[10px] font-black uppercase border-r px-4 h-12">Category</TableHead>
+                                    <TableHead className="text-[10px] font-black uppercase border-r px-4 h-12">Brand</TableHead>
+                                    <TableHead className="text-[10px] font-black uppercase border-r px-4 h-12 text-right">Base Price</TableHead>
+                                    <TableHead className="text-[10px] font-black uppercase border-r px-4 h-12 text-center">In Stock</TableHead>
+                                    <TableHead className="text-[10px] font-black uppercase border-r px-4 h-12 text-center w-20">Scarce</TableHead>
+                                    <TableHead className="text-[10px] font-black uppercase border-r px-4 h-12 text-center w-20">Rx Req</TableHead>
+                                </>}
+                                {activeTab === "categories" && <>
+                                    <TableHead className="text-[10px] font-black uppercase border-r px-4 h-12">Category Name</TableHead>
+                                    <TableHead className="text-[10px] font-black uppercase border-r px-4 h-12">Total Products</TableHead>
+                                </>}
+                                {activeTab === "brands" && <>
+                                    <TableHead className="text-[10px] font-black uppercase border-r px-4 h-12">Brand Name</TableHead>
+                                    <TableHead className="text-[10px] font-black uppercase border-r px-4 h-12">Sort Order</TableHead>
+                                    <TableHead className="text-[10px] font-black uppercase border-r px-4 h-12 text-center">Products</TableHead>
+                                </>}
+                                {activeTab === "ingredients" && <>
+                                    <TableHead className="text-[10px] font-black uppercase border-r px-4 h-12">Ingredient Name</TableHead>
+                                    <TableHead className="text-[10px] font-black uppercase border-r px-4 h-12 text-center">Products</TableHead>
+                                </>}
+                                {activeTab === "stocks" && <>
+                                    <TableHead className="text-[10px] font-black uppercase border-r px-4 h-12">Linked Product</TableHead>
+                                    <TableHead className="text-[10px] font-black uppercase border-r px-4 h-12 text-center">Qty</TableHead>
+                                    <TableHead className="text-[10px] font-black uppercase border-r px-4 h-12 text-right">Cost</TableHead>
+                                    <TableHead className="text-[10px] font-black uppercase border-r px-4 h-12 text-center">Added Date</TableHead>
+                                </>}
+                                {activeTab === "bulkprices" && <>
+                                    <TableHead className="text-[10px] font-black uppercase border-r px-4 h-12">Product</TableHead>
+                                    <TableHead className="text-[10px] font-black uppercase border-r px-4 h-12">Unit Name</TableHead>
+                                    <TableHead className="text-[10px] font-black uppercase border-r px-4 h-12 text-center">Qty</TableHead>
+                                    <TableHead className="text-[10px] font-black uppercase border-r px-4 h-12 text-right">Price</TableHead>
+                                </>}
+                                <TableHead className="w-14 bg-slate-50/50"></TableHead>
+                            </TableRow>
+                        </TableHeader>
+                        <TableBody>
+                            {(activeTab === "products" ? filteredProducts : activeTab === "categories" ? categories : activeTab === "brands" ? brands : activeTab === "ingredients" ? ingredients : activeTab === "stocks" ? stocks : bulkPrices).map((item, i) => (
+                                <TableRow key={item.id} className="group hover:bg-indigo-50/20 transition-all even:bg-slate-50/30">
+                                    <TableCell className="text-[10px] font-mono text-center border-r text-slate-400 group-hover:text-indigo-600 transition-colors">
+                                        {String(i + 1).padStart(3, '0')}
+                                    </TableCell>
+                                    
+                                    {activeTab === "products" && <>
+                                        <TableCell className="p-0 border-r">{renderCell(item, "name", "product")}</TableCell>
+                                        <TableCell className="p-0 border-r">{renderCell(item, "category", "product")}</TableCell>
+                                        <TableCell className="p-0 border-r">{renderCell(item, "brand", "product")}</TableCell>
+                                        <TableCell className="p-0 border-r">{renderCell(item, "price", "product")}</TableCell>
+                                        <TableCell className="p-0 border-r text-center">{renderCell(item, "stock", "product")}</TableCell>
+                                        <TableCell className="p-0 border-r text-center">{renderCell(item, "scarce", "product")}</TableCell>
+                                        <TableCell className="p-0 border-r text-center">{renderCell(item, "requiresPrescription", "product")}</TableCell>
+                                    </>}
 
-          {/* Placeholder for other tabs */}
-          <TabsContent value="categories" className="mt-6">
-            <Card>
-              <CardHeader>
-                <CardTitle className="flex items-center gap-2">
-                  <Tag className="h-5 w-5" />
-                  Categories Sheet
-                  <Badge variant="secondary">{categories.length} records</Badge>
-                </CardTitle>
-              </CardHeader>
-              <CardContent>
-                {loading ? (
-                  <div className="text-center py-8">Loading...</div>
-                ) : (
-                  <div className="overflow-x-auto">
-                    <Table>
-                      <TableHeader>
-                        <TableRow>
-                          <TableHead>Name</TableHead>
-                          <TableHead>Description</TableHead>
-                          <TableHead>Products Count</TableHead>
-                        </TableRow>
-                      </TableHeader>
-                      <TableBody>
-                        {categories.map((category) => (
-                          <TableRow key={category.id}>
-                            <TableCell>{renderCell(category, "name", "category")}</TableCell>
-                            <TableCell>{renderCell(category, "description", "category")}</TableCell>
-                            <TableCell>{category._count?.products || 0}</TableCell>
-                          </TableRow>
-                        ))}
-                      </TableBody>
-                    </Table>
-                  </div>
-                )}
-              </CardContent>
-            </Card>
-          </TabsContent>
+                                    {activeTab === "categories" && <>
+                                        <TableCell className="p-0 border-r">{renderCell(item, "name", "category")}</TableCell>
+                                        <TableCell className="p-0 border-r text-center text-xs font-bold text-indigo-600">{(item as any)._count?.products || 0}</TableCell>
+                                    </>}
 
-          <TabsContent value="brands" className="mt-6">
-            <Card>
-              <CardHeader>
-                <CardTitle className="flex items-center gap-2">
-                  <DollarSign className="h-5 w-5" />
-                  Bulk Prices Sheet
-                  <Badge variant="secondary">{bulkPrices.length} records</Badge>
-                </CardTitle>
-              </CardHeader>
-              <CardContent>
-                {loading ? (
-                  <div className="text-center py-8">Loading...</div>
-                ) : (
-                  <div className="overflow-x-auto">
-                    <Table>
-                      <TableHeader>
-                        <TableRow>
-                          <TableHead>Product</TableHead>
-                          <TableHead>Name</TableHead>
-                          <TableHead>Quantity</TableHead>
-                          <TableHead>Price</TableHead>
-                        </TableRow>
-                      </TableHeader>
-                      <TableBody>
-                        {bulkPrices.map((bulkPrice) => (
-                          <TableRow key={bulkPrice.id}>
-                            <TableCell>{bulkPrice.product?.name || "—"}</TableCell>
-                            <TableCell>{bulkPrice.name}</TableCell>
-                            <TableCell>{bulkPrice.quantity}</TableCell>
-                            <TableCell>₦{bulkPrice.price.toLocaleString()}</TableCell>
-                          </TableRow>
-                        ))}
-                      </TableBody>
-                    </Table>
-                  </div>
-                )}
-              </CardContent>
-            </Card>
-          </TabsContent>
+                                    {activeTab === "brands" && <>
+                                        <TableCell className="p-0 border-r">{renderCell(item, "name", "brand")}</TableCell>
+                                        <TableCell className="p-0 border-r">{renderCell(item, "order", "brand")}</TableCell>
+                                        <TableCell className="p-0 border-r text-center text-xs font-bold text-indigo-600">{(item as any)._count?.products || 0}</TableCell>
+                                    </>}
 
-          <TabsContent value="ingredients" className="mt-6">
-            <Card>
-              <CardHeader>
-                <CardTitle className="flex items-center gap-2">
-                  <Pill className="h-5 w-5" />
-                  Ingredients Sheet
-                  <Badge variant="secondary">{ingredients.length} records</Badge>
-                </CardTitle>
-              </CardHeader>
-              <CardContent>
-                {loading ? (
-                  <div className="text-center py-8">Loading...</div>
-                ) : (
-                  <div className="overflow-x-auto">
-                    <Table>
-                      <TableHeader>
-                        <TableRow>
-                          <TableHead>Name</TableHead>
-                          <TableHead>Products Count</TableHead>
-                        </TableRow>
-                      </TableHeader>
-                      <TableBody>
-                        {ingredients.map((ingredient) => (
-                          <TableRow key={ingredient.id}>
-                            <TableCell>{renderCell(ingredient, "name", "activeIngredient")}</TableCell>
-                            <TableCell>{ingredient._count?.products || 0}</TableCell>
-                          </TableRow>
-                        ))}
-                      </TableBody>
-                    </Table>
-                  </div>
-                )}
-              </CardContent>
-            </Card>
-          </TabsContent>
+                                    {activeTab === "ingredients" && <>
+                                        <TableCell className="p-0 border-r">{renderCell(item, "name", "activeIngredient")}</TableCell>
+                                        <TableCell className="p-0 border-r text-center text-xs font-bold text-indigo-600">{(item as any)._count?.products || 0}</TableCell>
+                                    </>}
 
-          <TabsContent value="stocks" className="mt-6">
-            <Card>
-              <CardHeader>
-                <CardTitle className="flex items-center gap-2">
-                  <TrendingUp className="h-5 w-5" />
-                  Stocks Sheet
-                  <Badge variant="secondary">{stocks.length} records</Badge>
-                </CardTitle>
-              </CardHeader>
-              <CardContent>
-                {loading ? (
-                  <div className="text-center py-8">Loading...</div>
-                ) : (
-                  <div className="overflow-x-auto">
-                    <Table>
-                      <TableHeader>
-                        <TableRow>
-                          <TableHead>Product</TableHead>
-                          <TableHead>Quantity Added</TableHead>
-                          <TableHead>Cost Per Product</TableHead>
-                          <TableHead>Price Per Product</TableHead>
-                          <TableHead>Date</TableHead>
-                        </TableRow>
-                      </TableHeader>
-                      <TableBody>
-                        {stocks.map((stock) => (
-                          <TableRow key={stock.id}>
-                            <TableCell>{stock.product?.name || "—"}</TableCell>
-                            <TableCell>{stock.addedQuantity}</TableCell>
-                            <TableCell>{stock.costPerProduct ? `₦${stock.costPerProduct}` : "—"}</TableCell>
-                            <TableCell>{stock.pricePerProduct ? `₦${stock.pricePerProduct}` : "—"}</TableCell>
-                            <TableCell>{new Date(stock.createdAt).toLocaleDateString()}</TableCell>
-                          </TableRow>
-                        ))}
-                      </TableBody>
-                    </Table>
-                  </div>
-                )}
-              </CardContent>
-            </Card>
-          </TabsContent>
+                                    {activeTab === "stocks" && <>
+                                        <TableCell className="p-0 border-r">{renderCell(item, "product", "stock")}</TableCell>
+                                        <TableCell className="p-0 border-r">{renderCell(item, "addedQuantity", "stock")}</TableCell>
+                                        <TableCell className="p-0 border-r">{renderCell(item, "costPerProduct", "stock")}</TableCell>
+                                        <TableCell className="p-0 border-r">{renderCell(item, "createdAt", "stock")}</TableCell>
+                                    </>}
 
-          <TabsContent value="users" className="mt-6">
-            <Card>
-              <CardHeader>
-                <CardTitle className="flex items-center gap-2">
-                  <Building className="h-5 w-5" />
-                  Brands Sheet
-                  <Badge variant="secondary">{brands.length} records</Badge>
-                </CardTitle>
-              </CardHeader>
-              <CardContent>
-                {loading ? (
-                  <div className="text-center py-8">Loading...</div>
-                ) : (
-                  <div className="overflow-x-auto">
-                    <Table>
-                      <TableHeader>
-                        <TableRow>
-                          <TableHead>Name</TableHead>
-                          <TableHead>Order</TableHead>
-                          <TableHead>Products Count</TableHead>
-                        </TableRow>
-                      </TableHeader>
-                      <TableBody>
-                        {brands.map((brand) => (
-                          <TableRow key={brand.id}>
-                            <TableCell>{renderCell(brand, "name", "brand")}</TableCell>
-                            <TableCell>{renderCell(brand, "order", "brand")}</TableCell>
-                            <TableCell>{brand._count?.products || 0}</TableCell>
-                          </TableRow>
-                        ))}
-                      </TableBody>
+                                    {activeTab === "bulkprices" && <>
+                                        <TableCell className="p-0 border-r">{renderCell(item, "product", "bulkPrice")}</TableCell>
+                                        <TableCell className="p-0 border-r">{renderCell(item, "name", "bulkPrice")}</TableCell>
+                                        <TableCell className="p-0 border-r">{renderCell(item, "quantity", "bulkPrice")}</TableCell>
+                                        <TableCell className="p-0 border-r">{renderCell(item, "price", "bulkPrice")}</TableCell>
+                                    </>}
+
+                                    <TableCell className="text-center p-0">
+                                        <DropdownMenu>
+                                            <DropdownMenuTrigger asChild>
+                                                <Button variant="ghost" size="icon" className="h-8 w-8 opacity-0 group-hover:opacity-100 transition-opacity">
+                                                    <MoreVertical size={14} />
+                                                </Button>
+                                            </DropdownMenuTrigger>
+                                            <DropdownMenuContent align="end" className="text-[11px] font-bold uppercase tracking-wider">
+                                                <DropdownMenuItem className="gap-2" onClick={() => window.open(`/products/${item.id || (item as any).productId}`)}><ExternalLink size={12} /> View Page</DropdownMenuItem>
+                                                <DropdownMenuItem className="gap-2 text-rose-600" onClick={() => deleteRow(item.id, activeTab === "products" ? "product" : activeTab === "categories" ? "category" : activeTab === "brands" ? "brand" : activeTab === "ingredients" ? "activeIngredient" : "product")}>
+                                                    <Trash2 size={12} /> Delete Record
+                                                </DropdownMenuItem>
+                                            </DropdownMenuContent>
+                                        </DropdownMenu>
+                                    </TableCell>
+                                </TableRow>
+                            ))}
+                        </TableBody>
                     </Table>
-                  </div>
                 )}
-              </CardContent>
-            </Card>
-          </TabsContent>
+            </div>
+          </Card>
         </Tabs>
+      </div>
+
+      {/* FOOTER BAR */}
+      <div className="bg-white border-t px-6 h-10 flex items-center justify-between text-[9px] font-black uppercase tracking-[0.2em] text-slate-400">
+          <div className="flex items-center gap-6">
+              <span className="flex items-center gap-1.5"><div className="h-1.5 w-1.5 rounded-full bg-green-500 shadow-sm shadow-green-200" /> Database Live</span>
+              <span className="text-indigo-600/60">Session Admin: {user.name}</span>
+          </div>
+          <div className="flex items-center gap-4">
+              <span>Environment: Production</span>
+              <span className="text-slate-200">|</span>
+              <span>CliqueEngine Proxy v4.2.1</span>
+          </div>
       </div>
     </div>
   )
@@ -9563,7 +9422,7 @@ LOCATION: components\myComponents\admin\AdminSheet.tsx
 
 "use client";
 
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useRef } from "react";
 import axios from "axios";
 import { 
   Table, 
@@ -9578,20 +9437,19 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { 
   Database, 
-  Save, 
-  Undo, 
   Plus, 
-  X, 
   Loader2, 
   CheckCircle2, 
   RefreshCcw,
   Package,
   Tags,
-  Image as ImageIcon,
-  MoreVertical,
   Activity,
   Layers,
-  Factory
+  Factory,
+  MoreVertical,
+  Trash2,
+  ExternalLink,
+  ChevronDown
 } from "lucide-react";
 import { toast } from "sonner";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
@@ -9601,15 +9459,17 @@ import {
   DropdownMenuItem, 
   DropdownMenuTrigger 
 } from "@/components/ui/dropdown-menu";
-import { formatPrice } from "@/lib/stock-pricing";
+import { Checkbox } from "@/components/ui/checkbox";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem } from "@/components/ui/command";
+import { cn } from "@/lib/utils";
 
-// Define generic types for our sheets
 type SheetModel = "product" | "category" | "brand" | "activeIngredient" | "stock" | "bulkPrice";
 
 interface ColumnDef {
   key: string;
   header: string;
-  type: "text" | "number" | "select" | "multiselect" | "boolean" | "relation-child" | "image";
+  type: "text" | "number" | "select" | "multiselect" | "boolean" | "relation-child";
   relationModel?: string;
   readOnly?: boolean;
 }
@@ -9623,8 +9483,10 @@ const SHEETS: Record<SheetModel, { header: string; icon: any; columns: ColumnDef
       { key: "categoryId", header: "Category", type: "select", relationModel: "category" },
       { key: "brandId", header: "Brand", type: "select", relationModel: "brand" },
       { key: "price", header: "Price (₦)", type: "number" },
+      { key: "activeIngredients", header: "Ingredients", type: "multiselect", relationModel: "activeIngredient" },
       { key: "scarce", header: "Scarce", type: "boolean" },
-      { key: "stock", header: "Stock", type: "relation-child", readOnly: true },
+      { key: "requiresPrescription", header: "Prescription", type: "boolean" },
+      { key: "stock", header: "Units", type: "relation-child", readOnly: true },
     ],
   },
   category: {
@@ -9633,14 +9495,14 @@ const SHEETS: Record<SheetModel, { header: string; icon: any; columns: ColumnDef
     columns: [
       { key: "name", header: "Category Name", type: "text" },
       { key: "description", header: "Description", type: "text" },
-      { key: "image", header: "Image URL", type: "image" },
+      { key: "image", header: "Image URL", type: "text" },
     ],
   },
   brand: {
     header: "Brands",
     icon: Factory,
     columns: [
-      { key: "name", header: "Brand", type: "text" },
+      { key: "name", header: "Brand Name", type: "text" },
       { key: "order", header: "Sort Order", type: "number" },
     ],
   },
@@ -9648,16 +9510,16 @@ const SHEETS: Record<SheetModel, { header: string; icon: any; columns: ColumnDef
     header: "Ingredients",
     icon: Activity,
     columns: [
-      { key: "name", header: "Name", type: "text" },
+      { key: "name", header: "Ingredient Name", type: "text" },
     ],
   },
   stock: {
-    header: "Stocks",
+    header: "Inventory",
     icon: Database,
     columns: [
       { key: "productId", header: "Product", type: "select", relationModel: "product" },
-      { key: "addedQuantity", header: "Qty", type: "number" },
-      { key: "costPerProduct", header: "Cost", type: "number" },
+      { key: "addedQuantity", header: "Qty Added", type: "number" },
+      { key: "costPerProduct", header: "Cost (₦)", type: "number" },
     ],
   },
   bulkPrice: {
@@ -9665,44 +9527,41 @@ const SHEETS: Record<SheetModel, { header: string; icon: any; columns: ColumnDef
     icon: Tags,
     columns: [
       { key: "productId", header: "Product", type: "select", relationModel: "product" },
-      { key: "name", header: "Unit (e.g. Pack)", type: "text" },
-      { key: "quantity", header: "Quantity", type: "number" },
-      { key: "price", header: "Price", type: "number" },
+      { key: "name", header: "Unit Name", type: "text" },
+      { key: "quantity", header: "Qty In Unit", type: "number" },
+      { key: "price", header: "Bulk Price (₦)", type: "number" },
     ],
   },
 };
 
-export const AdminSheet = ({ initialModel = "product" }: { initialModel?: SheetModel }) => {
-  const [activeModel, setActiveModel] = useState<SheetModel>(initialModel);
+export const AdminSheet = () => {
+  const [activeModel, setActiveModel] = useState<SheetModel>("product");
   const [data, setData] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState<string | null>(null);
-  const [dirtyCells, setDirtyCells] = useState<Record<string, any>>({});
   const [relations, setRelations] = useState<Record<string, any[]>>({});
-
-  // Sync relation options
-  const fetchRelations = async () => {
-    try {
-      const models = ["category", "brand", "product"];
-      const res = await Promise.all(models.map(m => axios.get(`/api/sheet?model=${m}`)));
-      const rels: any = {};
-      models.forEach((m, i) => rels[m] = res[i].data);
-      setRelations(rels);
-    } catch (err) {
-      console.error("Failed to load relations", err);
-    }
-  };
 
   const fetchData = async () => {
     setLoading(true);
-    setDirtyCells({});
     try {
       const res = await axios.get(`/api/sheet?model=${activeModel}`);
       setData(res.data);
     } catch (err) {
-      toast.error("Failed to load data sheet");
+      toast.error("Failed to fetch sheet data");
     } finally {
       setLoading(false);
+    }
+  };
+
+  const fetchRelations = async () => {
+    try {
+      const models = ["category", "brand", "activeIngredient", "product"];
+      const results = await Promise.all(models.map(m => axios.get(`/api/sheet?model=${m}`)));
+      const rels: any = {};
+      models.forEach((m, i) => rels[m] = results[i].data);
+      setRelations(rels);
+    } catch (err) {
+      console.error("Relation sync error", err);
     }
   };
 
@@ -9712,16 +9571,42 @@ export const AdminSheet = ({ initialModel = "product" }: { initialModel?: SheetM
   }, [activeModel]);
 
   const handleUpdate = async (id: string, field: string, value: any) => {
+    const originalValue = data.find(d => d.id === id)?.[field];
+    
+    // 1. Optimistic UI Update
+    setData(prev => prev.map(row => row.id === id ? { ...row, [field]: value } : row));
     setSaving(`${id}-${field}`);
+
     try {
       await axios.put("/api/sheet", { model: activeModel, id, field, value });
-      // Update local state without refetching
-      setData(prev => prev.map(row => row.id === id ? { ...row, [field]: value } : row));
       toast.success("Saved");
     } catch (err) {
-      toast.error("Update failed");
+      // 2. Rollback on Failure
+      setData(prev => prev.map(row => row.id === id ? { ...row, [field]: originalValue } : row));
+      toast.error("Cloud sync failed");
     } finally {
       setSaving(null);
+    }
+  };
+
+  const deleteRow = async (id: string) => {
+    if (!confirm("Are you sure? This action is permanent.")) return;
+    try {
+      await axios.delete(`/api/sheet?model=${activeModel}&id=${id}`);
+      setData(prev => prev.filter(row => row.id !== id));
+      toast.success("Deleted from database");
+    } catch (err) {
+      toast.error("Delete failed");
+    }
+  };
+
+  const createRow = async () => {
+    try {
+      const res = await axios.post("/api/sheet", { model: activeModel, data: {} });
+      setData(prev => [res.data, ...prev]);
+      toast.success("New empty record created");
+    } catch (err) {
+      toast.error("Failed to create record");
     }
   };
 
@@ -9731,12 +9616,12 @@ export const AdminSheet = ({ initialModel = "product" }: { initialModel?: SheetM
 
     if (col.readOnly) {
       if (col.type === "relation-child") {
-         const count = Array.isArray(value) ? value.length : 0;
-         return <Badge variant="outline" className="bg-green-50 text-green-700 border-green-200">
-           {count} Items
+         const count = Array.isArray(value) ? value.reduce((s: number, i: any) => s + (i.addedQuantity || 0), 0) : 0;
+         return <Badge variant={count > 0 ? "default" : "outline"} className="text-[10px] font-mono h-5">
+           {count} Units
          </Badge>;
       }
-      return <span className="text-muted-foreground text-xs">{value || "—"}</span>;
+      return <span className="text-[10px] text-muted-foreground">{String(value || "—")}</span>;
     }
 
     switch (col.type) {
@@ -9744,7 +9629,7 @@ export const AdminSheet = ({ initialModel = "product" }: { initialModel?: SheetM
         return (
           <Input 
             defaultValue={value}
-            className="h-8 text-xs border-transparent hover:border-input focus:border-primary transition-all bg-transparent focus:bg-white"
+            className="h-9 text-xs border-transparent hover:border-input focus:border-primary transition-all bg-transparent focus:bg-white"
             onBlur={(e) => {
               if (e.target.value !== value) handleUpdate(row.id, col.key, e.target.value);
             }}
@@ -9759,12 +9644,22 @@ export const AdminSheet = ({ initialModel = "product" }: { initialModel?: SheetM
           <Input 
             type="number"
             defaultValue={value}
-            className="h-8 text-xs border-transparent hover:border-input focus:border-primary bg-transparent focus:bg-white text-right font-mono"
+            className="h-9 text-xs border-transparent hover:border-input focus:border-primary bg-transparent focus:bg-white text-right font-mono"
             onBlur={(e) => {
               const num = parseFloat(e.target.value);
-              if (num !== value) handleUpdate(row.id, col.key, num);
+              if (num !== value) handleUpdate(row.id, col.key, isNaN(num) ? 0 : num);
             }}
           />
+        );
+
+      case "boolean":
+        return (
+          <div className="flex justify-center w-full">
+            <Checkbox 
+                checked={!!value} 
+                onCheckedChange={(checked) => handleUpdate(row.id, col.key, checked)}
+            />
+          </div>
         );
 
       case "select":
@@ -9774,11 +9669,10 @@ export const AdminSheet = ({ initialModel = "product" }: { initialModel?: SheetM
             value={value || "unassigned"} 
             onValueChange={(val) => handleUpdate(row.id, col.key, val)}
           >
-            <SelectTrigger className="h-8 text-[10px] border-transparent hover:border-input bg-transparent py-0 px-2 min-w-[120px]">
-              <SelectValue />
+            <SelectTrigger className="h-8 text-[10px] border-transparent hover:border-input bg-transparent px-2 w-full">
+              <SelectValue placeholder="Select..." />
             </SelectTrigger>
             <SelectContent>
-              <SelectItem value="unassigned" disabled>Select {col.header}</SelectItem>
               {opts.map((opt: any) => (
                 <SelectItem key={opt.id} value={opt.id} className="text-[10px]">
                   {opt.name}
@@ -9788,147 +9682,162 @@ export const AdminSheet = ({ initialModel = "product" }: { initialModel?: SheetM
           </Select>
         );
 
-      case "boolean":
+      case "multiselect":
+        const currentItems = Array.isArray(value) ? value.map((i: any) => i.name) : [];
+        const allPossible = relations[col.relationModel!] || [];
+        
         return (
-          <div className="flex justify-center">
-             <input 
-               type="checkbox" 
-               checked={!!value} 
-               onChange={(e) => handleUpdate(row.id, col.key, e.target.checked)}
-               className="h-4 w-4 rounded border-gray-300 text-primary focus:ring-primary"
-             />
-          </div>
+          <Popover>
+            <PopoverTrigger asChild>
+              <Button variant="ghost" className="h-8 w-full justify-start px-2 font-normal text-[10px] border-transparent hover:border-input">
+                {currentItems.length > 0 ? (
+                  <div className="flex gap-1 overflow-hidden">
+                    {currentItems.slice(0, 2).map((v, idx) => (
+                      <Badge key={idx} variant="secondary" className="px-1 text-[8px] h-4">{v}</Badge>
+                    ))}
+                    {currentItems.length > 2 && <span className="text-[8px] text-muted-foreground">+{currentItems.length - 2}</span>}
+                  </div>
+                ) : <span className="text-muted-foreground italic">Add...</span>}
+              </Button>
+            </PopoverTrigger>
+            <PopoverContent className="w-64 p-0" align="start">
+              <Command>
+                <CommandInput placeholder={`Search ${col.header}...`} />
+                <CommandEmpty>No matching found.</CommandEmpty>
+                <CommandGroup className="max-h-60 overflow-y-auto">
+                  {allPossible.map((opt) => (
+                    <CommandItem
+                      key={opt.id}
+                      onSelect={() => {
+                        const exists = currentItems.includes(opt.name);
+                        const next = exists 
+                          ? currentItems.filter(i => i !== opt.name)
+                          : [...currentItems, opt.name];
+                        handleUpdate(row.id, col.key, next);
+                      }}
+                      className="text-xs font-bold"
+                    >
+                      <div className={cn("mr-2 flex h-4 w-4 items-center justify-center rounded-sm border border-primary", currentItems.includes(opt.name) ? "bg-primary text-primary-foreground" : "opacity-50")}>
+                        {currentItems.includes(opt.name) && <CheckCircle2 className="h-3 w-3" />}
+                      </div>
+                      {opt.name}
+                    </CommandItem>
+                  ))}
+                </CommandGroup>
+              </Command>
+            </PopoverContent>
+          </Popover>
         );
 
       default:
-        return <span>{String(value || "")}</span>;
+        return <span className="text-xs px-2">{String(value || "")}</span>;
     }
   };
 
   return (
-    <div className="flex flex-col h-full bg-background border-r">
-      {/* SHEET TOOLBAR */}
-      <div className="flex flex-col border-b bg-muted/20">
+    <div className="flex flex-col h-screen bg-background select-none">
+      {/* HEADERBAR */}
+      <div className="flex flex-col bg-muted/30 border-b">
         <div className="flex items-center justify-between px-6 py-4">
-          <div className="flex items-center gap-3">
-            <div className="w-10 h-10 rounded-xl bg-primary flex items-center justify-center text-primary-foreground shadow-lg shadow-primary/20">
-              <Database size={20} />
+          <div className="flex items-center gap-4">
+            <div className="h-10 w-10 bg-black rounded-lg flex items-center justify-center text-white">
+               <Database size={20} />
             </div>
             <div>
-              <h1 className="text-xl font-bold tracking-tight">Admin Sheet Manager</h1>
-              <p className="text-[10px] font-bold uppercase text-muted-foreground tracking-widest">
-                Real-time Database Direct Edit
-              </p>
+               <h1 className="text-xl font-black italic uppercase tracking-tighter">CliqueSheet<span className="text-primary italic font-medium ml-1">v2.0</span></h1>
+               <div className="flex items-center gap-2 text-[9px] font-black uppercase tracking-widest text-muted-foreground mt-0.5">
+                  <span className="flex items-center gap-1"><span className="h-1.5 w-1.5 rounded-full bg-green-500" /> Active Sync Enabled</span>
+               </div>
             </div>
           </div>
-
-          <div className="flex items-center gap-2">
-             <Button variant="outline" size="sm" onClick={fetchData} className="h-9 gap-2">
-               <RefreshCcw size={14} className={loading ? "animate-spin" : ""} />
-               Sync
+          
+          <div className="flex items-center gap-3">
+             <Button variant="outline" size="sm" onClick={fetchData} className="h-8 gap-2 uppercase font-black text-[10px] tracking-widest border-2">
+               <RefreshCcw size={12} className={loading ? "animate-spin" : ""} /> Sync Cloud
              </Button>
-             <Button className="h-9 gap-2 shadow-sm">
-               <Plus size={14} /> New Record
+             <Button size="sm" onClick={createRow} className="h-8 gap-2 uppercase font-black text-[10px] tracking-widest">
+               <Plus size={12} /> New Record
              </Button>
           </div>
         </div>
 
-        {/* TAB NAVIGATION */}
-        <div className="flex items-center gap-1 px-4 pb-0 overflow-x-auto">
+        {/* TABS */}
+        <div className="flex px-4 gap-1 overflow-x-auto">
           {(Object.keys(SHEETS) as SheetModel[]).map((key) => {
             const S = SHEETS[key];
-            const Icon = S.icon;
             const active = activeModel === key;
             return (
               <button
                 key={key}
                 onClick={() => setActiveModel(key)}
-                className={`
-                  flex items-center gap-2 px-6 py-3 text-xs font-bold whitespace-nowrap border-b-2 transition-all
-                  ${active 
-                    ? "border-primary text-primary bg-primary/5" 
-                    : "border-transparent text-muted-foreground hover:bg-muted/50"}
-                `}
+                className={cn(
+                  "px-6 py-2.5 text-[11px] font-black uppercase tracking-widest transition-all border-b-2",
+                  active ? "border-primary text-primary bg-white shadow-sm" : "border-transparent text-muted-foreground hover:bg-muted/50"
+                )}
               >
-                <Icon size={14} />
                 {S.header}
-                <Badge variant="outline" className={`ml-1 text-[8px] h-4 min-w-4 p-0 flex items-center justify-center opacity-70`}>
-                  {key === activeModel && !loading ? data.length : "·"}
-                </Badge>
               </button>
             );
           })}
         </div>
       </div>
 
-      {/* SPREADSHEET GRID */}
-      <div className="flex-1 overflow-auto relative">
+      {/* GRID */}
+      <div className="flex-1 overflow-auto relative bg-[#fcfcfc]">
         {loading ? (
-          <div className="absolute inset-0 flex items-center justify-center bg-white/60 backdrop-blur-sm z-50">
-             <div className="flex flex-col items-center gap-4">
-                <Loader2 className="h-10 w-10 text-primary animate-spin" />
-                <p className="text-sm font-bold animate-pulse text-muted-foreground uppercase tracking-widest">Initializing Grid Engine...</p>
-             </div>
+          <div className="absolute inset-0 flex flex-col items-center justify-center gap-4 bg-white/80 backdrop-blur-sm z-50">
+            <Loader2 className="h-8 w-8 animate-spin text-primary" />
+            <span className="text-[10px] font-black uppercase tracking-[0.2em] text-muted-foreground animate-pulse">Refreshing Model Layer...</span>
           </div>
         ) : (
-          <Table className="border-collapse">
-            <TableHeader className="bg-muted/80 backdrop-blur-md sticky top-0 z-20 shadow-sm">
-              <TableRow className="border-b shadow-none hover:bg-transparent">
-                <TableHead className="w-12 text-center border-r bg-muted/50">#</TableHead>
+          <Table className="border-collapse table-fixed w-full">
+            <TableHeader className="sticky top-0 z-40 bg-white/95 backdrop-blur-sm border-b shadow-sm">
+              <TableRow className="hover:bg-transparent">
+                <TableHead className="w-12 text-center border-r h-10 text-[10px] font-black">#</TableHead>
                 {SHEETS[activeModel].columns.map((col) => (
-                  <TableHead key={col.key} className="text-xs font-black uppercase tracking-widest text-foreground min-w-[150px] border-r h-10 px-4">
-                    <div className="flex items-center gap-2">
+                  <TableHead key={col.key} className="text-[10px] font-black uppercase tracking-wider text-foreground border-r px-4 h-10 min-w-[140px]">
+                    <div className="flex items-center justify-between">
                        {col.header}
-                       {col.type === "select" && <div className="h-1.5 w-1.5 rounded-full bg-blue-500" />}
+                       <ChevronDown size={10} className="opacity-40" />
                     </div>
                   </TableHead>
                 ))}
-                <TableHead className="w-16 bg-muted/50"></TableHead>
+                <TableHead className="w-14"></TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
               {data.map((row, i) => (
-                <TableRow key={row.id} className="group hover:bg-blue-50/30 transition-colors border-b">
-                  <TableCell className="text-[10px] text-center font-mono text-muted-foreground bg-muted/5 border-r group-hover:bg-blue-50/50">
-                    {i + 1}
+                <TableRow key={row.id} className="group hover:bg-indigo-50/20 transition-all even:bg-muted/5">
+                  <TableCell className="text-[10px] font-mono text-center border-r text-muted-foreground/50">
+                    {String(i + 1).padStart(3, '0')}
                   </TableCell>
                   {SHEETS[activeModel].columns.map((col) => (
-                    <TableCell key={col.key} className={`p-0 h-10 border-r relative ${saving === `${row.id}-${col.key}` ? "bg-muted/5" : ""}`}>
-                      <div className="relative w-full h-full flex items-center px-1">
-                        {saving === `${row.id}-${col.key}` && (
-                          <div className="absolute right-2 z-10">
-                            <Loader2 className="h-3 w-3 animate-spin text-primary" />
-                          </div>
-                        )}
-                        {renderCell(row, col)}
-                      </div>
+                    <TableCell key={col.key} className={cn("p-0 border-r relative", saving === `${row.id}-${col.key}` && "bg-primary/5")}>
+                       <div className="w-full h-10 flex items-center relative">
+                          {renderCell(row, col)}
+                          {saving === `${row.id}-${col.key}` && (
+                            <div className="absolute right-1">
+                               <Loader2 className="h-3 w-3 animate-spin text-primary" />
+                            </div>
+                          )}
+                       </div>
                     </TableCell>
                   ))}
-                  <TableCell className="text-center p-0">
+                  <TableCell className="p-0 text-center">
                     <DropdownMenu>
-                       <DropdownMenuTrigger asChild>
-                         <Button variant="ghost" size="icon" className="h-7 w-7 opacity-0 group-hover:opacity-100">
-                           <MoreVertical size={14} />
-                         </Button>
-                       </DropdownMenuTrigger>
-                       <DropdownMenuContent align="end" className="text-xs font-bold">
-                         <DropdownMenuItem className="text-destructive font-black">
-                           Delete Row
+                      <DropdownMenuTrigger asChild>
+                        <Button variant="ghost" size="icon" className="h-7 w-7 opacity-0 group-hover:opacity-100"><MoreVertical size={12} /></Button>
+                      </DropdownMenuTrigger>
+                      <DropdownMenuContent align="end" className="text-[11px] font-black uppercase">
+                         <DropdownMenuItem onClick={() => window.open(`/products/${row.id}`)} className="gap-2">
+                            <ExternalLink size={12} /> View Public
                          </DropdownMenuItem>
-                         <DropdownMenuItem>Duplicate</DropdownMenuItem>
-                         <DropdownMenuItem onClick={() => window.open(`/products/${row.id}`)}>View Public</DropdownMenuItem>
-                       </DropdownMenuContent>
+                         <DropdownMenuItem onClick={() => deleteRow(row.id)} className="text-destructive gap-2 font-black">
+                            <Trash2 size={12} /> Remove Record
+                         </DropdownMenuItem>
+                      </DropdownMenuContent>
                     </DropdownMenu>
                   </TableCell>
-                </TableRow>
-              ))}
-              
-              {/* Empty state filler rows for aesthetics */}
-              {Array.from({ length: Math.max(0, 20 - data.length) }).map((_, i) => (
-                <TableRow key={`filler-${i}`} className="border-b last:border-0 pointer-events-none opacity-20">
-                   <TableCell className="border-r h-10" />
-                   {SHEETS[activeModel].columns.map(c => <TableCell key={c.key} className="border-r h-10" />)}
-                   <TableCell />
                 </TableRow>
               ))}
             </TableBody>
@@ -9936,15 +9845,16 @@ export const AdminSheet = ({ initialModel = "product" }: { initialModel?: SheetM
         )}
       </div>
 
-      {/* FOOTER BAR */}
-      <div className="h-8 border-t bg-muted/30 flex items-center justify-between px-6 text-[9px] font-bold uppercase tracking-widest text-muted-foreground">
-        <div className="flex items-center gap-4">
-          <span className="flex items-center gap-1"><CheckCircle2 size={10} className="text-green-500" /> All records synced</span>
-          <span className="text-primary/60">Ready for editing</span>
-        </div>
-        <div>
-          Prisma Node Environment • V8 Grid Engine
-        </div>
+      {/* STATUSBAR */}
+      <div className="h-8 border-t bg-muted/20 px-6 flex items-center justify-between text-[9px] font-bold uppercase tracking-widest text-muted-foreground">
+         <div className="flex gap-6 items-center">
+            <span className="text-foreground">Total Rows: {data.length}</span>
+            <div className="h-3 w-[1px] bg-muted-foreground/30" />
+            <span className="flex items-center gap-1"><span className="h-1.5 w-1.5 rounded-full bg-green-500" /> Database Ready</span>
+         </div>
+         <div>
+            CliqueAdmin • High Performance Grid Engine
+         </div>
       </div>
     </div>
   );
@@ -10844,7 +10754,7 @@ LOCATION: components\myComponents\subs\AdminBulkManager.tsx
 
 import React, { useState } from "react";
 import axios from "axios";
-import { Download, Upload, Loader2, FileSpreadsheet, CheckCircle2, AlertCircle, RefreshCcw } from "lucide-react";
+import { Download, Upload, Loader2, FileSpreadsheet, CheckCircle2, AlertCircle, RefreshCcw, Database } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
@@ -10875,6 +10785,25 @@ export const AdminBulkManager = () => {
         } catch (err) {
             console.error(err);
             toast.error("Failed to download CSV");
+        } finally {
+            setLoading(false);
+        }
+    };
+
+    const handleDownloadAllData = async () => {
+        setLoading(true);
+        try {
+            const res = await axios.get(`/api/admin/bulk?model=all`);
+            const dataStr = "data:text/json;charset=utf-8," + encodeURIComponent(JSON.stringify(res.data, null, 2));
+            const downloadAnchorNode = document.createElement('a');
+            downloadAnchorNode.setAttribute("href", dataStr);
+            downloadAnchorNode.setAttribute("download", `full_database_backup_${new Date().toISOString().split('T')[0]}.json`);
+            document.body.appendChild(downloadAnchorNode);
+            downloadAnchorNode.click();
+            downloadAnchorNode.remove();
+            toast.success("Full database backup downloaded");
+        } catch (err) {
+            toast.error("Failed to download database backup");
         } finally {
             setLoading(false);
         }
@@ -10951,6 +10880,15 @@ export const AdminBulkManager = () => {
                         >
                             {loading ? <Loader2 className="w-4 h-4 animate-spin" /> : <Download className="w-4 h-4" />}
                             Export
+                        </Button>
+                        <Button 
+                            variant="secondary" 
+                            className="h-12 rounded-xl px-6 gap-2 border-2 border-indigo-200 bg-indigo-50 text-indigo-700 hover:bg-indigo-100 font-black text-xs min-w-[140px]" 
+                            onClick={handleDownloadAllData}
+                            disabled={loading}
+                        >
+                            {loading ? <Loader2 className="w-4 h-4 animate-spin" /> : <Database className="w-4 h-4" />}
+                            Backup All
                         </Button>
                     </div>
                 </div>
@@ -36788,14 +36726,14 @@ model Product {
 //for inputing available product, after sales, deduct the quantity
 //one to one relationship with a product, notice the unique then objectid
 model Stock {
-  id             String   @id @default(auto()) @map("_id") @db.ObjectId
-  product        Product  @relation(fields: [productId], references: [id])
-  productId      String   @db.ObjectId
-  addedQuantity  Int?
-  costPerProduct Int?
-  // pricePerProduct Int? //not yet implemented to determine profit and dysplayed price
-  createdAt      DateTime @default(now())
-  updatedAt      DateTime @updatedAt
+  id              String   @id @default(auto()) @map("_id") @db.ObjectId
+  product         Product  @relation(fields: [productId], references: [id])
+  productId       String   @db.ObjectId
+  addedQuantity   Int?
+  costPerProduct  Int?
+  pricePerProduct Int? //not yet implemented to determine profit and dysplayed price
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
 }
 
 model BulkPrice {

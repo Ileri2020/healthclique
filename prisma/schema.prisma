@@ -79,6 +79,7 @@ model Category {
   products    Product[]
   createdAt   DateTime  @default(now())
   updatedAt   DateTime  @updatedAt
+  version     Int       @default(0)
 }
 
 model Product {
@@ -111,8 +112,15 @@ model Product {
   bulkPrices                BulkPrice[]
   createdAt                 DateTime                   @default(now())
   updatedAt                 DateTime                   @updatedAt
+  version                   Int                        @default(0)
   wishlist                  Wishlist[]
   heavilyDiscountedProducts HeavilyDiscountedProduct[]
+
+  @@index([name])
+  @@index([categoryId])
+  @@index([brandId])
+  @@index([createdAt])
+  @@index([price])
 }
 
 //for inputing available product, after sales, deduct the quantity
@@ -126,6 +134,10 @@ model Stock {
   pricePerProduct Int? //not yet implemented to determine profit and dysplayed price
   createdAt       DateTime @default(now())
   updatedAt       DateTime @updatedAt
+  version         Int      @default(0)
+
+  @@index([productId])
+  @@index([createdAt])
 }
 
 model BulkPrice {
@@ -299,6 +311,9 @@ model Brand {
   products  Product[]
   createdAt DateTime  @default(now())
   updatedAt DateTime  @updatedAt
+  version   Int       @default(0)
+
+  @@index([order])
 }
 
 model ActiveIngredient {
@@ -462,5 +477,16 @@ model HeavilyDiscountedProduct {
 //       Display Prisma version info
 //       $ prisma version
 
-//       Display Prisma debug info
-//       $ prisma debug
+model AuditLog {
+  id        String   @id @default(auto()) @map("_id") @db.ObjectId
+  model     String
+  operation String // create, update, delete
+  userId    String
+  recordId  String
+  changes   Json?     // { field: { old, new } }
+  timestamp DateTime @default(now())
+  
+  @@index([model, recordId])
+  @@index([userId, timestamp])
+  @@index([timestamp])
+}
