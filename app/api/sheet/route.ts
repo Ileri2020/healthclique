@@ -35,12 +35,20 @@ async function logChange(model: string, operation: string, userId: string, recor
 
 export async function GET(req: NextRequest) {
   const session = await auth();
-  if ((session?.user as any)?.role !== "admin") {
+  const isAdmin = (session?.user as any)?.role === "admin";
+  
+  if (!isAdmin) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 403 });
   }
 
   const { searchParams } = new URL(req.url);
   const model = searchParams.get("model");
+  
+  // Optimization: Default limit to 70 as requested. 
+  // Admin can override, but we cap it to 500 for safety unless explicitly needed.
+  const requestedLimit = parseInt(searchParams.get("limit") || "70");
+  const limit = isAdmin ? requestedLimit : Math.min(requestedLimit, 70);
+  const offset = parseInt(searchParams.get("offset") || "0");
 
   if (!model || !modelMap[model]) {
     return NextResponse.json({ error: "Invalid model" }, { status: 400 });
@@ -57,28 +65,39 @@ export async function GET(req: NextRequest) {
           stock: { select: { id: true, addedQuantity: true, costPerProduct: true, createdAt: true } },
           bulkPrices: { select: { id: true, name: true, quantity: true, price: true } },
         },
-        orderBy: { createdAt: 'desc' }
+        orderBy: { createdAt: 'desc' },
+        take: limit,
+        skip: offset,
       });
     } else if (model === "stock") {
       data = await prisma.stock.findMany({
         include: { product: { select: { id: true, name: true } } },
-        orderBy: { createdAt: 'desc' }
+        orderBy: { createdAt: 'desc' },
+        take: limit,
+        skip: offset,
       });
     } else if (model === "bulkPrice") {
       data = await prisma.bulkPrice.findMany({
         include: { product: { select: { id: true, name: true } } },
-        orderBy: { createdAt: 'desc' }
+        orderBy: { createdAt: 'desc' },
+        take: limit,
+        skip: offset,
       });
     } else {
       data = await modelMap[model].findMany({
         include: model === "category" || model === "brand" || model === "activeIngredient" 
           ? { _count: { select: { products: true } } } 
           : undefined,
-        orderBy: { createdAt: 'desc' }
+        orderBy: { createdAt: 'desc' },
+        take: limit,
+        skip: offset,
       });
     }
 
-    return NextResponse.json(data);
+    // Also return total count for pagination UI if needed
+    const total = await modelMap[model].count();
+
+    return NextResponse.json({ data, total, limit, offset });
   } catch (error) {
     console.error("Sheet Fetch Error:", error);
     return NextResponse.json({ error: "Fetch failed" }, { status: 500 });
@@ -135,9 +154,12 @@ export async function PUT(req: NextRequest) {
       updateData[field] = value;
     }
 
+    const item = await prismaModel.findUnique({ where: { id }, select: { version: true } });
+    if (!item) return NextResponse.json({ error: "Record not found" }, { status: 404 });
+
     const updated = await prismaModel.update({
-      where: { id },
-      data: updateData,
+      where: { id, version: item.version },
+      data: { ...updateData, version: { increment: 1 } },
     });
 
     // Log the change

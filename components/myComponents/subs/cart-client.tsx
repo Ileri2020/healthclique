@@ -126,7 +126,8 @@ export function CartClient({ className, cart: _unusedCart }: CartClientProps) {
   }, []);
 
   React.useEffect(() => {
-    if (user?.id && user.id !== 'nil' && (!user.addresses || user.addresses.length === 0)) {
+    // Only fetch if undefined to prevent infinite loop on empty array
+    if (user?.id && user.id !== 'nil' && user.addresses === undefined) {
       const fetchAddresses = async () => {
         try {
           const res = await axios.get(`/api/dbhandler?model=shippingAddress&userId=${user.id}`);

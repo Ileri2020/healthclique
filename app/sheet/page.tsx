@@ -43,6 +43,16 @@ import {
 } from "lucide-react"
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu"
 import { cn } from "@/lib/utils"
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+  DialogTrigger,
+} from "@/components/ui/dialog"
+import { Label } from "@/components/ui/label"
 
 interface Product {
   id: string
@@ -128,6 +138,19 @@ const Sheet = () => {
   const [filters, setFilters] = useState<ColumnFilter[]>([])
   const [sortConfig, setSortConfig] = useState<{ field: string; direction: 'asc' | 'desc' } | null>(null)
   const [saving, setSaving] = useState<string | null>(null)
+  const [bulkPriceDialogOpen, setBulkPriceDialogOpen] = useState(false)
+  const [selectedProductForBulk, setSelectedProductForBulk] = useState<Product | null>(null)
+  const [newBulkPrice, setNewBulkPrice] = useState({ name: '', quantity: 1, price: 0 })
+  
+  // Pagination State
+  const [currentPage, setCurrentPage] = useState(0)
+  const [totalItems, setTotalItems] = useState(0)
+  const [limit, setLimit] = useState(70)
+  
+  useEffect(() => {
+    // Reset page when tab changes
+    setCurrentPage(0)
+  }, [activeTab])
 
   useEffect(() => {
     // Only proceed once user data is loaded from context
@@ -138,7 +161,7 @@ const Sheet = () => {
       return
     }
     loadData()
-  }, [user, user.loading, router])
+  }, [user.id, user.role, user.loading, router, activeTab, currentPage, limit])
 
   // Copy/paste functionality
   useEffect(() => {
@@ -167,7 +190,11 @@ const Sheet = () => {
 
   const loadData = async () => {
     setLoading(true)
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 15000); // 15s timeout
+
     try {
+      const config = { signal: controller.signal };
       const [
         productsRes,
         categoriesRes,
@@ -176,23 +203,40 @@ const Sheet = () => {
         stocksRes,
         bulkPricesRes
       ] = await Promise.all([
-        axios.get("/api/sheet?model=product").catch(e => ({ data: [] })),
-        axios.get("/api/sheet?model=category").catch(e => ({ data: [] })),
-        axios.get("/api/sheet?model=brand").catch(e => ({ data: [] })),
-        axios.get("/api/sheet?model=activeIngredient").catch(e => ({ data: [] })),
-        axios.get("/api/sheet?model=stock").catch(e => ({ data: [] })),
-        axios.get("/api/sheet?model=bulkPrice").catch(e => ({ data: [] }))
+        axios.get(`/api/sheet?model=product&limit=${activeTab === 'products' ? limit : 1000}&offset=${activeTab === 'products' ? currentPage * limit : 0}`, config).catch(e => ({ data: { data: [], total: 0 } })),
+        axios.get(`/api/sheet?model=category&limit=${activeTab === 'categories' ? limit : 1000}&offset=${activeTab === 'categories' ? currentPage * limit : 0}`, config).catch(e => ({ data: { data: [], total: 0 } })),
+        axios.get(`/api/sheet?model=brand&limit=${activeTab === 'brands' ? limit : 1000}&offset=${activeTab === 'brands' ? currentPage * limit : 0}`, config).catch(e => ({ data: { data: [], total: 0 } })),
+        axios.get(`/api/sheet?model=activeIngredient&limit=${activeTab === 'ingredients' ? limit : 1000}&offset=${activeTab === 'ingredients' ? currentPage * limit : 0}`, config).catch(e => ({ data: { data: [], total: 0 } })),
+        axios.get(`/api/sheet?model=stock&limit=${activeTab === 'stocks' ? limit : 1000}&offset=${activeTab === 'stocks' ? currentPage * limit : 0}`, config).catch(e => ({ data: { data: [], total: 0 } })),
+        axios.get(`/api/sheet?model=bulkPrice&limit=${activeTab === 'bulkprices' ? limit : 1000}&offset=${activeTab === 'bulkprices' ? currentPage * limit : 0}`, config).catch(e => ({ data: { data: [], total: 0 } }))
       ])
       
-      setProducts(productsRes.data)
-      setCategories(categoriesRes.data)
-      setBrands(brandsRes.data)
-      setIngredients(ingredientsRes.data)
-      setStocks(stocksRes.data)
-      setBulkPrices(bulkPricesRes.data)
+      clearTimeout(timeoutId);
+      
+      const resMap: Record<string, any> = {
+        products: productsRes.data,
+        categories: categoriesRes.data,
+        brands: brandsRes.data,
+        ingredients: ingredientsRes.data,
+        stocks: stocksRes.data,
+        bulkprices: bulkPricesRes.data
+      };
+
+      setProducts(productsRes.data.data)
+      setCategories(categoriesRes.data.data)
+      setBrands(brandsRes.data.data)
+      setIngredients(ingredientsRes.data.data)
+      setStocks(stocksRes.data.data)
+      setBulkPrices(bulkPricesRes.data.data)
+
+      setTotalItems(resMap[activeTab]?.total || 0)
     } catch (error) {
-      console.error("Critical Data Load Error:", error)
-      toast.error("Failed to sync some data tables")
+      if (axios.isCancel(error)) {
+        toast.error("Cloud Sync Timed Out - DB Connection Slow")
+      } else {
+        console.error("Critical Data Load Error:", error)
+        toast.error("Failed to sync some data tables")
+      }
     } finally {
       setLoading(false)
     }
@@ -460,6 +504,30 @@ const Sheet = () => {
       loadData();
     } catch (err) {
       toast.error("Failed to create record");
+    }
+  };
+
+  const handleAddBulkPrice = async () => {
+    if (!selectedProductForBulk) return;
+    try {
+      setLoading(true);
+      await axios.post("/api/sheet", { 
+        model: "bulkPrice", 
+        data: {
+          productId: selectedProductForBulk.id,
+          name: newBulkPrice.name,
+          quantity: newBulkPrice.quantity,
+          price: newBulkPrice.price
+        }
+      });
+      toast.success("Bulk price added");
+      setBulkPriceDialogOpen(false);
+      setNewBulkPrice({ name: '', quantity: 1, price: 0 });
+      loadData();
+    } catch (err) {
+      toast.error("Failed to add bulk price");
+    } finally {
+      setLoading(false);
     }
   };
 
@@ -929,6 +997,17 @@ const Sheet = () => {
                                             </DropdownMenuTrigger>
                                             <DropdownMenuContent align="end" className="text-[11px] font-bold uppercase tracking-wider">
                                                 <DropdownMenuItem className="gap-2" onClick={() => window.open(`/products/${item.id || (item as any).productId}`)}><ExternalLink size={12} /> View Page</DropdownMenuItem>
+                                                {activeTab === "products" && (
+                                                    <DropdownMenuItem 
+                                                        className="gap-2" 
+                                                        onClick={() => {
+                                                            setSelectedProductForBulk(item as Product);
+                                                            setBulkPriceDialogOpen(true);
+                                                        }}
+                                                    >
+                                                        <Plus size={12} /> Add Bulk Pricing
+                                                    </DropdownMenuItem>
+                                                )}
                                                 <DropdownMenuItem className="gap-2 text-rose-600" onClick={() => deleteRow(item.id, activeTab === "products" ? "product" : activeTab === "categories" ? "category" : activeTab === "brands" ? "brand" : activeTab === "ingredients" ? "activeIngredient" : "product")}>
                                                     <Trash2 size={12} /> Delete Record
                                                 </DropdownMenuItem>
@@ -946,17 +1025,110 @@ const Sheet = () => {
       </div>
 
       {/* FOOTER BAR */}
-      <div className="bg-white border-t px-6 h-10 flex items-center justify-between text-[9px] font-black uppercase tracking-[0.2em] text-slate-400">
+      <div className="bg-white border-t px-6 h-12 flex items-center justify-between text-[9px] font-black uppercase tracking-[0.2em] text-slate-400">
           <div className="flex items-center gap-6">
               <span className="flex items-center gap-1.5"><div className="h-1.5 w-1.5 rounded-full bg-green-500 shadow-sm shadow-green-200" /> Database Live</span>
               <span className="text-indigo-600/60">Session Admin: {user.name}</span>
           </div>
+
+          <div className="flex items-center gap-4 bg-slate-50 px-4 py-1 rounded-full border border-slate-100 shadow-sm">
+              <span className="text-slate-500">Items: {totalItems}</span>
+              <div className="flex items-center gap-2">
+                  <Button 
+                    variant="ghost" 
+                    size="sm" 
+                    disabled={currentPage === 0} 
+                    onClick={() => setCurrentPage(prev => prev - 1)}
+                    className="h-6 px-2 text-[10px] hover:bg-indigo-100"
+                  >
+                    Prev
+                  </Button>
+                  <span className="text-indigo-600 font-black">Page {currentPage + 1} / {Math.max(1, Math.ceil(totalItems / limit))}</span>
+                  <Button 
+                    variant="ghost" 
+                    size="sm" 
+                    disabled={totalItems <= (currentPage + 1) * limit} 
+                    onClick={() => setCurrentPage(prev => prev + 1)}
+                    className="h-6 px-2 text-[10px] hover:bg-indigo-100"
+                  >
+                    Next
+                  </Button>
+              </div>
+              <Select value={String(limit)} onValueChange={(v) => { setLimit(Number(v)); setCurrentPage(0); }}>
+                  <SelectTrigger className="h-6 w-20 text-[10px] bg-transparent border-none">
+                      <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                      <SelectItem value="70" className="text-[10px]">70 / page</SelectItem>
+                      <SelectItem value="150" className="text-[10px]">150 / page</SelectItem>
+                      <SelectItem value="250" className="text-[10px]">250 / page</SelectItem>
+                      <SelectItem value="500" className="text-[10px]">500 / page</SelectItem>
+                  </SelectContent>
+              </Select>
+          </div>
+
           <div className="flex items-center gap-4">
               <span>Environment: Production</span>
               <span className="text-slate-200">|</span>
               <span>CliqueEngine Proxy v4.2.1</span>
           </div>
       </div>
+
+      <Dialog open={bulkPriceDialogOpen} onOpenChange={setBulkPriceDialogOpen}>
+        <DialogContent className="sm:max-w-[425px]">
+          <DialogHeader>
+            <DialogTitle>Add Bulk Pricing</DialogTitle>
+            <DialogDescription>
+              Add a new bulk price tier for <span className="font-bold text-indigo-600">{selectedProductForBulk?.name}</span>.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="grid gap-4 py-4">
+            <div className="grid grid-cols-4 items-center gap-4">
+              <Label htmlFor="name" className="text-right">Unit Name</Label>
+              <Input
+                id="name"
+                placeholder="e.g. Card, Pack, Carton"
+                className="col-span-3 h-9 text-xs"
+                value={newBulkPrice.name}
+                onChange={(e) => setNewBulkPrice(prev => ({ ...prev, name: e.target.value }))}
+              />
+            </div>
+            <div className="grid grid-cols-4 items-center gap-4">
+              <Label htmlFor="quantity" className="text-right">Quantity</Label>
+              <Input
+                id="quantity"
+                type="number"
+                min="1"
+                className="col-span-3 h-9 text-xs"
+                value={newBulkPrice.quantity}
+                onChange={(e) => setNewBulkPrice(prev => ({ ...prev, quantity: parseInt(e.target.value) || 0 }))}
+              />
+            </div>
+            <div className="grid grid-cols-4 items-center gap-4">
+              <Label htmlFor="price" className="text-right">Price (₦)</Label>
+              <Input
+                id="price"
+                type="number"
+                step="0.01"
+                min="0"
+                className="col-span-3 h-9 text-xs"
+                value={newBulkPrice.price}
+                onChange={(e) => setNewBulkPrice(prev => ({ ...prev, price: parseFloat(e.target.value) || 0 }))}
+              />
+            </div>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setBulkPriceDialogOpen(false)}>Cancel</Button>
+            <Button 
+                onClick={handleAddBulkPrice}
+                disabled={!newBulkPrice.name || newBulkPrice.quantity < 1 || newBulkPrice.price < 0}
+                className="bg-indigo-600 hover:bg-indigo-700"
+            >
+                Save Pricing Tier
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   )
 }

@@ -13,6 +13,7 @@ function useUnreadCount() {
   const { user } = useAppContext();
   const [unreadCount, setUnreadCount] = useState(0);
   const [showToast, setShowToast] = useState(false);
+  const isFetching = React.useRef(false);
 
   const isAdmin = user.role === "admin" || user.role === "staff" || user.role === "professional";
 
@@ -20,6 +21,8 @@ function useUnreadCount() {
     if (!user?.id || user.id === "nil") return;
 
     const checkMessages = async () => {
+      if (isFetching.current) return;
+      isFetching.current = true;
       try {
         const res = await axios.get("/api/dbhandler?model=message");
         const unread = res.data.filter((msg: any) => msg.receiverId === user.id && !msg.isRead);
@@ -33,7 +36,11 @@ function useUnreadCount() {
         }
         
         setUnreadCount(unread.length);
-      } catch {}
+      } catch (err) {
+        console.error("Error fetching messages:", err);
+      } finally {
+        isFetching.current = false;
+      }
     };
 
     checkMessages();

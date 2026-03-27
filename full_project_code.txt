@@ -1,6 +1,6 @@
 ================================================================================
 LOIS SPICE PROJECT - SOURCE CODE CONSOLIDATION
-Generated: 2026-03-27 16:00:13
+Generated: 2026-03-27 18:45:28
 ================================================================================
 
 
@@ -4792,6 +4792,62 @@ export async function POST(req: NextRequest) {
 
 
 ================================================================================
+LOCATION: app\api\sheet\batch\route.ts
+================================================================================
+
+import { NextRequest, NextResponse } from "next/server";
+import { PrismaClient } from "@prisma/client";
+import { auth } from "@/auth";
+
+const prisma = new PrismaClient();
+
+const modelMap: Record<string, any> = {
+  product: prisma.product,
+  category: prisma.category,
+  brand: prisma.brand,
+  activeIngredient: prisma.activeIngredient,
+  healthConcern: prisma.healthConcern,
+  stock: prisma.stock,
+  bulkPrice: prisma.bulkPrice,
+  user: prisma.user,
+};
+
+export async function POST(req: NextRequest) {
+  const session = await auth();
+  if ((session?.user as any)?.role !== 'admin') {
+    return NextResponse.json({ error: 'Unauthorized' }, { status: 403 });
+  }
+
+  try {
+    const { model, operations } = await req.json();
+    
+    if (!model || !modelMap[model] || !Array.isArray(operations)) {
+      return NextResponse.json({ error: 'Invalid parameters' }, { status: 400 });
+    }
+    
+    // operations: [{ type: 'update' | 'create' | 'delete', id?, data }]
+    const results = await prisma.$transaction(
+      operations.map((op: any) => {
+        if (op.type === 'update') {
+          return modelMap[model].update({ where: { id: op.id }, data: op.data });
+        } else if (op.type === 'create') {
+          return modelMap[model].create({ data: op.data });
+        } else if (op.type === 'delete') {
+          return modelMap[model].delete({ where: { id: op.id } });
+        }
+        throw new Error(`Unsupported operation type: ${op.type}`);
+      })
+    );
+
+    return NextResponse.json({ success: true, results });
+  } catch (error: any) {
+    console.error("Batch operation failed:", error);
+    return NextResponse.json({ error: error.message || "Batch operation failed" }, { status: 500 });
+  }
+}
+
+
+================================================================================
 LOCATION: app\api\sheet\route.ts
 ================================================================================
 
@@ -4813,14 +4869,39 @@ const modelMap: Record<string, any> = {
   user: prisma.user,
 };
 
+async function logChange(model: string, operation: string, userId: string, recordId: string, changes: any) {
+  try {
+    await prisma.auditLog.create({
+      data: {
+        model,
+        operation,
+        userId,
+        recordId,
+        changes,
+        timestamp: new Date()
+      }
+    });
+  } catch (error) {
+    console.error("Audit log failed:", error);
+  }
+}
+
 export async function GET(req: NextRequest) {
   const session = await auth();
-  if ((session?.user as any)?.role !== "admin") {
+  const isAdmin = (session?.user as any)?.role === "admin";
+  
+  if (!isAdmin) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 403 });
   }
 
   const { searchParams } = new URL(req.url);
   const model = searchParams.get("model");
+  
+  // Optimization: Default limit to 70 as requested. 
+  // Admin can override, but we cap it to 500 for safety unless explicitly needed.
+  const requestedLimit = parseInt(searchParams.get("limit") || "70");
+  const limit = isAdmin ? requestedLimit : Math.min(requestedLimit, 70);
+  const offset = parseInt(searchParams.get("offset") || "0");
 
   if (!model || !modelMap[model]) {
     return NextResponse.json({ error: "Invalid model" }, { status: 400 });
@@ -4837,28 +4918,39 @@ export async function GET(req: NextRequest) {
           stock: { select: { id: true, addedQuantity: true, costPerProduct: true, createdAt: true } },
           bulkPrices: { select: { id: true, name: true, quantity: true, price: true } },
         },
-        orderBy: { createdAt: 'desc' }
+        orderBy: { createdAt: 'desc' },
+        take: limit,
+        skip: offset,
       });
     } else if (model === "stock") {
       data = await prisma.stock.findMany({
         include: { product: { select: { id: true, name: true } } },
-        orderBy: { createdAt: 'desc' }
+        orderBy: { createdAt: 'desc' },
+        take: limit,
+        skip: offset,
       });
     } else if (model === "bulkPrice") {
       data = await prisma.bulkPrice.findMany({
         include: { product: { select: { id: true, name: true } } },
-        orderBy: { createdAt: 'desc' }
+        orderBy: { createdAt: 'desc' },
+        take: limit,
+        skip: offset,
       });
     } else {
       data = await modelMap[model].findMany({
         include: model === "category" || model === "brand" || model === "activeIngredient" 
           ? { _count: { select: { products: true } } } 
           : undefined,
-        orderBy: { createdAt: 'desc' }
+        orderBy: { createdAt: 'desc' },
+        take: limit,
+        skip: offset,
       });
     }
 
-    return NextResponse.json(data);
+    // Also return total count for pagination UI if needed
+    const total = await modelMap[model].count();
+
+    return NextResponse.json({ data, total, limit, offset });
   } catch (error) {
     console.error("Sheet Fetch Error:", error);
     return NextResponse.json({ error: "Fetch failed" }, { status: 500 });
@@ -4915,10 +5007,16 @@ export async function PUT(req: NextRequest) {
       updateData[field] = value;
     }
 
+    const item = await prismaModel.findUnique({ where: { id }, select: { version: true } });
+    if (!item) return NextResponse.json({ error: "Record not found" }, { status: 404 });
+
     const updated = await prismaModel.update({
-      where: { id },
-      data: updateData,
+      where: { id, version: item.version },
+      data: { ...updateData, version: { increment: 1 } },
     });
+
+    // Log the change
+    await logChange(model, 'update', session?.user?.id || 'unknown', id, { field, newValue: value });
 
     return NextResponse.json(updated);
   } catch (error: any) {
@@ -4963,12 +5061,115 @@ export async function DELETE(req: NextRequest) {
 
   try {
     await modelMap[model].delete({ where: { id } });
+    
+    // Log the deletion
+    await logChange(model, 'delete', session?.user?.id || 'unknown', id!, null);
+    
     return NextResponse.json({ success: true });
   } catch (error: any) {
     return NextResponse.json({ error: error.message }, { status: 500 });
   }
 }
 
+
+
+================================================================================
+LOCATION: app\api\sheet\search\route.ts
+================================================================================
+
+"use server";
+
+import { NextRequest, NextResponse } from "next/server";
+import { PrismaClient } from "@prisma/client";
+import { auth } from "@/auth";
+
+const prisma = new PrismaClient();
+
+// Unified Model Map for the entire Sheet System
+const modelMap: Record<string, any> = {
+  product: prisma.product,
+  category: prisma.category,
+  brand: prisma.brand,
+  activeIngredient: prisma.activeIngredient,
+  healthConcern: prisma.healthConcern,
+  stock: prisma.stock,
+  bulkPrice: prisma.bulkPrice,
+  user: prisma.user,
+};
+
+export async function POST(req: NextRequest) {
+  const session = await auth();
+  if ((session?.user as any)?.role !== "admin") {
+    return NextResponse.json({ error: "Unauthorized" }, { status: 403 });
+  }
+
+  try {
+    const { model, query, filters, sortBy, sortOrder, page = 1, limit = 50 } = await req.json();
+
+    if (!model || !modelMap[model]) {
+      return NextResponse.json({ error: "Invalid model" }, { status: 400 });
+    }
+
+    const prismaModel = modelMap[model];
+
+    const where: any = {};
+
+    // Text search across multiple fields
+    if (query) {
+      where.OR = [
+        { name: { contains: query, mode: 'insensitive' } },
+        { description: { contains: query, mode: 'insensitive' } },
+      ];
+    }
+
+    // Apply filters
+    if (filters) {
+      Object.entries(filters).forEach(([field, value]) => {
+        where[field] = value;
+      });
+    }
+
+    const [data, total] = await Promise.all([
+      prismaModel.findMany({
+        where,
+        skip: (page - 1) * limit,
+        take: limit,
+        orderBy: { [sortBy || 'createdAt']: sortOrder || 'desc' },
+        include: getIncludesForModel(model)
+      }),
+      prismaModel.count({ where })
+    ]);
+
+    return NextResponse.json({
+      data,
+      total,
+      page,
+      totalPages: Math.ceil(total / limit)
+    });
+  } catch (error: any) {
+    console.error("Advanced search error:", error);
+    return NextResponse.json({ error: error.message || "Search failed" }, { status: 500 });
+  }
+}
+
+function getIncludesForModel(model: string) {
+  switch (model) {
+    case 'product':
+      return {
+        category: { select: { id: true, name: true } },
+        brand: { select: { id: true, name: true } },
+        activeIngredients: { select: { id: true, name: true } },
+        stock: { select: { id: true, addedQuantity: true } },
+        bulkPrices: { select: { id: true, name: true, price: true } },
+      };
+    case 'stock':
+      return { product: { select: { id: true, name: true } } };
+    case 'bulkPrice':
+      return { product: { select: { id: true, name: true } } };
+    default:
+      return undefined;
+  }
+}
 
 
 ================================================================================
@@ -7073,7 +7274,7 @@ LOCATION: app\sheet\page.tsx
 
 "use client"
 
-import { useState, useEffect, useRef } from "react"
+import { useState, useEffect, useRef, useMemo } from "react"
 import { useAppContext } from "@/hooks/useAppContext"
 import { Button } from "@/components/ui/button"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
@@ -7175,6 +7376,12 @@ interface BulkPrice {
   product?: { name: string }
 }
 
+interface ColumnFilter {
+  field: string;
+  operator: 'contains' | 'equals' | 'greaterThan' | 'lessThan';
+  value: any;
+}
+
 const Sheet = () => {
   const { user } = useAppContext()
   const router = useRouter()
@@ -7187,8 +7394,24 @@ const Sheet = () => {
   const [bulkPrices, setBulkPrices] = useState<BulkPrice[]>([])
   const [loading, setLoading] = useState(true)
   const [editingCell, setEditingCell] = useState<{ rowId: string, field: string } | null>(null)
-  const [saving, setSaving] = useState<string | null>(null)
   const [searchQuery, setSearchQuery] = useState("")
+  const [selectedRows, setSelectedRows] = useState<Set<string>>(new Set())
+  const [history, setHistory] = useState<any[]>([])
+  const [historyIndex, setHistoryIndex] = useState(-1)
+  const [validationErrors, setValidationErrors] = useState<Record<string, string>>({})
+  const [filters, setFilters] = useState<ColumnFilter[]>([])
+  const [sortConfig, setSortConfig] = useState<{ field: string; direction: 'asc' | 'desc' } | null>(null)
+  const [saving, setSaving] = useState<string | null>(null)
+  
+  // Pagination State
+  const [currentPage, setCurrentPage] = useState(0)
+  const [totalItems, setTotalItems] = useState(0)
+  const [limit, setLimit] = useState(70)
+  
+  useEffect(() => {
+    // Reset page when tab changes
+    setCurrentPage(0)
+  }, [activeTab])
 
   useEffect(() => {
     // Only proceed once user data is loaded from context
@@ -7199,11 +7422,40 @@ const Sheet = () => {
       return
     }
     loadData()
-  }, [user, user.loading, router])
+  }, [user.id, user.role, user.loading, router, activeTab, currentPage, limit])
+
+  // Copy/paste functionality
+  useEffect(() => {
+    const handlePaste = async (e: ClipboardEvent) => {
+      if (editingCell) {
+        const text = e.clipboardData?.getData('text');
+        if (text) {
+          // Parse tabular data and update multiple cells if it's CSV-like
+          const lines = text.split('\n').map(line => line.split('\t'));
+          if (lines.length > 1 && lines[0].length > 1) {
+            // Multi-cell paste
+            e.preventDefault();
+            // For now, just paste the first cell
+            updateCell(editingCell.rowId, editingCell.field, text.trim());
+          } else {
+            // Single cell paste
+            updateCell(editingCell.rowId, editingCell.field, text.trim());
+          }
+        }
+      }
+    };
+
+    document.addEventListener('paste', handlePaste);
+    return () => document.removeEventListener('paste', handlePaste);
+  }, [editingCell]);
 
   const loadData = async () => {
     setLoading(true)
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 15000); // 15s timeout
+
     try {
+      const config = { signal: controller.signal };
       const [
         productsRes,
         categoriesRes,
@@ -7212,29 +7464,72 @@ const Sheet = () => {
         stocksRes,
         bulkPricesRes
       ] = await Promise.all([
-        axios.get("/api/sheet?model=product").catch(e => ({ data: [] })),
-        axios.get("/api/sheet?model=category").catch(e => ({ data: [] })),
-        axios.get("/api/sheet?model=brand").catch(e => ({ data: [] })),
-        axios.get("/api/sheet?model=activeIngredient").catch(e => ({ data: [] })),
-        axios.get("/api/sheet?model=stock").catch(e => ({ data: [] })),
-        axios.get("/api/sheet?model=bulkPrice").catch(e => ({ data: [] }))
+        axios.get(`/api/sheet?model=product&limit=${activeTab === 'products' ? limit : 1000}&offset=${activeTab === 'products' ? currentPage * limit : 0}`, config).catch(e => ({ data: { data: [], total: 0 } })),
+        axios.get(`/api/sheet?model=category&limit=${activeTab === 'categories' ? limit : 1000}&offset=${activeTab === 'categories' ? currentPage * limit : 0}`, config).catch(e => ({ data: { data: [], total: 0 } })),
+        axios.get(`/api/sheet?model=brand&limit=${activeTab === 'brands' ? limit : 1000}&offset=${activeTab === 'brands' ? currentPage * limit : 0}`, config).catch(e => ({ data: { data: [], total: 0 } })),
+        axios.get(`/api/sheet?model=activeIngredient&limit=${activeTab === 'ingredients' ? limit : 1000}&offset=${activeTab === 'ingredients' ? currentPage * limit : 0}`, config).catch(e => ({ data: { data: [], total: 0 } })),
+        axios.get(`/api/sheet?model=stock&limit=${activeTab === 'stocks' ? limit : 1000}&offset=${activeTab === 'stocks' ? currentPage * limit : 0}`, config).catch(e => ({ data: { data: [], total: 0 } })),
+        axios.get(`/api/sheet?model=bulkPrice&limit=${activeTab === 'bulkprices' ? limit : 1000}&offset=${activeTab === 'bulkprices' ? currentPage * limit : 0}`, config).catch(e => ({ data: { data: [], total: 0 } }))
       ])
       
-      setProducts(productsRes.data)
-      setCategories(categoriesRes.data)
-      setBrands(brandsRes.data)
-      setIngredients(ingredientsRes.data)
-      setStocks(stocksRes.data)
-      setBulkPrices(bulkPricesRes.data)
+      clearTimeout(timeoutId);
+      
+      const resMap: Record<string, any> = {
+        products: productsRes.data,
+        categories: categoriesRes.data,
+        brands: brandsRes.data,
+        ingredients: ingredientsRes.data,
+        stocks: stocksRes.data,
+        bulkprices: bulkPricesRes.data
+      };
+
+      setProducts(productsRes.data.data)
+      setCategories(categoriesRes.data.data)
+      setBrands(brandsRes.data.data)
+      setIngredients(ingredientsRes.data.data)
+      setStocks(stocksRes.data.data)
+      setBulkPrices(bulkPricesRes.data.data)
+
+      setTotalItems(resMap[activeTab]?.total || 0)
     } catch (error) {
-      console.error("Critical Data Load Error:", error)
-      toast.error("Failed to sync some data tables")
+      if (axios.isCancel(error)) {
+        toast.error("Cloud Sync Timed Out - DB Connection Slow")
+      } else {
+        console.error("Critical Data Load Error:", error)
+        toast.error("Failed to sync some data tables")
+      }
     } finally {
       setLoading(false)
     }
   }
 
   const updateCell = async (id: string, field: string, value: any, model: string = "product") => {
+    // Validate cell value
+    const validationError = validateCell(model, field, value);
+    if (validationError) {
+      setValidationErrors(prev => ({ ...prev, [`${id}-${field}`]: validationError }));
+      return;
+    }
+
+    // Clear validation error
+    setValidationErrors(prev => {
+      const newErrors = { ...prev };
+      delete newErrors[`${id}-${field}`];
+      return newErrors;
+    });
+
+    // Save to history for undo
+    const previousValue = getCurrentValue(id, field, model);
+    setHistory(prev => [...prev.slice(0, historyIndex + 1), {
+      id,
+      field,
+      model,
+      previousValue,
+      newValue: value,
+      timestamp: Date.now()
+    }]);
+    setHistoryIndex(prev => prev + 1);
+
     try {
       const response = await axios.put("/api/sheet", { model, id, field, value })
       // Update local state with server response
@@ -7246,6 +7541,10 @@ const Sheet = () => {
         setBrands(prev => prev.map(b => b.id === id ? response.data : b));
       } else if (model === "activeIngredient") {
         setIngredients(prev => prev.map(i => i.id === id ? response.data : i));
+      } else if (model === "stock") {
+        setStocks(prev => prev.map(s => s.id === id ? response.data : s));
+      } else if (model === "bulkPrice") {
+        setBulkPrices(prev => prev.map(b => b.id === id ? response.data : b));
       }
       toast.success("Updated successfully")
     } catch (error) {
@@ -7253,6 +7552,200 @@ const Sheet = () => {
       loadData() // Reload on error
     }
   }
+
+  const validateCell = (model: string, field: string, value: any): string | null => {
+    if (model === 'product') {
+      if (field === 'price' && (isNaN(value) || value < 0)) {
+        return 'Price must be a positive number';
+      }
+      if (field === 'name' && (!value || value.length < 3)) {
+        return 'Name must be at least 3 characters';
+      }
+    } else if (model === 'stock') {
+      if (field === 'addedQuantity' && (isNaN(value) || value < 0)) {
+        return 'Quantity must be a positive number';
+      }
+      if (field === 'costPerProduct' && (isNaN(value) || value < 0)) {
+        return 'Cost must be a positive number';
+      }
+    } else if (model === 'bulkPrice') {
+      if (field === 'quantity' && (isNaN(value) || value < 1)) {
+        return 'Quantity must be at least 1';
+      }
+      if (field === 'price' && (isNaN(value) || value < 0)) {
+        return 'Price must be a positive number';
+      }
+    }
+    return null;
+  }
+
+  const getCurrentValue = (id: string, field: string, model: string) => {
+    let data;
+    switch (model) {
+      case 'product': data = products; break;
+      case 'category': data = categories; break;
+      case 'brand': data = brands; break;
+      case 'activeIngredient': data = ingredients; break;
+      case 'stock': data = stocks; break;
+      case 'bulkPrice': data = bulkPrices; break;
+      default: return null;
+    }
+    return data.find(item => item.id === id)?.[field];
+  }
+
+  const undo = () => {
+    if (historyIndex >= 0) {
+      const change = history[historyIndex];
+      updateCell(change.id, change.field, change.previousValue, change.model);
+      setHistoryIndex(prev => prev - 1);
+    }
+  }
+
+  const redo = () => {
+    if (historyIndex < history.length - 1) {
+      const change = history[historyIndex + 1];
+      updateCell(change.id, change.field, change.newValue, change.model);
+      setHistoryIndex(prev => prev + 1);
+    }
+  }
+
+  const handleKeyDown = (e: React.KeyboardEvent, rowId: string, field: string) => {
+    if (e.key === 'Enter') {
+      e.preventDefault();
+      moveToCell(rowId, field, 'down');
+    } else if (e.key === 'Tab') {
+      e.preventDefault();
+      moveToCell(rowId, field, e.shiftKey ? 'left' : 'right');
+    } else if (e.key === 'Escape') {
+      setEditingCell(null);
+    }
+  }
+
+  const moveToCell = (rowId: string, field: string, direction: 'up' | 'down' | 'left' | 'right') => {
+    const fieldsMap: Record<string, string[]> = {
+      products: ["name", "price"],
+      categories: ["name"],
+      brands: ["name", "order"],
+      ingredients: ["name"],
+      stocks: ["addedQuantity", "costPerProduct"],
+      bulkprices: ["name", "quantity", "price"]
+    };
+
+    const currentFields = fieldsMap[activeTab] || [];
+    const currentIndex = sortedData.findIndex(item => item.id === rowId);
+    if (currentIndex === -1) return;
+
+    let nextRowId = rowId;
+    let nextField = field;
+
+    if (direction === 'down' && currentIndex < sortedData.length - 1) {
+      nextRowId = sortedData[currentIndex + 1].id;
+    } else if (direction === 'up' && currentIndex > 0) {
+      nextRowId = sortedData[currentIndex - 1].id;
+    } else if (direction === 'right') {
+      const fieldIndex = currentFields.indexOf(field);
+      if (fieldIndex < currentFields.length - 1) {
+        nextField = currentFields[fieldIndex + 1];
+      } else if (currentIndex < sortedData.length - 1) {
+        nextRowId = sortedData[currentIndex + 1].id;
+        nextField = currentFields[0];
+      }
+    } else if (direction === 'left') {
+      const fieldIndex = currentFields.indexOf(field);
+      if (fieldIndex > 0) {
+        nextField = currentFields[fieldIndex - 1];
+      } else if (currentIndex > 0) {
+        nextRowId = sortedData[currentIndex - 1].id;
+        nextField = currentFields[currentFields.length - 1];
+      }
+    }
+
+    if (nextRowId !== rowId || nextField !== field) {
+      setEditingCell({ rowId: nextRowId, field: nextField });
+    }
+  }
+
+  const bulkDelete = async () => {
+    if (selectedRows.size === 0) return;
+    if (!confirm(`Delete ${selectedRows.size} records?`)) return;
+
+    try {
+      await Promise.all(
+        Array.from(selectedRows).map(id =>
+          axios.delete(`/api/sheet?model=${activeTab}&id=${id}`)
+        )
+      );
+      setSelectedRows(new Set());
+      loadData();
+      toast.success(`Deleted ${selectedRows.size} records`);
+    } catch (error) {
+      toast.error("Bulk delete failed");
+    }
+  }
+
+  const exportToCSV = () => {
+    let data;
+    switch (activeTab) {
+      case 'products': data = products; break;
+      case 'categories': data = categories; break;
+      case 'brands': data = brands; break;
+      case 'ingredients': data = ingredients; break;
+      case 'stocks': data = stocks; break;
+      case 'bulkprices': data = bulkPrices; break;
+      default: return;
+    }
+
+    if (data.length === 0) return;
+
+    const headers = Object.keys(data[0]).join(',');
+    const rows = data.map(row =>
+      Object.values(row).map(v => `"${v}"`).join(',')
+    ).join('\n');
+    const csv = `${headers}\n${rows}`;
+    const blob = new Blob([csv], { type: 'text/csv' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `${activeTab}_export_${new Date().toISOString().split('T')[0]}.csv`;
+    a.click();
+  }
+
+  const filteredData = useMemo(() => {
+    let data;
+    switch (activeTab) {
+      case 'products': data = products; break;
+      case 'categories': data = categories; break;
+      case 'brands': data = brands; break;
+      case 'ingredients': data = ingredients; break;
+      case 'stocks': data = stocks; break;
+      case 'bulkprices': data = bulkPrices; break;
+      default: data = [];
+    }
+
+    return data.filter(row =>
+      filters.every(filter => {
+        const cellValue = row[filter.field];
+        switch (filter.operator) {
+          case 'contains': return cellValue?.toString().toLowerCase().includes(filter.value.toLowerCase());
+          case 'equals': return cellValue === filter.value;
+          case 'greaterThan': return cellValue > filter.value;
+          case 'lessThan': return cellValue < filter.value;
+          default: return true;
+        }
+      })
+    );
+  }, [activeTab, products, categories, brands, ingredients, stocks, bulkPrices, filters]);
+
+  const sortedData = useMemo(() => {
+    if (!sortConfig) return filteredData;
+    return [...filteredData].sort((a, b) => {
+      const aVal = a[sortConfig.field];
+      const bVal = b[sortConfig.field];
+      if (aVal < bVal) return sortConfig.direction === 'asc' ? -1 : 1;
+      if (aVal > bVal) return sortConfig.direction === 'asc' ? 1 : -1;
+      return 0;
+    });
+  }, [filteredData, sortConfig]);
 
   const deleteRow = async (id: string, model: string) => {
     if (!confirm("Are you sure? This is permanent.")) return;
@@ -7277,17 +7770,23 @@ const Sheet = () => {
 
   const renderCell = (item: any, field: string, model: string) => {
     const isEditing = editingCell?.rowId === item.id && editingCell?.field === field
-    const isSaving = saving === `${item.id}-${field}`
+    const validationError = validationErrors[`${item.id}-${field}`]
 
     return (
-      <div className={cn("relative min-h-[40px] flex items-center px-1", isSaving && "bg-primary/5")}>
-        {isSaving && <div className="absolute right-1 top-1"><Loader2 className="h-2 w-2 animate-spin text-primary" /></div>}
-        {model === "product" && renderProductCell(item as Product, field, isEditing)}
-        {model === "category" && renderCategoryCell(item as Category, field, isEditing)}
-        {model === "brand" && renderBrandCell(item as Brand, field, isEditing)}
-        {model === "activeIngredient" && renderActiveIngredientCell(item as ActiveIngredient, field, isEditing)}
-        {model === "stock" && renderStockCell(item as Stock, field, isEditing)}
-        {model === "bulkPrice" && renderBulkPriceCell(item as BulkPrice, field, isEditing)}
+      <div className="relative min-h-[40px] flex flex-col">
+        <div className="flex items-center px-1">
+          {model === "product" && renderProductCell(item as Product, field, isEditing)}
+          {model === "category" && renderCategoryCell(item as Category, field, isEditing)}
+          {model === "brand" && renderBrandCell(item as Brand, field, isEditing)}
+          {model === "activeIngredient" && renderActiveIngredientCell(item as ActiveIngredient, field, isEditing)}
+          {model === "stock" && renderStockCell(item as Stock, field, isEditing)}
+          {model === "bulkPrice" && renderBulkPriceCell(item as BulkPrice, field, isEditing)}
+        </div>
+        {validationError && (
+          <div className="absolute -bottom-6 left-0 text-[10px] text-destructive bg-white px-1 rounded shadow-sm border">
+            {validationError}
+          </div>
+        )}
       </div>
     )
   }
@@ -7298,12 +7797,13 @@ const Sheet = () => {
         return isEditing ? (
           <Input
             defaultValue={product.name}
+            id={`cell-${product.id}-name`}
             className="h-8 text-xs border-primary"
             onBlur={(e) => {
                 if (e.target.value !== product.name) updateCell(product.id, field, e.target.value);
                 setEditingCell(null);
             }}
-            onKeyDown={(e) => e.key === "Enter" && (e.target as any).blur()}
+            onKeyDown={(e) => handleKeyDown(e, product.id, field)}
             autoFocus
           />
         ) : (
@@ -7314,6 +7814,7 @@ const Sheet = () => {
         return isEditing ? (
           <Input
             type="number"
+            id={`cell-${product.id}-price`}
             defaultValue={product.price}
             className="h-8 text-xs font-mono text-right"
             onBlur={(e) => {
@@ -7321,6 +7822,7 @@ const Sheet = () => {
                 if (val !== product.price) updateCell(product.id, field, val);
                 setEditingCell(null);
             }}
+            onKeyDown={(e) => handleKeyDown(e, product.id, field)}
             autoFocus
           />
         ) : (
@@ -7501,8 +8003,6 @@ const Sheet = () => {
     }
   }
 
-  const filteredProducts = products.filter(p => p.name?.toLowerCase().includes(searchQuery.toLowerCase()));
-
   return (
     <div className="min-h-screen bg-[#f8f9fa] flex flex-col select-none">
       {/* APP BAR */}
@@ -7527,6 +8027,45 @@ const Sheet = () => {
                     onChange={(e) => setSearchQuery(e.target.value)}
                 />
             </div>
+            <Button 
+              variant="outline" 
+              size="sm" 
+              onClick={undo} 
+              disabled={historyIndex < 0}
+              className="h-9 gap-2 border-2 text-[11px] font-bold uppercase tracking-wider"
+            >
+                <Undo size={14} />
+                Undo
+            </Button>
+            <Button 
+              variant="outline" 
+              size="sm" 
+              onClick={redo} 
+              disabled={historyIndex >= history.length - 1}
+              className="h-9 gap-2 border-2 text-[11px] font-bold uppercase tracking-wider"
+            >
+                <RefreshCcw size={14} />
+                Redo
+            </Button>
+            <Button 
+              variant="outline" 
+              size="sm" 
+              onClick={bulkDelete} 
+              disabled={selectedRows.size === 0}
+              className="h-9 gap-2 border-2 text-[11px] font-bold uppercase tracking-wider text-destructive hover:bg-destructive hover:text-white"
+            >
+                <Trash2 size={14} />
+                Delete ({selectedRows.size})
+            </Button>
+            <Button 
+              variant="outline" 
+              size="sm" 
+              onClick={exportToCSV}
+              className="h-9 gap-2 border-2 text-[11px] font-bold uppercase tracking-wider"
+            >
+                <ExternalLink size={14} />
+                Export CSV
+            </Button>
             <Button variant="outline" size="sm" onClick={loadData} className="h-9 gap-2 border-2 text-[11px] font-bold uppercase tracking-wider">
                 <RefreshCcw size={14} className={loading ? "animate-spin" : ""} />
                 Cloud Sync
@@ -7573,6 +8112,18 @@ const Sheet = () => {
                     <Table className="border-collapse">
                         <TableHeader className="bg-slate-50/80 sticky top-0 z-20 backdrop-blur-md">
                             <TableRow className="border-b shadow-none hover:bg-transparent">
+                                <TableHead className="w-12 text-center text-[10px] font-black border-r">
+                                  <Checkbox
+                                    checked={selectedRows.size > 0 && selectedRows.size === sortedData.length}
+                                    onCheckedChange={(checked) => {
+                                      if (checked) {
+                                        setSelectedRows(new Set(sortedData.map(item => item.id)));
+                                      } else {
+                                        setSelectedRows(new Set());
+                                      }
+                                    }}
+                                  />
+                                </TableHead>
                                 <TableHead className="w-12 text-center text-[10px] font-black border-r">#</TableHead>
                                 {activeTab === "products" && <>
                                     <TableHead className="text-[10px] font-black uppercase border-r px-4 h-12">Product Name</TableHead>
@@ -7612,8 +8163,24 @@ const Sheet = () => {
                             </TableRow>
                         </TableHeader>
                         <TableBody>
-                            {(activeTab === "products" ? filteredProducts : activeTab === "categories" ? categories : activeTab === "brands" ? brands : activeTab === "ingredients" ? ingredients : activeTab === "stocks" ? stocks : bulkPrices).map((item, i) => (
-                                <TableRow key={item.id} className="group hover:bg-indigo-50/20 transition-all even:bg-slate-50/30">
+                            {sortedData.map((item, i) => (
+                                <TableRow key={item.id} className={cn("group hover:bg-indigo-50/20 transition-all even:bg-slate-50/30", selectedRows.has(item.id) && "bg-indigo-100/50")}>
+                                    <TableCell className="text-center border-r">
+                                      <Checkbox
+                                        checked={selectedRows.has(item.id)}
+                                        onCheckedChange={(checked) => {
+                                          if (checked) {
+                                            setSelectedRows(prev => new Set([...prev, item.id]));
+                                          } else {
+                                            setSelectedRows(prev => {
+                                              const newSet = new Set(prev);
+                                              newSet.delete(item.id);
+                                              return newSet;
+                                            });
+                                          }
+                                        }}
+                                      />
+                                    </TableCell>
                                     <TableCell className="text-[10px] font-mono text-center border-r text-slate-400 group-hover:text-indigo-600 transition-colors">
                                         {String(i + 1).padStart(3, '0')}
                                     </TableCell>
@@ -7684,11 +8251,48 @@ const Sheet = () => {
       </div>
 
       {/* FOOTER BAR */}
-      <div className="bg-white border-t px-6 h-10 flex items-center justify-between text-[9px] font-black uppercase tracking-[0.2em] text-slate-400">
+      <div className="bg-white border-t px-6 h-12 flex items-center justify-between text-[9px] font-black uppercase tracking-[0.2em] text-slate-400">
           <div className="flex items-center gap-6">
               <span className="flex items-center gap-1.5"><div className="h-1.5 w-1.5 rounded-full bg-green-500 shadow-sm shadow-green-200" /> Database Live</span>
               <span className="text-indigo-600/60">Session Admin: {user.name}</span>
           </div>
+
+          <div className="flex items-center gap-4 bg-slate-50 px-4 py-1 rounded-full border border-slate-100 shadow-sm">
+              <span className="text-slate-500">Items: {totalItems}</span>
+              <div className="flex items-center gap-2">
+                  <Button 
+                    variant="ghost" 
+                    size="sm" 
+                    disabled={currentPage === 0} 
+                    onClick={() => setCurrentPage(prev => prev - 1)}
+                    className="h-6 px-2 text-[10px] hover:bg-indigo-100"
+                  >
+                    Prev
+                  </Button>
+                  <span className="text-indigo-600 font-black">Page {currentPage + 1} / {Math.max(1, Math.ceil(totalItems / limit))}</span>
+                  <Button 
+                    variant="ghost" 
+                    size="sm" 
+                    disabled={totalItems <= (currentPage + 1) * limit} 
+                    onClick={() => setCurrentPage(prev => prev + 1)}
+                    className="h-6 px-2 text-[10px] hover:bg-indigo-100"
+                  >
+                    Next
+                  </Button>
+              </div>
+              <Select value={String(limit)} onValueChange={(v) => { setLimit(Number(v)); setCurrentPage(0); }}>
+                  <SelectTrigger className="h-6 w-20 text-[10px] bg-transparent border-none">
+                      <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                      <SelectItem value="70" className="text-[10px]">70 / page</SelectItem>
+                      <SelectItem value="150" className="text-[10px]">150 / page</SelectItem>
+                      <SelectItem value="250" className="text-[10px]">250 / page</SelectItem>
+                      <SelectItem value="500" className="text-[10px]">500 / page</SelectItem>
+                  </SelectContent>
+              </Select>
+          </div>
+
           <div className="flex items-center gap-4">
               <span>Environment: Production</span>
               <span className="text-slate-200">|</span>
@@ -11793,7 +12397,8 @@ export function CartClient({ className, cart: _unusedCart }: CartClientProps) {
   }, []);
 
   React.useEffect(() => {
-    if (user?.id && user.id !== 'nil' && (!user.addresses || user.addresses.length === 0)) {
+    // Only fetch if undefined to prevent infinite loop on empty array
+    if (user?.id && user.id !== 'nil' && user.addresses === undefined) {
       const fetchAddresses = async () => {
         try {
           const res = await axios.get(`/api/dbhandler?model=shippingAddress&userId=${user.id}`);
@@ -17152,6 +17757,7 @@ function useUnreadCount() {
   const { user } = useAppContext();
   const [unreadCount, setUnreadCount] = useState(0);
   const [showToast, setShowToast] = useState(false);
+  const isFetching = React.useRef(false);
 
   const isAdmin = user.role === "admin" || user.role === "staff" || user.role === "professional";
 
@@ -17159,6 +17765,8 @@ function useUnreadCount() {
     if (!user?.id || user.id === "nil") return;
 
     const checkMessages = async () => {
+      if (isFetching.current) return;
+      isFetching.current = true;
       try {
         const res = await axios.get("/api/dbhandler?model=message");
         const unread = res.data.filter((msg: any) => msg.receiverId === user.id && !msg.isRead);
@@ -17172,7 +17780,11 @@ function useUnreadCount() {
         }
         
         setUnreadCount(unread.length);
-      } catch {}
+      } catch (err) {
+        console.error("Error fetching messages:", err);
+      } finally {
+        isFetching.current = false;
+      }
     };
 
     checkMessages();
@@ -36687,6 +37299,7 @@ model Category {
   products    Product[]
   createdAt   DateTime  @default(now())
   updatedAt   DateTime  @updatedAt
+  version     Int       @default(0)
 }
 
 model Product {
@@ -36719,8 +37332,15 @@ model Product {
   bulkPrices                BulkPrice[]
   createdAt                 DateTime                   @default(now())
   updatedAt                 DateTime                   @updatedAt
+  version                   Int                        @default(0)
   wishlist                  Wishlist[]
   heavilyDiscountedProducts HeavilyDiscountedProduct[]
+
+  @@index([name])
+  @@index([categoryId])
+  @@index([brandId])
+  @@index([createdAt])
+  @@index([price])
 }
 
 //for inputing available product, after sales, deduct the quantity
@@ -36734,6 +37354,10 @@ model Stock {
   pricePerProduct Int? //not yet implemented to determine profit and dysplayed price
   createdAt       DateTime @default(now())
   updatedAt       DateTime @updatedAt
+  version         Int      @default(0)
+
+  @@index([productId])
+  @@index([createdAt])
 }
 
 model BulkPrice {
@@ -36907,6 +37531,9 @@ model Brand {
   products  Product[]
   createdAt DateTime  @default(now())
   updatedAt DateTime  @updatedAt
+  version   Int       @default(0)
+
+  @@index([order])
 }
 
 model ActiveIngredient {
@@ -37070,8 +37697,19 @@ model HeavilyDiscountedProduct {
 //       Display Prisma version info
 //       $ prisma version
 
-//       Display Prisma debug info
-//       $ prisma debug
+model AuditLog {
+  id        String   @id @default(auto()) @map("_id") @db.ObjectId
+  model     String
+  operation String // create, update, delete
+  userId    String
+  recordId  String
+  changes   Json?     // { field: { old, new } }
+  timestamp DateTime @default(now())
+  
+  @@index([model, recordId])
+  @@index([userId, timestamp])
+  @@index([timestamp])
+}
 
 
 
@@ -42851,6 +43489,43 @@ listAll();
 
 
 ================================================================================
+LOCATION: tmp\test-db.js
+================================================================================
+
+const { PrismaClient } = require('@prisma/client');
+const prisma = new PrismaClient();
+
+async function test() {
+  try {
+    console.time('query');
+    const data = await prisma.product.findMany({
+      include: {
+        category: { select: { id: true, name: true } },
+        brand: { select: { id: true, name: true } },
+        activeIngredients: { select: { id: true, name: true } },
+        stock: { select: { id: true, addedQuantity: true, costPerProduct: true, createdAt: true } },
+        bulkPrices: { select: { id: true, name: true, quantity: true, price: true } }
+      },
+      take: 5,
+      orderBy: { createdAt: 'desc' }
+    });
+    console.timeEnd('query');
+    console.log('Products found:', data.length);
+    if (data.length > 0) {
+      console.log('Sample Product:', data[0].name);
+    }
+  } catch (e) {
+    console.error('Test Error:', e);
+  } finally {
+    await prisma.$disconnect();
+  }
+}
+
+test();
+
+
+
+================================================================================
 LOCATION: tmp\test_gemini.js
 ================================================================================
 
@@ -43055,5 +43730,5 @@ export const normalizeDateTime = (dateTime?: string): string => {
 
 
 ================================================================================
-TOTAL FILES CONSOLIDATED: 356
+TOTAL FILES CONSOLIDATED: 359
 ================================================================================
