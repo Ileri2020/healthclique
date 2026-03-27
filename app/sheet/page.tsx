@@ -171,6 +171,8 @@ const Sheet = () => {
   const [bulkPriceDialogOpen, setBulkPriceDialogOpen] = useState(false)
   const [selectedProductForBulk, setSelectedProductForBulk] = useState<Product | null>(null)
   const [newBulkPrice, setNewBulkPrice] = useState({ name: '', quantity: 1, price: 0 })
+  const [pendingChanges, setPendingChanges] = useState<Record<string, { id: string, model: string, field: string, value: any }>>({})
+  const [lastAutoSave, setLastAutoSave] = useState<Date | null>(null)
   
   // Pagination State
   const [currentPage, setCurrentPage] = useState(0)
@@ -192,6 +194,17 @@ const Sheet = () => {
     }
     loadData()
   }, [user.id, user.role, user.loading, router, activeTab, currentPage, limit])
+
+  // Auto-save logic: every minute (60s) if there are changes
+  useEffect(() => {
+    if (Object.keys(pendingChanges).length === 0) return;
+
+    const timer = setInterval(() => {
+      saveAllChanges(true); // Internal call for auto-save
+    }, 60000);
+
+    return () => clearInterval(timer);
+  }, [pendingChanges]);
 
   // Copy/paste functionality
   useEffect(() => {
@@ -280,64 +293,85 @@ const Sheet = () => {
       return;
     }
 
-    // Clear validation error
     setValidationErrors(prev => {
       const newErrors = { ...prev };
       delete newErrors[`${id}-${field}`];
       return newErrors;
     });
 
-    // Save to history for undo
-    const previousValue = getCurrentValue(id, field, model);
-    setHistory(prev => [...prev.slice(0, historyIndex + 1), {
-      id,
-      field,
-      model,
-      previousValue,
-      newValue: value,
-      timestamp: Date.now()
-    }]);
-    setHistoryIndex(prev => prev + 1);
+    // Update LOCAL state immediately for snappy UI
+    const updateLocalState = (data: any[], setter: (val: any) => void) => {
+        setter(data.map(item => item.id === id ? { ...item, [field]: value } : item));
+    }
 
+    if (model === "product") updateLocalState(products, setProducts);
+    else if (model === "category") updateLocalState(categories, setCategories);
+    else if (model === "brand") updateLocalState(brands, setBrands);
+    else if (model === "activeIngredient") updateLocalState(ingredients, setIngredients);
+    else if (model === "stock") updateLocalState(stocks, setStocks);
+    else if (model === "bulkPrice") {
+        updateLocalState(bulkPrices, setBulkPrices);
+        // Bulk prices often nested in products too
+        setProducts(prev => prev.map(p => ({
+            ...p,
+            bulkPrices: p.bulkPrices?.map(bp => bp.id === id ? { ...bp, [field]: value } : bp)
+        })));
+    }
+
+    // Add to pending changes instead of saving to DB immediately
+    setPendingChanges(prev => ({
+        ...prev,
+        [`${model}-${id}-${field}`]: { id, model, field, value }
+    }));
+  }
+
+  const saveAllChanges = async (isAutoSave: boolean = false) => {
+    const changeList = Object.values(pendingChanges);
+    if (changeList.length === 0) return;
+
+    setSaving("Saving all changes...");
     try {
-      const response = await axios.put("/api/sheet", { model, id, field, value })
-      // Update local state with server response
-      if (model === "product") {
-        setProducts(prev => prev.map(p => p.id === id ? response.data : p));
-        if (selectedProductForBulk?.id === id) {
-          setSelectedProductForBulk(response.data);
+      // Group changes by model
+      const groupedByModel: Record<string, any[]> = {};
+      changeList.forEach(change => {
+        if (!groupedByModel[change.model]) groupedByModel[change.model] = [];
+        
+        // Find if this specific record update is already partially built
+        const existingOp = groupedByModel[change.model].find(op => op.id === change.id);
+        if (existingOp) {
+          existingOp.data[change.field] = change.value;
+        } else {
+          groupedByModel[change.model].push({
+            type: 'update',
+            id: change.id,
+            data: { [change.field]: change.value }
+          });
         }
-      } else if (model === "category") {
-        setCategories(prev => prev.map(c => c.id === id ? response.data : c));
-      } else if (model === "brand") {
-        setBrands(prev => prev.map(b => b.id === id ? response.data : b));
-      } else if (model === "activeIngredient") {
-        setIngredients(prev => prev.map(i => i.id === id ? response.data : i));
-      } else if (model === "stock") {
-        setStocks(prev => prev.map(s => s.id === id ? response.data : s));
-      } else if (model === "bulkPrice") {
-        setBulkPrices(prev => prev.map(b => b.id === id ? response.data : b));
-        // Also update products if it has this bulk price
-        setProducts(prev => prev.map(p => {
-          if (p.bulkPrices?.some(bp => bp.id === id)) {
-            return {
-              ...p,
-              bulkPrices: p.bulkPrices.map(bp => bp.id === id ? { ...bp, [field]: value } : bp)
-            };
-          }
-          return p;
-        }));
-        if (selectedProductForBulk?.bulkPrices?.some(bp => bp.id === id)) {
-          setSelectedProductForBulk(prev => prev ? ({
-            ...prev,
-            bulkPrices: prev.bulkPrices?.map(bp => bp.id === id ? { ...bp, [field]: value } : bp)
-          }) : null);
-        }
-      }
-      toast.success("Updated successfully")
-    } catch (error) {
-      toast.error("Update failed")
-      loadData() // Reload on error
+      });
+
+      // Execute batch updates for each model
+      await Promise.all(
+        Object.entries(groupedByModel).map(([model, operations]) =>
+          axios.post("/api/sheet/batch", { model, operations })
+        )
+      );
+
+      setPendingChanges({}); // Clear buffer
+      setLastAutoSave(new Date());
+      toast.success(isAutoSave ? "Autosave successful" : "All changes saved successfully");
+    } catch (err) {
+      console.error("Batch save failed:", err);
+      toast.error("Failed to save some changes. Syncing with database...");
+      loadData(); // Re-sync to ensure consistency if something failed
+    } finally {
+      setSaving(null);
+    }
+  }
+
+  const discardChanges = () => {
+    if (confirm(`Discard ${Object.keys(pendingChanges).length} unsaved changes?`)) {
+        setPendingChanges({});
+        loadData(); // Reload from DB to clear local dirty state
     }
   }
 
@@ -679,12 +713,14 @@ const Sheet = () => {
   const renderCell = (item: any, field: string, model: string) => {
     const isEditing = editingCell?.rowId === item.id && editingCell?.field === field
     const validationError = validationErrors[`${item.id}-${field}`]
+    const isDirty = pendingChanges[`${model}-${item.id}-${field}`]
 
     return (
       <div
         className={cn(
           "relative min-h-[40px] flex flex-col px-2 transition-all",
-          focusedCell?.rowId === item.id && focusedCell?.field === field ? "ring-2 ring-indigo-500/50 bg-indigo-50/10 z-10" : "hover:bg-slate-50/50"
+          focusedCell?.rowId === item.id && focusedCell?.field === field ? "ring-2 ring-indigo-500/50 bg-indigo-50/10 z-10" : "hover:bg-slate-50/50",
+          isDirty ? "bg-amber-50/40 relative before:content-[''] before:absolute before:top-0 before:right-0 before:border-r-[6px] before:border-r-amber-400 before:border-b-[6px] before:border-b-transparent" : ""
         )}
         tabIndex={0}
         onFocus={() => setFocusedCell({ rowId: item.id, field })}
@@ -997,6 +1033,31 @@ const Sheet = () => {
                 <ExternalLink size={14} />
                 Export CSV
             </Button>
+            <Button 
+                variant="outline" 
+                size="sm" 
+                onClick={discardChanges} 
+                className="h-9 gap-2 border-2 border-dashed text-[11px] font-bold uppercase tracking-wider text-slate-400 hover:text-rose-500"
+                disabled={Object.keys(pendingChanges).length === 0}
+            >
+                Discard
+            </Button>
+
+            <Button 
+              size="sm" 
+              onClick={() => saveAllChanges()} 
+              disabled={Object.keys(pendingChanges).length === 0 || !!saving}
+              className={cn(
+                "h-9 gap-2 uppercase text-[11px] font-bold tracking-wider transition-all",
+                Object.keys(pendingChanges).length > 0 
+                  ? "bg-amber-500 hover:bg-amber-600 shadow-lg shadow-amber-100 text-white" 
+                  : "bg-slate-100 text-slate-400 border border-slate-200"
+              )}
+            >
+                {saving ? <Loader2 size={14} className="animate-spin" /> : <Save size={14} />}
+                {Object.keys(pendingChanges).length > 0 ? `Save ${Object.keys(pendingChanges).length} Changes` : 'All Saved'}
+            </Button>
+
             <Button variant="outline" size="sm" onClick={loadData} className="h-9 gap-2 border-2 text-[11px] font-bold uppercase tracking-wider">
                 <RefreshCcw size={14} className={loading ? "animate-spin" : ""} />
                 Cloud Sync
@@ -1167,8 +1228,9 @@ const Sheet = () => {
       {/* FOOTER BAR */}
       <div className="bg-white border-t px-6 h-12 flex items-center justify-between text-[9px] font-black uppercase tracking-[0.2em] text-slate-400">
           <div className="flex items-center gap-6">
-              <span className="flex items-center gap-1.5"><div className="h-1.5 w-1.5 rounded-full bg-green-500 shadow-sm shadow-green-200" /> Database Live</span>
-              <span className="text-indigo-600/60">Session Admin: {user.name}</span>
+              <span className="flex items-center gap-1.5"><div className={cn("h-1.5 w-1.5 rounded-full transition-all shadow-sm", Object.keys(pendingChanges).length > 0 ? "bg-amber-500 animate-pulse" : "bg-green-500")} /> Database {Object.keys(pendingChanges).length > 0 ? 'Dirty (Unsaved Changes)' : 'Live & Synced'}</span>
+              {lastAutoSave && <span className="text-[8px] opacity-70 italic lowercase tracking-normal">Last Saved: {lastAutoSave.toLocaleTimeString()}</span>}
+              <span className="text-indigo-600/60 ml-auto">Session Admin: {user.name}</span>
           </div>
 
           <div className="flex items-center gap-4 bg-slate-50 px-4 py-1 rounded-full border border-slate-100 shadow-sm">
