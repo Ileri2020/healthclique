@@ -130,6 +130,36 @@ const Sheet = () => {
   const [bulkPrices, setBulkPrices] = useState<BulkPrice[]>([])
   const [loading, setLoading] = useState(true)
   const [editingCell, setEditingCell] = useState<{ rowId: string, field: string } | null>(null)
+  const [focusedCell, setFocusedCell] = useState<{ rowId: string, field: string } | null>(null)
+  const [columnOrderByTab, setColumnOrderByTab] = useState<Record<string, string[]>>({
+    products: ["name", "category", "brand", "price", "stock", "scarce", "requiresPrescription", "bulkPrices"],
+    categories: ["name", "products"],
+    brands: ["name", "order", "products"],
+    ingredients: ["name", "products"],
+    stocks: ["product", "addedQuantity", "costPerProduct", "createdAt"],
+    bulkprices: ["product", "name", "quantity", "price"]
+  })
+  const [columnWidths, setColumnWidths] = useState<Record<string, number>>({
+    name: 200,
+    category: 140,
+    brand: 140,
+    price: 100,
+    stock: 100,
+    scarce: 80,
+    requiresPrescription: 90,
+    bulkPrices: 120,
+    products: 120,
+    order: 80,
+    product: 140,
+    addedQuantity: 100,
+    costPerProduct: 120,
+    createdAt: 140,
+    quantity: 90
+  })
+  const [draggedColumn, setDraggedColumn] = useState<string | null>(null)
+  const [resizingColumn, setResizingColumn] = useState<string | null>(null)
+  const [resizeStartX, setResizeStartX] = useState<number>(0)
+  const [startWidth, setStartWidth] = useState<number>(0)
   const [searchQuery, setSearchQuery] = useState("")
   const [selectedRows, setSelectedRows] = useState<Set<string>>(new Set())
   const [history, setHistory] = useState<any[]>([])
@@ -145,7 +175,7 @@ const Sheet = () => {
   // Pagination State
   const [currentPage, setCurrentPage] = useState(0)
   const [totalItems, setTotalItems] = useState(0)
-  const [limit, setLimit] = useState(70)
+  const [limit, setLimit] = useState(50)
   
   useEffect(() => {
     // Reset page when tab changes
@@ -186,7 +216,7 @@ const Sheet = () => {
 
     document.addEventListener('paste', handlePaste);
     return () => document.removeEventListener('paste', handlePaste);
-  }, [editingCell]);
+  }, [editingCell, historyIndex, history]); // Added missing dependencies
 
   const loadData = async () => {
     setLoading(true)
@@ -274,6 +304,9 @@ const Sheet = () => {
       // Update local state with server response
       if (model === "product") {
         setProducts(prev => prev.map(p => p.id === id ? response.data : p));
+        if (selectedProductForBulk?.id === id) {
+          setSelectedProductForBulk(response.data);
+        }
       } else if (model === "category") {
         setCategories(prev => prev.map(c => c.id === id ? response.data : c));
       } else if (model === "brand") {
@@ -284,6 +317,22 @@ const Sheet = () => {
         setStocks(prev => prev.map(s => s.id === id ? response.data : s));
       } else if (model === "bulkPrice") {
         setBulkPrices(prev => prev.map(b => b.id === id ? response.data : b));
+        // Also update products if it has this bulk price
+        setProducts(prev => prev.map(p => {
+          if (p.bulkPrices?.some(bp => bp.id === id)) {
+            return {
+              ...p,
+              bulkPrices: p.bulkPrices.map(bp => bp.id === id ? { ...bp, [field]: value } : bp)
+            };
+          }
+          return p;
+        }));
+        if (selectedProductForBulk?.bulkPrices?.some(bp => bp.id === id)) {
+          setSelectedProductForBulk(prev => prev ? ({
+            ...prev,
+            bulkPrices: prev.bulkPrices?.map(bp => bp.id === id ? { ...bp, [field]: value } : bp)
+          }) : null);
+        }
       }
       toast.success("Updated successfully")
     } catch (error) {
@@ -329,7 +378,7 @@ const Sheet = () => {
       case 'bulkPrice': data = bulkPrices; break;
       default: return null;
     }
-    return data.find(item => item.id === id)?.[field];
+    return (data as any[]).find(item => item.id === id)?.[field];
   }
 
   const undo = () => {
@@ -361,16 +410,7 @@ const Sheet = () => {
   }
 
   const moveToCell = (rowId: string, field: string, direction: 'up' | 'down' | 'left' | 'right') => {
-    const fieldsMap: Record<string, string[]> = {
-      products: ["name", "price"],
-      categories: ["name"],
-      brands: ["name", "order"],
-      ingredients: ["name"],
-      stocks: ["addedQuantity", "costPerProduct"],
-      bulkprices: ["name", "quantity", "price"]
-    };
-
-    const currentFields = fieldsMap[activeTab] || [];
+    const currentFields = columnOrderByTab[activeTab] || [];
     const currentIndex = sortedData.findIndex(item => item.id === rowId);
     if (currentIndex === -1) return;
 
@@ -402,6 +442,84 @@ const Sheet = () => {
     if (nextRowId !== rowId || nextField !== field) {
       setEditingCell({ rowId: nextRowId, field: nextField });
     }
+  }
+
+  const handleViewModeKeyDown = (e: React.KeyboardEvent, rowId: string, field: string) => {
+    if (e.key === 'Enter' || e.key === 'F2') {
+      e.preventDefault();
+      setEditingCell({ rowId, field });
+      return;
+    }
+    if (e.key === 'Tab') {
+      e.preventDefault();
+      moveToCell(rowId, field, e.shiftKey ? 'left' : 'right');
+      return;
+    }
+    if (e.key === 'ArrowDown') {
+      e.preventDefault();
+      moveToCell(rowId, field, 'down');
+      return;
+    }
+    if (e.key === 'ArrowUp') {
+      e.preventDefault();
+      moveToCell(rowId, field, 'up');
+      return;
+    }
+    if (e.key === 'ArrowLeft') {
+      e.preventDefault();
+      moveToCell(rowId, field, 'left');
+      return;
+    }
+    if (e.key === 'ArrowRight') {
+      e.preventDefault();
+      moveToCell(rowId, field, 'right');
+      return;
+    }
+  }
+
+  const startColumnResize = (field: string, e: React.MouseEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    setResizingColumn(field);
+    setResizeStartX(e.clientX);
+    setStartWidth(columnWidths[field] || 120);
+  }
+
+  const stopColumnResize = () => {
+    setResizingColumn(null);
+  }
+
+  const onColumnResize = (e: MouseEvent) => {
+    if (!resizingColumn) return;
+    const delta = e.clientX - resizeStartX;
+    const nextWidth = Math.max(60, startWidth + delta);
+    setColumnWidths(prev => ({ ...prev, [resizingColumn]: nextWidth }));
+  }
+
+  useEffect(() => {
+    if (!resizingColumn) return;
+    window.addEventListener('mousemove', onColumnResize);
+    window.addEventListener('mouseup', stopColumnResize);
+    return () => {
+      window.removeEventListener('mousemove', onColumnResize);
+      window.removeEventListener('mouseup', stopColumnResize);
+    };
+  }, [resizingColumn, resizeStartX, startWidth]);
+
+  const onColumnDragStart = (field: string) => {
+    setDraggedColumn(field);
+  }
+
+  const onColumnDrop = (targetField: string) => {
+    if (!draggedColumn || targetField === draggedColumn) return;
+    const order = [...(columnOrderByTab[activeTab] || [])];
+    const sourceIndex = order.indexOf(draggedColumn);
+    const targetIndex = order.indexOf(targetField);
+    if (sourceIndex < 0 || targetIndex < 0) return;
+    order.splice(sourceIndex, 1);
+    order.splice(targetIndex, 0, draggedColumn);
+    setColumnOrderByTab(prev => ({ ...prev, [activeTab]: order }));
+    setDraggedColumn(null);
   }
 
   const bulkDelete = async () => {
@@ -450,7 +568,7 @@ const Sheet = () => {
   }
 
   const filteredData = useMemo(() => {
-    let data;
+    let data: any[] = [];
     switch (activeTab) {
       case 'products': data = products; break;
       case 'categories': data = categories; break;
@@ -477,7 +595,7 @@ const Sheet = () => {
 
   const sortedData = useMemo(() => {
     if (!sortConfig) return filteredData;
-    return [...filteredData].sort((a, b) => {
+    return [...filteredData].sort((a: any, b: any) => {
       const aVal = a[sortConfig.field];
       const bVal = b[sortConfig.field];
       if (aVal < bVal) return sortConfig.direction === 'asc' ? -1 : 1;
@@ -495,6 +613,33 @@ const Sheet = () => {
     } catch (err) {
       toast.error("Delete failed");
     }
+  };
+
+  const tabToModel: Record<string, string> = {
+    products: "product",
+    categories: "category",
+    brands: "brand",
+    ingredients: "activeIngredient",
+    stocks: "stock",
+    bulkprices: "bulkPrice"
+  };
+
+  const columnLabelByField: Record<string, string> = {
+    name: "Name",
+    category: "Category",
+    brand: "Brand",
+    price: "Base Price",
+    stock: "In Stock",
+    scarce: "Scarce",
+    requiresPrescription: "Rx Req",
+    bulkPrices: "Bulk",
+    products: "Products",
+    order: "Order",
+    product: "Product",
+    addedQuantity: "Quantity",
+    costPerProduct: "Cost",
+    createdAt: "Added Date",
+    quantity: "Bulk Qty"
   };
 
   const createRow = async (model: string) => {
@@ -536,8 +681,16 @@ const Sheet = () => {
     const validationError = validationErrors[`${item.id}-${field}`]
 
     return (
-      <div className="relative min-h-[40px] flex flex-col">
-        <div className="flex items-center px-1">
+      <div
+        className={cn(
+          "relative min-h-[40px] flex flex-col px-2 transition-all",
+          focusedCell?.rowId === item.id && focusedCell?.field === field ? "ring-2 ring-indigo-500/50 bg-indigo-50/10 z-10" : "hover:bg-slate-50/50"
+        )}
+        tabIndex={0}
+        onFocus={() => setFocusedCell({ rowId: item.id, field })}
+        onKeyDown={(e) => handleViewModeKeyDown(e, item.id, field)}
+      >
+        <div className="flex items-center w-full">
           {model === "product" && renderProductCell(item as Product, field, isEditing)}
           {model === "category" && renderCategoryCell(item as Category, field, isEditing)}
           {model === "brand" && renderBrandCell(item as Brand, field, isEditing)}
@@ -561,16 +714,16 @@ const Sheet = () => {
           <Input
             defaultValue={product.name}
             id={`cell-${product.id}-name`}
-            className="h-8 text-xs border-primary"
-            onBlur={(e) => {
+            className="h-8 text-xs border border-slate-300 focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+            onBlur={(e: React.FocusEvent<HTMLInputElement>) => {
                 if (e.target.value !== product.name) updateCell(product.id, field, e.target.value);
                 setEditingCell(null);
             }}
-            onKeyDown={(e) => handleKeyDown(e, product.id, field)}
+            onKeyDown={(e: React.KeyboardEvent) => handleKeyDown(e, product.id, field)}
             autoFocus
           />
         ) : (
-          <div className="cursor-text w-full text-xs font-bold" onClick={() => setEditingCell({ rowId: product.id, field })}>{product.name || <span className="text-muted-foreground/40 italic">New Product...</span>}</div>
+          <div className="cursor-text w-full text-xs font-bold focus:outline-none focus:ring-2 focus:ring-blue-500 px-1" tabIndex={0} onClick={() => setEditingCell({ rowId: product.id, field })}>{product.name || <span className="text-muted-foreground/40 italic">New Product...</span>}</div>
         )
 
       case "price":
@@ -579,24 +732,24 @@ const Sheet = () => {
             type="number"
             id={`cell-${product.id}-price`}
             defaultValue={product.price}
-            className="h-8 text-xs font-mono text-right"
-            onBlur={(e) => {
+            className="h-8 text-xs font-mono text-right border border-slate-300 focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+            onBlur={(e: React.FocusEvent<HTMLInputElement>) => {
                 const val = parseFloat(e.target.value);
                 if (val !== product.price) updateCell(product.id, field, val);
                 setEditingCell(null);
             }}
-            onKeyDown={(e) => handleKeyDown(e, product.id, field)}
+            onKeyDown={(e: React.KeyboardEvent) => handleKeyDown(e, product.id, field)}
             autoFocus
           />
         ) : (
-          <div className="cursor-text w-full text-xs font-mono text-right font-black" onClick={() => setEditingCell({ rowId: product.id, field })}>₦{product.price.toLocaleString()}</div>
+          <div className="cursor-text w-full text-xs font-mono text-right font-black focus:outline-none focus:ring-2 focus:ring-blue-500 px-1" tabIndex={0} onClick={() => setEditingCell({ rowId: product.id, field })}>₦{product.price.toLocaleString()}</div>
         )
 
       case "category":
         return (
           <Select
             value={product.categoryId || "none"}
-            onValueChange={(value) => updateCell(product.id, "categoryId", value === "none" ? null : value)}
+            onValueChange={(value: string) => updateCell(product.id, "categoryId", value === "none" ? null : value)}
           >
             <SelectTrigger className="h-7 text-[10px] border-none bg-transparent hover:bg-muted/50 transition-colors">
               <SelectValue placeholder="Select Category" />
@@ -612,7 +765,7 @@ const Sheet = () => {
         return (
           <Select
             value={product.brandId || "none"}
-            onValueChange={(value) => updateCell(product.id, "brandId", value === "none" ? null : value)}
+            onValueChange={(value: string) => updateCell(product.id, "brandId", value === "none" ? null : value)}
           >
             <SelectTrigger className="h-7 text-[10px] border-none bg-transparent hover:bg-muted/50 transition-colors">
               <SelectValue placeholder="Select Brand" />
@@ -629,8 +782,8 @@ const Sheet = () => {
         return (
           <div className="flex justify-center w-full">
             <Checkbox
-              checked={!!product[field]}
-              onCheckedChange={(checked) => updateCell(product.id, field, checked)}
+              checked={!!(product as any)[field]}
+              onCheckedChange={(checked: boolean) => updateCell(product.id, field, checked)}
             />
           </div>
         )
@@ -639,6 +792,21 @@ const Sheet = () => {
         const total = product.stock?.reduce((s, x) => s + x.addedQuantity, 0) || 0;
         return <Badge variant={total > 0 ? "default" : "outline"} className="text-[10px] h-5 font-mono">{total} Units</Badge>
 
+      case "bulkPrices":
+        return (
+          <Button
+            variant="outline"
+            size="sm"
+            className="text-[10px] h-6 px-2"
+            onClick={() => {
+              setSelectedProductForBulk(product);
+              setBulkPriceDialogOpen(true);
+            }}
+          >
+            🔍 View Bulk
+          </Button>
+        )
+
       default: return <div>{(product as any)[field]}</div>
     }
   }
@@ -646,7 +814,7 @@ const Sheet = () => {
   const renderCategoryCell = (category: Category, field: string, isEditing: boolean) => {
     if (field === "name") {
         return isEditing ? (
-            <Input defaultValue={category.name} onBlur={(e) => { updateCell(category.id, field, e.target.value, "category"); setEditingCell(null); }} autoFocus className="h-8 text-xs" />
+            <Input defaultValue={category.name} onBlur={(e: React.FocusEvent<HTMLInputElement>) => { updateCell(category.id, field, e.target.value, "category"); setEditingCell(null); }} autoFocus className="h-8 text-xs" />
         ) : <div className="w-full text-xs font-bold" onClick={() => setEditingCell({ rowId: category.id, field })}>{category.name}</div>
     }
     return <div>{(category as any)[field]}</div>
@@ -655,12 +823,12 @@ const Sheet = () => {
   const renderBrandCell = (brand: Brand, field: string, isEditing: boolean) => {
     if (field === "name") {
         return isEditing ? (
-            <Input defaultValue={brand.name} onBlur={(e) => { updateCell(brand.id, field, e.target.value, "brand"); setEditingCell(null); }} autoFocus className="h-8 text-xs" />
+            <Input defaultValue={brand.name} onBlur={(e: React.FocusEvent<HTMLInputElement>) => { updateCell(brand.id, field, e.target.value, "brand"); setEditingCell(null); }} autoFocus className="h-8 text-xs" />
         ) : <div className="w-full text-xs font-bold" onClick={() => setEditingCell({ rowId: brand.id, field })}>{brand.name}</div>
     }
     if (field === "order") {
         return isEditing ? (
-            <Input type="number" defaultValue={brand.order} onBlur={(e) => { updateCell(brand.id, field, parseInt(e.target.value), "brand"); setEditingCell(null); }} autoFocus className="h-8 text-xs" />
+            <Input type="number" defaultValue={brand.order} onBlur={(e: React.FocusEvent<HTMLInputElement>) => { updateCell(brand.id, field, parseInt(e.target.value), "brand"); setEditingCell(null); }} autoFocus className="h-8 text-xs" />
         ) : <div className="w-full text-xs font-mono" onClick={() => setEditingCell({ rowId: brand.id, field })}>{brand.order}</div>
     }
     return <div>{(brand as any)[field]}</div>
@@ -669,7 +837,7 @@ const Sheet = () => {
   const renderActiveIngredientCell = (ingredient: ActiveIngredient, field: string, isEditing: boolean) => {
     if (field === "name") {
         return isEditing ? (
-            <Input defaultValue={ingredient.name} onBlur={(e) => { updateCell(ingredient.id, field, e.target.value, "activeIngredient"); setEditingCell(null); }} autoFocus className="h-8 text-xs" />
+            <Input defaultValue={ingredient.name} onBlur={(e: React.FocusEvent<HTMLInputElement>) => { updateCell(ingredient.id, field, e.target.value, "activeIngredient"); setEditingCell(null); }} autoFocus className="h-8 text-xs" />
         ) : <div className="w-full text-xs font-bold" onClick={() => setEditingCell({ rowId: ingredient.id, field })}>{ingredient.name}</div>
     }
     return <div>{(ingredient as any)[field]}</div>
@@ -684,7 +852,7 @@ const Sheet = () => {
           <Input
             type="number"
             defaultValue={stock.addedQuantity}
-            onBlur={(e) => { updateCell(stock.id, field, parseInt(e.target.value) || 0, "stock"); setEditingCell(null); }}
+            onBlur={(e: React.FocusEvent<HTMLInputElement>) => { updateCell(stock.id, field, parseInt(e.target.value) || 0, "stock"); setEditingCell(null); }}
             autoFocus
             className="h-8 text-xs text-center"
           />
@@ -699,7 +867,7 @@ const Sheet = () => {
             type="number"
             step="0.01"
             defaultValue={stock.costPerProduct || 0}
-            onBlur={(e) => { updateCell(stock.id, field, parseFloat(e.target.value) || 0, "stock"); setEditingCell(null); }}
+            onBlur={(e: React.FocusEvent<HTMLInputElement>) => { updateCell(stock.id, field, parseFloat(e.target.value) || 0, "stock"); setEditingCell(null); }}
             autoFocus
             className="h-8 text-xs text-right"
           />
@@ -723,7 +891,7 @@ const Sheet = () => {
         return isEditing ? (
           <Input
             defaultValue={bulkPrice.name}
-            onBlur={(e) => { updateCell(bulkPrice.id, field, e.target.value, "bulkPrice"); setEditingCell(null); }}
+            onBlur={(e: React.FocusEvent<HTMLInputElement>) => { updateCell(bulkPrice.id, field, e.target.value, "bulkPrice"); setEditingCell(null); }}
             autoFocus
             className="h-8 text-xs"
           />
@@ -737,7 +905,7 @@ const Sheet = () => {
           <Input
             type="number"
             defaultValue={bulkPrice.quantity}
-            onBlur={(e) => { updateCell(bulkPrice.id, field, parseInt(e.target.value) || 0, "bulkPrice"); setEditingCell(null); }}
+            onBlur={(e: React.FocusEvent<HTMLInputElement>) => { updateCell(bulkPrice.id, field, parseInt(e.target.value) || 0, "bulkPrice"); setEditingCell(null); }}
             autoFocus
             className="h-8 text-xs text-center"
           />
@@ -752,7 +920,7 @@ const Sheet = () => {
             type="number"
             step="0.01"
             defaultValue={bulkPrice.price}
-            onBlur={(e) => { updateCell(bulkPrice.id, field, parseFloat(e.target.value) || 0, "bulkPrice"); setEditingCell(null); }}
+            onBlur={(e: React.FocusEvent<HTMLInputElement>) => { updateCell(bulkPrice.id, field, parseFloat(e.target.value) || 0, "bulkPrice"); setEditingCell(null); }}
             autoFocus
             className="h-8 text-xs text-right"
           />
@@ -787,7 +955,7 @@ const Sheet = () => {
                     placeholder="Search records..." 
                     className="pl-9 h-9 w-[300px] bg-slate-50 border-none text-xs font-medium focus:ring-2 ring-indigo-500/20"
                     value={searchQuery}
-                    onChange={(e) => setSearchQuery(e.target.value)}
+                    onChange={(e: React.ChangeEvent<HTMLInputElement>) => setSearchQuery(e.target.value)}
                 />
             </div>
             <Button 
@@ -872,66 +1040,54 @@ const Sheet = () => {
                         <span className="text-[10px] font-black uppercase tracking-[0.2em] text-slate-400">Restoring Data Pipeline...</span>
                     </div>
                 ) : (
-                    <Table className="border-collapse">
+                    <Table className="border-collapse border border-slate-200 bg-white">
                         <TableHeader className="bg-slate-50/80 sticky top-0 z-20 backdrop-blur-md">
                             <TableRow className="border-b shadow-none hover:bg-transparent">
-                                <TableHead className="w-12 text-center text-[10px] font-black border-r">
+                                <TableHead className="w-12 text-center text-[10px] font-black border-r sticky left-0 bg-slate-100/90 z-40 shadow-[1px_0_0_rgba(0,0,0,0.1)] backdrop-blur-sm">
                                   <Checkbox
                                     checked={selectedRows.size > 0 && selectedRows.size === sortedData.length}
-                                    onCheckedChange={(checked) => {
+                                    onCheckedChange={(checked: boolean) => {
                                       if (checked) {
-                                        setSelectedRows(new Set(sortedData.map(item => item.id)));
+                                        setSelectedRows(new Set(sortedData.map((item: any) => item.id)));
                                       } else {
                                         setSelectedRows(new Set());
                                       }
                                     }}
                                   />
                                 </TableHead>
-                                <TableHead className="w-12 text-center text-[10px] font-black border-r">#</TableHead>
-                                {activeTab === "products" && <>
-                                    <TableHead className="text-[10px] font-black uppercase border-r px-4 h-12">Product Name</TableHead>
-                                    <TableHead className="text-[10px] font-black uppercase border-r px-4 h-12">Category</TableHead>
-                                    <TableHead className="text-[10px] font-black uppercase border-r px-4 h-12">Brand</TableHead>
-                                    <TableHead className="text-[10px] font-black uppercase border-r px-4 h-12 text-right">Base Price</TableHead>
-                                    <TableHead className="text-[10px] font-black uppercase border-r px-4 h-12 text-center">In Stock</TableHead>
-                                    <TableHead className="text-[10px] font-black uppercase border-r px-4 h-12 text-center w-20">Scarce</TableHead>
-                                    <TableHead className="text-[10px] font-black uppercase border-r px-4 h-12 text-center w-20">Rx Req</TableHead>
-                                </>}
-                                {activeTab === "categories" && <>
-                                    <TableHead className="text-[10px] font-black uppercase border-r px-4 h-12">Category Name</TableHead>
-                                    <TableHead className="text-[10px] font-black uppercase border-r px-4 h-12">Total Products</TableHead>
-                                </>}
-                                {activeTab === "brands" && <>
-                                    <TableHead className="text-[10px] font-black uppercase border-r px-4 h-12">Brand Name</TableHead>
-                                    <TableHead className="text-[10px] font-black uppercase border-r px-4 h-12">Sort Order</TableHead>
-                                    <TableHead className="text-[10px] font-black uppercase border-r px-4 h-12 text-center">Products</TableHead>
-                                </>}
-                                {activeTab === "ingredients" && <>
-                                    <TableHead className="text-[10px] font-black uppercase border-r px-4 h-12">Ingredient Name</TableHead>
-                                    <TableHead className="text-[10px] font-black uppercase border-r px-4 h-12 text-center">Products</TableHead>
-                                </>}
-                                {activeTab === "stocks" && <>
-                                    <TableHead className="text-[10px] font-black uppercase border-r px-4 h-12">Linked Product</TableHead>
-                                    <TableHead className="text-[10px] font-black uppercase border-r px-4 h-12 text-center">Qty</TableHead>
-                                    <TableHead className="text-[10px] font-black uppercase border-r px-4 h-12 text-right">Cost</TableHead>
-                                    <TableHead className="text-[10px] font-black uppercase border-r px-4 h-12 text-center">Added Date</TableHead>
-                                </>}
-                                {activeTab === "bulkprices" && <>
-                                    <TableHead className="text-[10px] font-black uppercase border-r px-4 h-12">Product</TableHead>
-                                    <TableHead className="text-[10px] font-black uppercase border-r px-4 h-12">Unit Name</TableHead>
-                                    <TableHead className="text-[10px] font-black uppercase border-r px-4 h-12 text-center">Qty</TableHead>
-                                    <TableHead className="text-[10px] font-black uppercase border-r px-4 h-12 text-right">Price</TableHead>
-                                </>}
+                                <TableHead className="w-12 text-center text-[10px] font-black border-r sticky left-12 bg-slate-100/90 z-30 shadow-[1px_0_0_rgba(0,0,0,0.1)] backdrop-blur-sm">#</TableHead>
+                                {(columnOrderByTab[activeTab] || []).map((field) => (
+                                  <TableHead
+                                    key={field}
+                                    draggable
+                                    onDragStart={() => onColumnDragStart(field)}
+                                    onDragOver={(e: React.DragEvent) => e.preventDefault()}
+                                    onDrop={() => onColumnDrop(field)}
+                                    className="text-[10px] font-black uppercase border-r px-4 h-12 relative"
+                                    style={{ width: columnWidths[field] ? `${columnWidths[field]}px` : 'auto', minWidth: '80px' }}
+                                  >
+                                    <div className="flex items-center justify-between gap-1">
+                                      <span className="truncate cursor-pointer" onClick={() => setSortConfig(prev => prev?.field === field ? { field, direction: prev.direction === 'asc' ? 'desc' : 'asc' } : { field, direction: 'asc' })}>
+                                        {columnLabelByField[field] || field}
+                                        {sortConfig?.field === field ? (sortConfig.direction === 'asc' ? ' ▲' : ' ▼') : ''}
+                                      </span>
+                                      <div
+                                        onMouseDown={(e) => startColumnResize(field, e)}
+                                        className="h-full w-1 cursor-col-resize absolute right-0 top-0"
+                                      />
+                                    </div>
+                                  </TableHead>
+                                ))}
                                 <TableHead className="w-14 bg-slate-50/50"></TableHead>
                             </TableRow>
                         </TableHeader>
                         <TableBody>
                             {sortedData.map((item, i) => (
                                 <TableRow key={item.id} className={cn("group hover:bg-indigo-50/20 transition-all even:bg-slate-50/30", selectedRows.has(item.id) && "bg-indigo-100/50")}>
-                                    <TableCell className="text-center border-r">
+                                    <TableCell className="text-center border-r sticky left-0 bg-white/95 z-10 group-hover:bg-indigo-50/50 transition-colors shadow-[1px_0_0_rgba(0,0,0,0.05)]">
                                       <Checkbox
                                         checked={selectedRows.has(item.id)}
-                                        onCheckedChange={(checked) => {
+                                        onCheckedChange={(checked: boolean) => {
                                           if (checked) {
                                             setSelectedRows(prev => new Set([...prev, item.id]));
                                           } else {
@@ -944,54 +1100,38 @@ const Sheet = () => {
                                         }}
                                       />
                                     </TableCell>
-                                    <TableCell className="text-[10px] font-mono text-center border-r text-slate-400 group-hover:text-indigo-600 transition-colors">
+                                    <TableCell className="text-[10px] font-mono text-center border-r sticky left-12 bg-white/95 z-10 text-slate-400 group-hover:text-indigo-600 group-hover:bg-indigo-50/50 transition-all shadow-[1px_0_0_rgba(0,0,0,0.05)]">
                                         {String(i + 1).padStart(3, '0')}
                                     </TableCell>
                                     
-                                    {activeTab === "products" && <>
-                                        <TableCell className="p-0 border-r">{renderCell(item, "name", "product")}</TableCell>
-                                        <TableCell className="p-0 border-r">{renderCell(item, "category", "product")}</TableCell>
-                                        <TableCell className="p-0 border-r">{renderCell(item, "brand", "product")}</TableCell>
-                                        <TableCell className="p-0 border-r">{renderCell(item, "price", "product")}</TableCell>
-                                        <TableCell className="p-0 border-r text-center">{renderCell(item, "stock", "product")}</TableCell>
-                                        <TableCell className="p-0 border-r text-center">{renderCell(item, "scarce", "product")}</TableCell>
-                                        <TableCell className="p-0 border-r text-center">{renderCell(item, "requiresPrescription", "product")}</TableCell>
-                                    </>}
-
-                                    {activeTab === "categories" && <>
-                                        <TableCell className="p-0 border-r">{renderCell(item, "name", "category")}</TableCell>
-                                        <TableCell className="p-0 border-r text-center text-xs font-bold text-indigo-600">{(item as any)._count?.products || 0}</TableCell>
-                                    </>}
-
-                                    {activeTab === "brands" && <>
-                                        <TableCell className="p-0 border-r">{renderCell(item, "name", "brand")}</TableCell>
-                                        <TableCell className="p-0 border-r">{renderCell(item, "order", "brand")}</TableCell>
-                                        <TableCell className="p-0 border-r text-center text-xs font-bold text-indigo-600">{(item as any)._count?.products || 0}</TableCell>
-                                    </>}
-
-                                    {activeTab === "ingredients" && <>
-                                        <TableCell className="p-0 border-r">{renderCell(item, "name", "activeIngredient")}</TableCell>
-                                        <TableCell className="p-0 border-r text-center text-xs font-bold text-indigo-600">{(item as any)._count?.products || 0}</TableCell>
-                                    </>}
-
-                                    {activeTab === "stocks" && <>
-                                        <TableCell className="p-0 border-r">{renderCell(item, "product", "stock")}</TableCell>
-                                        <TableCell className="p-0 border-r">{renderCell(item, "addedQuantity", "stock")}</TableCell>
-                                        <TableCell className="p-0 border-r">{renderCell(item, "costPerProduct", "stock")}</TableCell>
-                                        <TableCell className="p-0 border-r">{renderCell(item, "createdAt", "stock")}</TableCell>
-                                    </>}
-
-                                    {activeTab === "bulkprices" && <>
-                                        <TableCell className="p-0 border-r">{renderCell(item, "product", "bulkPrice")}</TableCell>
-                                        <TableCell className="p-0 border-r">{renderCell(item, "name", "bulkPrice")}</TableCell>
-                                        <TableCell className="p-0 border-r">{renderCell(item, "quantity", "bulkPrice")}</TableCell>
-                                        <TableCell className="p-0 border-r">{renderCell(item, "price", "bulkPrice")}</TableCell>
-                                    </>}
+                                    {(columnOrderByTab[activeTab] || []).map((field) => (
+                                      <TableCell
+                                        key={`${item.id}-${field}`}
+                                        className="p-0 border-r"
+                                        style={{ width: columnWidths[field] ? `${columnWidths[field]}px` : 'auto', minWidth: '80px' }}
+                                      >
+                                        {renderCell(item, field, tabToModel[activeTab])}
+                                      </TableCell>
+                                    ))}
 
                                     <TableCell className="text-center p-0">
+                                        <div className="flex items-center justify-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                                          <Button size="icon" variant="ghost" className="h-7 w-7" onClick={() => setEditingCell({ rowId: item.id, field: (columnOrderByTab[activeTab] || [])[0] })} aria-label="Edit row">
+                                            ✏️
+                                          </Button>
+                                          {activeTab === "products" && (
+                                            <Button size="icon" variant="ghost" className="h-7 w-7" onClick={() => {
+                                              setSelectedProductForBulk(item as Product);
+                                              setBulkPriceDialogOpen(true);
+                                            }} aria-label="Bulk options">📦</Button>
+                                          )}
+                                          <Button size="icon" variant="ghost" className="h-7 w-7" onClick={() => deleteRow(item.id, tabToModel[activeTab])} aria-label="Delete row">
+                                            🗑
+                                          </Button>
+                                        </div>
                                         <DropdownMenu>
                                             <DropdownMenuTrigger asChild>
-                                                <Button variant="ghost" size="icon" className="h-8 w-8 opacity-0 group-hover:opacity-100 transition-opacity">
+                                                <Button variant="ghost" size="icon" className="h-8 w-8 absolute top-1 right-1 opacity-0 group-hover:opacity-100 transition-opacity">
                                                     <MoreVertical size={14} />
                                                 </Button>
                                             </DropdownMenuTrigger>
@@ -1008,7 +1148,7 @@ const Sheet = () => {
                                                         <Plus size={12} /> Add Bulk Pricing
                                                     </DropdownMenuItem>
                                                 )}
-                                                <DropdownMenuItem className="gap-2 text-rose-600" onClick={() => deleteRow(item.id, activeTab === "products" ? "product" : activeTab === "categories" ? "category" : activeTab === "brands" ? "brand" : activeTab === "ingredients" ? "activeIngredient" : "product")}>
+                                                <DropdownMenuItem className="gap-2 text-rose-600" onClick={() => deleteRow(item.id, tabToModel[activeTab])}>
                                                     <Trash2 size={12} /> Delete Record
                                                 </DropdownMenuItem>
                                             </DropdownMenuContent>
@@ -1054,7 +1194,7 @@ const Sheet = () => {
                     Next
                   </Button>
               </div>
-              <Select value={String(limit)} onValueChange={(v) => { setLimit(Number(v)); setCurrentPage(0); }}>
+              <Select value={String(limit)} onValueChange={(v: string) => { setLimit(Number(v)); setCurrentPage(0); }}>
                   <SelectTrigger className="h-6 w-20 text-[10px] bg-transparent border-none">
                       <SelectValue />
                   </SelectTrigger>
@@ -1075,56 +1215,163 @@ const Sheet = () => {
       </div>
 
       <Dialog open={bulkPriceDialogOpen} onOpenChange={setBulkPriceDialogOpen}>
-        <DialogContent className="sm:max-w-[425px]">
-          <DialogHeader>
-            <DialogTitle>Add Bulk Pricing</DialogTitle>
-            <DialogDescription>
-              Add a new bulk price tier for <span className="font-bold text-indigo-600">{selectedProductForBulk?.name}</span>.
+        <DialogContent className="sm:max-w-[750px] max-h-[90vh] overflow-hidden flex flex-col p-0 gap-0 border-none shadow-2xl rounded-3xl">
+          <DialogHeader className="p-8 pb-4 bg-indigo-600 text-white rounded-t-3xl">
+            <DialogTitle className="flex items-center gap-3 text-xl font-black uppercase tracking-tight">
+              <div className="h-10 w-10 bg-white/20 rounded-xl flex items-center justify-center backdrop-blur-md">
+                <DollarSign size={20} />
+              </div>
+              Bulk Pricing Manager
+            </DialogTitle>
+            <DialogDescription className="text-indigo-100 font-medium">
+              Managing wholesale tiers for <span className="text-white font-bold decoration-white/30 underline underline-offset-4">{selectedProductForBulk?.name}</span>
             </DialogDescription>
           </DialogHeader>
-          <div className="grid gap-4 py-4">
-            <div className="grid grid-cols-4 items-center gap-4">
-              <Label htmlFor="name" className="text-right">Unit Name</Label>
-              <Input
-                id="name"
-                placeholder="e.g. Card, Pack, Carton"
-                className="col-span-3 h-9 text-xs"
-                value={newBulkPrice.name}
-                onChange={(e) => setNewBulkPrice(prev => ({ ...prev, name: e.target.value }))}
-              />
-            </div>
-            <div className="grid grid-cols-4 items-center gap-4">
-              <Label htmlFor="quantity" className="text-right">Quantity</Label>
-              <Input
-                id="quantity"
-                type="number"
-                min="1"
-                className="col-span-3 h-9 text-xs"
-                value={newBulkPrice.quantity}
-                onChange={(e) => setNewBulkPrice(prev => ({ ...prev, quantity: parseInt(e.target.value) || 0 }))}
-              />
-            </div>
-            <div className="grid grid-cols-4 items-center gap-4">
-              <Label htmlFor="price" className="text-right">Price (₦)</Label>
-              <Input
-                id="price"
-                type="number"
-                step="0.01"
-                min="0"
-                className="col-span-3 h-9 text-xs"
-                value={newBulkPrice.price}
-                onChange={(e) => setNewBulkPrice(prev => ({ ...prev, price: parseFloat(e.target.value) || 0 }))}
-              />
+
+          <div className="flex-1 overflow-y-auto px-8 py-6 bg-slate-50/50">
+            <div className="space-y-8">
+              {/* CURRENT TIERS SECTION */}
+              <section>
+                <div className="flex items-center justify-between mb-4">
+                  <h3 className="text-[10px] font-black uppercase tracking-[0.2em] text-slate-400 flex items-center gap-2">
+                    <div className="h-2 w-2 rounded-full bg-indigo-400 shadow-sm shadow-indigo-200" />
+                    Live Pricing Matrix
+                  </h3>
+                  <Badge variant="outline" className="bg-white text-indigo-600 border-indigo-100 px-2.5 py-0.5 text-[9px] font-bold">
+                    {selectedProductForBulk?.bulkPrices?.length || 0} TIERS ACTIVE
+                  </Badge>
+                </div>
+
+                <div className="rounded-2xl border border-slate-200 bg-white shadow-sm overflow-hidden">
+                  <Table>
+                    <TableHeader className="bg-slate-50/80">
+                      <TableRow className="hover:bg-transparent border-b">
+                        <TableHead className="text-[10px] font-black uppercase tracking-widest text-slate-500 h-10 px-4">Unit Label</TableHead>
+                        <TableHead className="text-[10px] font-black uppercase tracking-widest text-slate-500 h-10 px-4 text-center">Threshold Qty</TableHead>
+                        <TableHead className="text-[10px] font-black uppercase tracking-widest text-slate-500 h-10 px-4 text-right">Wholesale Price</TableHead>
+                        <TableHead className="w-[80px] h-10"></TableHead>
+                      </TableRow>
+                    </TableHeader>
+                    <TableBody>
+                      {selectedProductForBulk?.bulkPrices && selectedProductForBulk.bulkPrices.length > 0 ? (
+                        selectedProductForBulk.bulkPrices.map((bp) => (
+                          <TableRow key={bp.id} className="group hover:bg-slate-50 transition-colors">
+                            <TableCell className="p-0 border-r border-slate-100">
+                              <Input 
+                                value={bp.name} 
+                                onChange={(e: React.ChangeEvent<HTMLInputElement>) => updateCell(bp.id, "name", e.target.value, "bulkPrice")}
+                                className="border-none bg-transparent h-12 text-xs font-black text-slate-800 focus-visible:ring-0 focus-visible:bg-indigo-50/30 rounded-none w-full px-4"
+                                placeholder="e.g. Pack"
+                              />
+                            </TableCell>
+                            <TableCell className="p-0 border-r border-slate-100">
+                              <Input 
+                                type="number"
+                                value={bp.quantity} 
+                                onChange={(e: React.ChangeEvent<HTMLInputElement>) => updateCell(bp.id, "quantity", parseInt(e.target.value) || 0, "bulkPrice")}
+                                className="border-none bg-transparent h-12 text-xs text-center font-mono font-bold text-slate-600 focus-visible:ring-0 focus-visible:bg-indigo-50/30 rounded-none w-full"
+                              />
+                            </TableCell>
+                            <TableCell className="p-0 border-r border-slate-100">
+                              <div className="relative flex items-center">
+                                <span className="absolute left-3 text-slate-400 text-[10px] font-bold">₦</span>
+                                <Input 
+                                  type="number"
+                                  value={bp.price} 
+                                  onChange={(e: React.ChangeEvent<HTMLInputElement>) => updateCell(bp.id, "price", parseFloat(e.target.value) || 0, "bulkPrice")}
+                                  className="border-none bg-transparent h-12 text-xs text-right font-mono font-black text-indigo-600 focus-visible:ring-0 focus-visible:bg-indigo-50/30 rounded-none w-full pr-4 pl-8"
+                                />
+                              </div>
+                            </TableCell>
+                            <TableCell className="text-center p-0">
+                              <Button 
+                                variant="ghost" 
+                                size="icon" 
+                                className="h-8 w-8 text-slate-300 hover:text-rose-500 hover:bg-rose-50 transition-all opacity-0 group-hover:opacity-100"
+                                onClick={() => deleteRow(bp.id, "bulkPrice")}
+                              >
+                                <Trash2 size={14} />
+                              </Button>
+                            </TableCell>
+                          </TableRow>
+                        ))
+                      ) : (
+                        <TableRow>
+                          <TableCell colSpan={4} className="h-32 text-center">
+                            <div className="flex flex-col items-center justify-center gap-2 opacity-40">
+                              <Package size={24} className="text-slate-300" />
+                              <p className="text-[10px] font-black uppercase tracking-widest text-slate-400">No active pricing tiers</p>
+                            </div>
+                          </TableCell>
+                        </TableRow>
+                      )}
+                    </TableBody>
+                  </Table>
+                </div>
+              </section>
+
+              {/* ADD NEW TIER SECTION */}
+              <section>
+                <h3 className="text-[10px] font-black uppercase tracking-[0.2em] text-slate-400 mb-4 flex items-center gap-2">
+                  <div className="h-2 w-2 rounded-full bg-emerald-400 shadow-sm shadow-emerald-200" />
+                  Forge New Tier
+                </h3>
+                
+                <div className="bg-indigo-50/50 p-6 rounded-2xl border border-indigo-100 border-dashed grid grid-cols-3 gap-6 relative overflow-hidden group/add">
+                  <div className="space-y-2">
+                    <Label className="text-[9px] uppercase font-black tracking-widest text-slate-500 ml-1">Tier Identity</Label>
+                    <Input
+                      placeholder="e.g. Wholesale Pack"
+                      className="h-10 text-xs bg-white border-slate-200 focus:ring-indigo-500 rounded-xl font-bold"
+                      value={newBulkPrice.name}
+                      onChange={(e: React.ChangeEvent<HTMLInputElement>) => setNewBulkPrice(prev => ({ ...prev, name: e.target.value }))}
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <Label className="text-[9px] uppercase font-black tracking-widest text-slate-500 ml-1">Min. Units</Label>
+                    <Input
+                      type="number"
+                      min="1"
+                      className="h-10 text-xs bg-white border-slate-200 focus:ring-indigo-500 rounded-xl font-mono font-bold"
+                      value={newBulkPrice.quantity}
+                      onChange={(e: React.ChangeEvent<HTMLInputElement>) => setNewBulkPrice(prev => ({ ...prev, quantity: parseInt(e.target.value) || 0 }))}
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <Label className="text-[9px] uppercase font-black tracking-widest text-slate-500 ml-1">Landing Price</Label>
+                    <div className="flex gap-3">
+                      <div className="relative flex-1">
+                        <span className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 text-[10px] font-bold">₦</span>
+                        <Input
+                          type="number"
+                          step="0.01"
+                          className="h-10 text-xs bg-white border-slate-200 focus:ring-indigo-500 pr-4 pl-7 rounded-xl font-mono font-black text-indigo-600"
+                          value={newBulkPrice.price}
+                          onChange={(e: React.ChangeEvent<HTMLInputElement>) => setNewBulkPrice(prev => ({ ...prev, price: parseFloat(e.target.value) || 0 }))}
+                        />
+                      </div>
+                      <Button 
+                        onClick={handleAddBulkPrice}
+                        size="icon"
+                        disabled={!newBulkPrice.name || newBulkPrice.quantity < 1 || newBulkPrice.price < 0}
+                        className="h-10 w-12 bg-indigo-600 hover:bg-indigo-700 shrink-0 shadow-lg shadow-indigo-100 rounded-xl transition-all active:scale-95"
+                      >
+                        <Plus size={18} />
+                      </Button>
+                    </div>
+                  </div>
+                </div>
+              </section>
             </div>
           </div>
-          <DialogFooter>
-            <Button variant="outline" onClick={() => setBulkPriceDialogOpen(false)}>Cancel</Button>
+
+          <DialogFooter className="p-8 bg-white border-t border-slate-100 rounded-b-3xl">
             <Button 
-                onClick={handleAddBulkPrice}
-                disabled={!newBulkPrice.name || newBulkPrice.quantity < 1 || newBulkPrice.price < 0}
-                className="bg-indigo-600 hover:bg-indigo-700"
+              variant="outline" 
+              onClick={() => setBulkPriceDialogOpen(false)} 
+              className="h-12 w-full text-[11px] font-black uppercase tracking-[0.2em] rounded-2xl hover:bg-slate-50 border-2"
             >
-                Save Pricing Tier
+              Finalize & Exit Manager
             </Button>
           </DialogFooter>
         </DialogContent>
