@@ -588,17 +588,58 @@ const Sheet = () => {
 
     if (data.length === 0) return;
 
-    const headers = Object.keys(data[0]).join(',');
-    const rows = data.map(row =>
-      Object.values(row).map(v => `"${v}"`).join(',')
-    ).join('\n');
-    const csv = `${headers}\n${rows}`;
-    const blob = new Blob([csv], { type: 'text/csv' });
+    // Define custom columns based on active tab to include nested data
+    let headers: string[] = [];
+    let getRowData: (row: any) => string[] = (row) => [];
+
+    if (activeTab === 'products') {
+      headers = ["ID", "Name", "Price", "Category", "Brand", "Scarce", "Rx Req", "Created At"];
+      getRowData = (p) => [
+        p.id,
+        p.name,
+        p.price,
+        p.category?.name || "N/A",
+        p.brand?.name || "N/A",
+        p.scarce ? "YES" : "NO",
+        p.requiresPrescription ? "YES" : "NO",
+        p.createdAt
+      ];
+    } else if (activeTab === 'stocks') {
+      headers = ["ID", "Product", "Quantity", "Cost", "Date"];
+      getRowData = (s) => [
+        s.id,
+        s.product?.name || "N/A",
+        s.addedQuantity,
+        s.costPerProduct || 0,
+        s.createdAt
+      ];
+    } else if (activeTab === 'bulkprices') {
+      headers = ["ID", "Product", "Unit Label", "Threshold Qty", "Price"];
+      getRowData = (bp) => [
+        bp.id,
+        bp.product?.name || "N/A",
+        bp.name,
+        bp.quantity,
+        bp.price
+      ];
+    } else {
+        // Fallback for simple tables
+        headers = Object.keys(data[0]);
+        getRowData = (row) => headers.map(h => row[h]);
+    }
+
+    const csvContent = [
+      headers.join(','),
+      ...data.map((row: any) => getRowData(row).map(v => `"${String(v).replace(/"/g, '""')}"`).join(','))
+    ].join('\n');
+
+    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
     a.href = url;
     a.download = `${activeTab}_export_${new Date().toISOString().split('T')[0]}.csv`;
     a.click();
+    URL.revokeObjectURL(url);
   }
 
   const filteredData = useMemo(() => {

@@ -83,7 +83,7 @@ export function Footer({ className }: { className?: string }) {
   
   
   return (
-    <footer className={cn("border-t bg-background", className)}>
+    <footer className={cn("border-t bg-slate-900 text-slate-200 font-sans", className)}>
       <div
         className={`container mx-auto max-w-7xl px-4 py-12 sm:px-6 lg:px-8 `}
       >
@@ -98,22 +98,31 @@ export function Footer({ className }: { className?: string }) {
               {SEO_CONFIG.name}
             </span>
           </Link>
-          <p className="text-sm text-muted-foreground max-w-sm">
-            {SEO_CONFIG.description}
+          <p className="text-sm text-slate-400 max-w-sm font-medium">
+            Professional pharmaceuticals and healthcare specialties delivered with excellence.
           </p>
 
           <div className="flex space-x-4">
-            {socialMediaLinks.map((social, index) => (
-              <Button
-                className="h-8 w-8 rounded-full"
+             <Button
+                className="h-9 w-9 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-600"
                 size="icon"
                 variant="ghost"
-                key={index}
+                asChild
               >
-                {social.icon}
-                <span className="sr-only">{social.label}</span>
+                <Link href="https://www.instagram.com/healthclique_specialties?utm_source=qr" target="_blank">
+                  <Instagram className="h-5 w-5" />
+                </Link>
               </Button>
-            ))}
+              <Button
+                className="h-9 w-9 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-600"
+                size="icon"
+                variant="ghost"
+                asChild
+              >
+                <Link href="mailto:healthcliquespecialties@gmail.com">
+                  <Facebook className="h-5 w-5" />
+                </Link>
+              </Button>
           </div>
         </div>
 

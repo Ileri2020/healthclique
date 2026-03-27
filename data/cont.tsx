@@ -9,15 +9,15 @@ export default {
     description : "If you have any questions, inquiries, or would like to hire me, I would love to hear from you. Please feel free to reach out using the contact information provided below:",
     contact : [
         {
-            icon: <FaEnvelope/>, // className="w-[40px] h-[40px] text-accent hover:bg-accent hover:text-slate-100 rounded-md bg-transparent border-accent border-2 p-1"
+            icon: <FaEnvelope/>,
             text: "Email",
-            value: "adepojuololade2020@gmail.com"
+            value: "healthcliquespecialties@gmail.com"
         },
-        {
-            icon : <MdOutlineMessage />, //className="w-[40px] h-[40px] text-accent hover:bg-accent hover:text-slate-100 rounded-md bg-transparent border-accent border-2 p-1"
-            text : "Chat to us",
-            value : "ileri2020.github.io"
-        },
+        // {
+        //     icon : <MdOutlineMessage />, //className="w-[40px] h-[40px] text-accent hover:bg-accent hover:text-slate-100 rounded-md bg-transparent border-accent border-2 p-1"
+        //     text : "Chat to us",
+        //     value : "ileri2020.github.io"
+        // },
         {
             icon : <MdOutlinePhone/>,
             text: "Phone",

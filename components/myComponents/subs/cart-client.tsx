@@ -58,6 +58,9 @@ type CartClientProps = {
 };
 
 export function CartClient({ className, cart: _unusedCart }: CartClientProps) {
+  const { items, removeItem, clearCart, subtotal, updateQuantity, itemCount } = useCart();
+  const { user, setUser, checkoutData, setCheckoutData } = useAppContext();
+
   const [isOpen, setIsOpen] = React.useState(false);
   const [isMounted, setIsMounted] = React.useState(false);
   const [isCheckingOut, setIsCheckingOut] = React.useState(false);
@@ -65,6 +68,7 @@ export function CartClient({ className, cart: _unusedCart }: CartClientProps) {
   const [appliedCoupon, setAppliedCoupon] = React.useState<any>(null);
   const [isValidatingCoupon, setIsValidatingCoupon] = React.useState(false);
   const [deliveryFee, setDeliveryFee] = React.useState(100);
+  const [withDelivery, setWithDelivery] = React.useState(true);
   const [pendingAutoMethod, setPendingAutoMethod] = React.useState<'monnify' | 'manual' | 'test' | null>(null);
   const [termsAccepted, setTermsAccepted] = React.useState(false);
 
@@ -73,8 +77,7 @@ export function CartClient({ className, cart: _unusedCart }: CartClientProps) {
 
   const isDesktop = useMediaQuery("(min-width: 768px)");
 
-  const { items, removeItem, clearCart, subtotal, updateQuantity, itemCount } = useCart();
-  const { user, setUser, checkoutData, setCheckoutData } = useAppContext();
+
   
   const [selectedAddressId, setSelectedAddressId] = React.useState<string | null>(
     user?.addresses?.[0]?.id ?? null
@@ -105,7 +108,7 @@ export function CartClient({ className, cart: _unusedCart }: CartClientProps) {
   // The delivery fee is already in the state
   
   const subtotalRounded = roundUpToNearest5(subtotal);
-  const deliveryFeeRounded = roundUpToNearest5(deliveryFee);
+  const deliveryFeeRounded = withDelivery ? roundUpToNearest5(deliveryFee) : 0;
 
   let discountAmount = 0;
   if (appliedCoupon) {
@@ -457,29 +460,47 @@ export function CartClient({ className, cart: _unusedCart }: CartClientProps) {
              )}
           </div>
 
-          {/* Pricing Summary */}
-          <div className="space-y-2 py-3 border-t border-b border-dashed">
-             <div className="flex justify-between text-xs font-bold text-muted-foreground">
-                <span>Subtotal</span>
-                <span>₦{formatPrice(subtotalRounded)}</span>
-             </div>
-             {appliedCoupon && (
-                 <div className="flex justify-between text-xs font-bold text-green-600">
-                    <span>Discount ({appliedCoupon.code})</span>
-                    <span>-₦{formatPrice(discountAmountRounded)}</span>
-                 </div>
-             )}
-             <div className="flex justify-between text-xs font-bold text-muted-foreground">
-                <span>Delivery Charge</span>
-                <span>₦{formatPrice(deliveryFeeRounded)}</span>
-             </div>
-             <div className="flex justify-between text-lg font-black text-primary pt-1">
-                <span>Total Amount</span>
-                <span>₦{formatPrice(totalAmount)}</span>
-             </div>
-          </div>
+           {/* Delivery Toggle */}
+           <div className="flex items-center justify-between p-3 rounded-xl bg-primary/5 border border-primary/10">
+              <div className="flex flex-col gap-0.5">
+                <span className="text-[10px] font-black uppercase tracking-widest text-primary">Delivery Service</span>
+                <span className="text-[9px] text-muted-foreground font-medium italic">Turn off for self-pickup</span>
+              </div>
+              <Button 
+                variant={withDelivery ? "default" : "outline"}
+                size="sm"
+                className={cn("h-7 px-3 text-[9px] font-black uppercase tracking-widest transition-all", !withDelivery && "border-primary text-primary")}
+                onClick={() => setWithDelivery(!withDelivery)}
+              >
+                {withDelivery ? 'ADDED' : 'ADD DELIVERY'}
+              </Button>
+           </div>
 
-          <TermsAgreements onAllAcceptedChange={setTermsAccepted} />
+           {/* Pricing Summary */}
+           <div className="space-y-2 py-3 border-t border-b border-dashed">
+              <div className="flex justify-between text-xs font-bold text-muted-foreground">
+                 <span>Subtotal</span>
+                 <span>₦{formatPrice(subtotalRounded)}</span>
+              </div>
+              {appliedCoupon && (
+                  <div className="flex justify-between text-xs font-bold text-green-600">
+                     <span>Discount ({appliedCoupon.code})</span>
+                     <span>-₦{formatPrice(discountAmountRounded)}</span>
+                  </div>
+              )}
+              <div className="flex justify-between text-xs font-bold text-muted-foreground">
+                 <span>Delivery Charge</span>
+                 <span>{withDelivery ? `₦${formatPrice(deliveryFeeRounded)}` : 'FREE / PICKUP'}</span>
+              </div>
+              <div className="flex justify-between text-lg font-black text-primary pt-1">
+                 <span>Total Amount</span>
+                 <span>₦{formatPrice(totalAmount)}</span>
+              </div>
+           </div>
+
+           {!(user?.acceptedTerms && user?.acceptedPrivacy && user?.acceptedReturns) && (
+              <TermsAgreements onAllAcceptedChange={setTermsAccepted} />
+           )}
 
           {/* Buttons Block */}
           {user?.id !== 'nil' && !isCheckingOut && (
