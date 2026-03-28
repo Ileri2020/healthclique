@@ -65,6 +65,8 @@ export async function GET(req: NextRequest) {
         scarce: true,
         requiresPrescription: true,
         createdAt: true,
+        categoryId: true,
+        brandId: true,
         category: { select: { id: true, name: true } },
         brand: { select: { id: true, name: true } },
       };

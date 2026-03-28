@@ -53,6 +53,7 @@ import {
   DialogTitle,
   DialogTrigger,
 } from "@/components/ui/dialog"
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip"
 import { Label } from "@/components/ui/label"
 
 interface Product {
@@ -261,6 +262,17 @@ const Sheet = () => {
       
       const apiModel = modelMap[activeTab as keyof typeof modelMap];
       res = await axios.get(`/api/sheet?model=${apiModel}&limit=${limit}&offset=${currentPage * limit}&search=${encodeURIComponent(debouncedSearchQuery)}`, config);
+      
+      // Handle lookup data fetching for products tab (non-blocking)
+      if (activeTab === 'products' && (categories.length === 0 || brands.length === 0)) {
+        Promise.all([
+          axios.get('/api/sheet?model=category&limit=500', config),
+          axios.get('/api/sheet?model=brand&limit=500', config)
+        ]).then(([catsRes, brandsRes]) => {
+          setCategories(catsRes.data.data);
+          setBrands(brandsRes.data.data);
+        }).catch(err => console.error("Lookup data fetch failed:", err));
+      }
       
       const data = res.data.data;
       const total = res.data.total;
@@ -1168,7 +1180,7 @@ const Sheet = () => {
                     <Table className="border-collapse border border-slate-200 bg-white">
                         <TableHeader className="bg-slate-50/90 sticky top-0 z-[100] backdrop-blur-md border-b-2 shadow-sm">
                             <TableRow className="border-b shadow-none hover:bg-transparent">
-                                <TableHead className="w-12 text-center text-[10px] font-black border-r sticky left-0 top-0 bg-slate-100 z-[110] shadow-[2px_0_0_rgba(0,0,0,0.05)]">
+                                <TableHead className="w-[48px] min-w-[48px] text-center text-[10px] font-black border-r sticky left-0 top-0 bg-slate-100 z-[110] shadow-[2px_0_0_rgba(0,0,0,0.05)]">
                                   <Checkbox
                                     checked={selectedRows.size > 0 && selectedRows.size === sortedData.length}
                                     onCheckedChange={(checked: boolean) => {
@@ -1180,7 +1192,7 @@ const Sheet = () => {
                                     }}
                                   />
                                 </TableHead>
-                                <TableHead className="w-12 text-center text-[10px] font-black border-r sticky left-12 top-0 bg-slate-100 z-[110] shadow-[2px_0_0_rgba(0,0,0,0.05)] font-mono text-slate-400">#</TableHead>
+                                <TableHead className="w-[48px] min-w-[48px] text-center text-[10px] font-black border-r sticky left-[48px] top-0 bg-slate-100 z-[110] shadow-[2px_0_0_rgba(0,0,0,0.05)] font-mono text-slate-400">#</TableHead>
                                 {(columnOrderByTab[activeTab] || []).map((field) => (
                                   <TableHead
                                     key={field}
@@ -1206,7 +1218,7 @@ const Sheet = () => {
                                     </div>
                                   </TableHead>
                                 ))}
-                                <TableHead className="w-14 bg-slate-50/50"></TableHead>
+                                <TableHead className="w-[60px] min-w-[60px] bg-slate-100 text-[10px] font-black text-center sticky right-0 top-0 z-[110] border-l shadow-[-2px_0_0_rgba(0,0,0,0.05)] uppercase">Actions</TableHead>
                             </TableRow>
                         </TableHeader>
                         <TableBody style={{ height: `${rowVirtualizer.getTotalSize()}px`, position: 'relative' }}>
@@ -1225,7 +1237,7 @@ const Sheet = () => {
                                             transform: `translateY(${virtualItem.start}px)`,
                                         }}
                                     >
-                                        <TableCell className="text-center border-r sticky left-0 bg-white z-[40] group-hover:bg-indigo-50/80 transition-colors shadow-[2px_0_0_rgba(0,0,0,0.05)] border-r-indigo-100/50">
+                                        <TableCell className="w-[48px] min-w-[48px] text-center border-r sticky left-0 bg-white z-[40] group-hover:bg-indigo-50/80 transition-colors shadow-[2px_0_0_rgba(0,0,0,0.05)] border-r-indigo-100/50">
                                           <Checkbox
                                             checked={selectedRows.has(item.id)}
                                             onCheckedChange={(checked: boolean) => {
@@ -1241,7 +1253,7 @@ const Sheet = () => {
                                             }}
                                           />
                                         </TableCell>
-                                        <TableCell className="text-[10px] font-mono text-center border-r sticky left-12 bg-white z-[40] text-slate-400 group-hover:text-indigo-600 group-hover:bg-indigo-50/80 transition-all shadow-[2px_0_0_rgba(0,0,0,0.05)] border-r-indigo-100/50">
+                                        <TableCell className="w-[48px] min-w-[48px] text-[10px] font-mono text-center border-r sticky left-[48px] bg-white z-[40] text-slate-400 group-hover:text-indigo-600 group-hover:bg-indigo-50/80 transition-all shadow-[2px_0_0_rgba(0,0,0,0.05)] border-r-indigo-100/50">
                                             {String(virtualItem.index + 1).padStart(3, '0')}
                                         </TableCell>
                                         
@@ -1258,24 +1270,43 @@ const Sheet = () => {
                                           </TableCell>
                                         ))}
 
-                                        <TableCell className="text-center p-0">
-                                            <div className="flex items-center justify-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
-                                              <Button size="icon" variant="ghost" className="h-7 w-7" onClick={() => setEditingCell({ rowId: item.id, field: (columnOrderByTab[activeTab] || [])[0] })} aria-label="Edit row">
-                                                ✏️
-                                              </Button>
-                                              {activeTab === "products" && (
-                                                <Button size="icon" variant="ghost" className="h-7 w-7" onClick={() => {
-                                                  setSelectedProductForBulk(item as Product);
-                                                  setBulkPriceDialogOpen(true);
-                                                }} aria-label="Bulk options">📦</Button>
-                                              )}
-                                              <Button size="icon" variant="ghost" className="h-7 w-7" onClick={() => deleteRow(item.id, tabToModel[activeTab])} aria-label="Delete row">
-                                                🗑
-                                              </Button>
+                                        <TableCell className="text-center p-0 w-[60px] min-w-[60px] border-l bg-slate-50/50 sticky right-0 z-[40] shadow-[-2px_0_0_rgba(0,0,0,0.05)]">
+                                            <div className="flex items-center justify-center gap-1.5 py-1">
+                                              <TooltipProvider>
+                                                <Tooltip>
+                                                  <TooltipTrigger asChild>
+                                                    <Button size="icon" variant="ghost" className="h-7 w-7 text-indigo-600 hover:bg-indigo-100" onClick={() => setEditingCell({ rowId: item.id, field: (columnOrderByTab[activeTab] || [])[0] })}>
+                                                      ✏️
+                                                    </Button>
+                                                  </TooltipTrigger>
+                                                  <TooltipContent>Edit Record</TooltipContent>
+                                                </Tooltip>
+
+                                                {activeTab === "products" && (
+                                                  <Tooltip>
+                                                    <TooltipTrigger asChild>
+                                                      <Button size="icon" variant="ghost" className="h-7 w-7 text-amber-600 hover:bg-amber-100" onClick={() => {
+                                                        setSelectedProductForBulk(item as Product);
+                                                        setBulkPriceDialogOpen(true);
+                                                      }}>📦</Button>
+                                                    </TooltipTrigger>
+                                                    <TooltipContent>Manage Bulk Prices</TooltipContent>
+                                                  </Tooltip>
+                                                )}
+
+                                                <Tooltip>
+                                                  <TooltipTrigger asChild>
+                                                    <Button size="icon" variant="ghost" className="h-7 w-7 text-rose-600 hover:bg-rose-100" onClick={() => deleteRow(item.id, tabToModel[activeTab])}>
+                                                      🗑
+                                                    </Button>
+                                                  </TooltipTrigger>
+                                                  <TooltipContent>Delete Record</TooltipContent>
+                                                </Tooltip>
+                                              </TooltipProvider>
                                             </div>
                                             <DropdownMenu>
                                                 <DropdownMenuTrigger asChild>
-                                                    <Button variant="ghost" size="icon" className="h-8 w-8 absolute top-1 right-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                                                    <Button variant="ghost" size="icon" className="h-8 w-8 absolute top-0.5 right-0.5 opacity-0 group-hover:opacity-100 transition-opacity">
                                                         <MoreVertical size={14} />
                                                     </Button>
                                                 </DropdownMenuTrigger>
