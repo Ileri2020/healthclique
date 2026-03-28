@@ -1,8 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
-import { PrismaClient } from "@prisma/client";
 import { auth } from "@/auth";
-
-const prisma = new PrismaClient();
+import { prisma } from "@/lib/prisma";
 
 export async function GET(req: NextRequest) {
     const session = await auth();
@@ -14,19 +12,32 @@ export async function GET(req: NextRequest) {
 
     const { searchParams } = new URL(req.url);
     const model = searchParams.get("model") || "product";
+    const page = parseInt(searchParams.get("page") || "1");
+    const limit = parseInt(searchParams.get("limit") || "50");
+    const offset = (page - 1) * limit;
 
     try {
         if (model === "product") {
             const products = await prisma.product.findMany({
-                include: {
+                select: {
+                    id: true,
+                    name: true,
+                    description: true,
+                    price: true,
+                    scarce: true,
+                    requiresPrescription: true,
                     category: { select: { name: true } },
                     brand: { select: { name: true } },
                     activeIngredients: { select: { name: true } },
                     stock: { select: { addedQuantity: true } },
                     bulkPrices: { select: { name: true, quantity: true, price: true } }
-                }
+                },
+                take: limit,
+                skip: offset,
+                orderBy: { createdAt: 'desc' }
             });
 
+            const total = await prisma.product.count();
             const data = products.map(p => ({
                 id: p.id,
                 name: p.name,
@@ -40,24 +51,52 @@ export async function GET(req: NextRequest) {
                 scarce: p.scarce || false,
                 requiresPrescription: p.requiresPrescription || false
             }));
-            return NextResponse.json(data);
+            return NextResponse.json({ data, total, page, limit });
         }
 
         if (model === "category") {
-            return NextResponse.json(await prisma.category.findMany());
+            const categories = await prisma.category.findMany({
+                take: limit,
+                skip: offset,
+                orderBy: { createdAt: 'desc' }
+            });
+            const total = await prisma.category.count();
+            return NextResponse.json({ data: categories, total, page, limit });
         }
 
         if (model === "brand") {
-            return NextResponse.json(await prisma.brand.findMany());
+            const brands = await prisma.brand.findMany({
+                take: limit,
+                skip: offset,
+                orderBy: { order: 'asc' }
+            });
+            const total = await prisma.brand.count();
+            return NextResponse.json({ data: brands, total, page, limit });
         }
 
         if (model === "activeIngredient") {
-            return NextResponse.json(await prisma.activeIngredient.findMany());
+            const ingredients = await prisma.activeIngredient.findMany({
+                take: limit,
+                skip: offset,
+                orderBy: { name: 'asc' }
+            });
+            const total = await prisma.activeIngredient.count();
+            return NextResponse.json({ data: ingredients, total, page, limit });
         }
 
         if (model === "stock") {
             const stocks = await prisma.stock.findMany({
-                include: { product: { select: { name: true } } }
+                select: {
+                    id: true,
+                    addedQuantity: true,
+                    costPerProduct: true,
+                    pricePerProduct: true as any, // Handle potential missing fields gracefully
+                    createdAt: true,
+                    product: { select: { name: true } }
+                },
+                take: limit,
+                skip: offset,
+                orderBy: { createdAt: 'desc' }
             });
             const data = stocks.map(s => ({
                 id: s.id,
@@ -66,20 +105,13 @@ export async function GET(req: NextRequest) {
                 costPrice: s.costPerProduct,
                 sellingPrice: (s as any).pricePerProduct,
             }));
-            return NextResponse.json(data);
+            const total = await prisma.stock.count();
+            return NextResponse.json({ data: data, total, page, limit });
         }
 
+        // 'all' endpoint restricted to metadata or removed for production safety
         if (model === "all") {
-            const [products, categories, brands, ingredients, stocks, bulkPrices, users] = await Promise.all([
-                prisma.product.findMany({ include: { category: true, brand: true, activeIngredients: true, stock: true, bulkPrices: true } }),
-                prisma.category.findMany({ include: { _count: { select: { products: true } } } }),
-                prisma.brand.findMany({ include: { _count: { select: { products: true } } } }),
-                prisma.activeIngredient.findMany({ include: { _count: { select: { products: true } } } }),
-                prisma.stock.findMany({ include: { product: { select: { name: true } } } }),
-                prisma.bulkPrice.findMany({ include: { product: { select: { name: true } } } }),
-                prisma.user.findMany({ select: { id: true, name: true, email: true, role: true, createdAt: true } })
-            ]);
-            return NextResponse.json({ products, categories, brands, ingredients, stocks, bulkPrices, users });
+             return NextResponse.json({ error: "Bulk 'all' export is disabled for performance. Export individual models instead." }, { status: 400 });
         }
 
         return NextResponse.json({ error: "Model not supported for export" }, { status: 400 });

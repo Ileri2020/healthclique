@@ -19,7 +19,9 @@ export const AdminBulkManager = () => {
         setLoading(true);
         try {
             const res = await axios.get(`/api/admin/bulk?model=${model}`);
-            const csv = Papa.unparse(res.data);
+            // The API now returns { data, total, page, limit }
+            const exportData = res.data.data || res.data;
+            const csv = Papa.unparse(exportData);
             const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
             const link = document.createElement("a");
             const url = URL.createObjectURL(blob);
@@ -39,22 +41,7 @@ export const AdminBulkManager = () => {
     };
 
     const handleDownloadAllData = async () => {
-        setLoading(true);
-        try {
-            const res = await axios.get(`/api/admin/bulk?model=all`);
-            const dataStr = "data:text/json;charset=utf-8," + encodeURIComponent(JSON.stringify(res.data, null, 2));
-            const downloadAnchorNode = document.createElement('a');
-            downloadAnchorNode.setAttribute("href", dataStr);
-            downloadAnchorNode.setAttribute("download", `full_database_backup_${new Date().toISOString().split('T')[0]}.json`);
-            document.body.appendChild(downloadAnchorNode);
-            downloadAnchorNode.click();
-            downloadAnchorNode.remove();
-            toast.success("Full database backup downloaded");
-        } catch (err) {
-            toast.error("Failed to download database backup");
-        } finally {
-            setLoading(false);
-        }
+        toast.info("Full database backup disabled for performance. Export individual models.");
     };
 
     const handleFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {

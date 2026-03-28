@@ -1,8 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
-import { PrismaClient } from "@prisma/client";
 import { auth } from "@/auth";
-
-const prisma = new PrismaClient();
+import { prisma } from "@/lib/prisma";
 
 // Unified Model Map for the entire Sheet System
 const modelMap: Record<string, any> = {
@@ -44,11 +42,12 @@ export async function GET(req: NextRequest) {
   const { searchParams } = new URL(req.url);
   const model = searchParams.get("model");
   
-  // Optimization: Default limit to 70 as requested. 
-  // Admin can override, but we cap it to 500 for safety unless explicitly needed.
-  const requestedLimit = parseInt(searchParams.get("limit") || "70");
-  const limit = isAdmin ? requestedLimit : Math.min(requestedLimit, 70);
+  // Optimization: Default limit to 50 for better performance
+  const requestedLimit = parseInt(searchParams.get("limit") || "50");
+  const limit = isAdmin ? Math.min(requestedLimit, 500) : Math.min(requestedLimit, 50);
   const offset = parseInt(searchParams.get("offset") || "0");
+  const search = searchParams.get("search") || "";
+  const details = searchParams.get("details") === "true"; // Lazy load heavy relations
 
   if (!model || !modelMap[model]) {
     return NextResponse.json({ error: "Invalid model" }, { status: 400 });
@@ -57,18 +56,45 @@ export async function GET(req: NextRequest) {
   try {
     let data;
     if (model === "product") {
+      // Use select for basic data, include heavy relations only when details=true
+      const baseSelect = {
+        id: true,
+        name: true,
+        description: true,
+        price: true,
+        scarce: true,
+        requiresPrescription: true,
+        createdAt: true,
+        category: { select: { id: true, name: true } },
+        brand: { select: { id: true, name: true } },
+      };
+
+      const includeClause = details ? {
+        activeIngredients: { select: { id: true, name: true } },
+        stock: { select: { id: true, addedQuantity: true, costPerProduct: true, createdAt: true } },
+        bulkPrices: { select: { id: true, name: true, quantity: true, price: true } },
+      } : {};
+
+      const whereClause = search ? {
+        name: { contains: search, mode: 'insensitive' as const }
+      } : {};
+
       data = await prisma.product.findMany({
-        include: {
-          category: { select: { id: true, name: true } },
-          brand: { select: { id: true, name: true } },
-          activeIngredients: { select: { id: true, name: true } },
-          stock: { select: { id: true, addedQuantity: true, costPerProduct: true, createdAt: true } },
-          bulkPrices: { select: { id: true, name: true, quantity: true, price: true } },
-        },
+        where: whereClause,
+        select: baseSelect,
+        include: includeClause,
         orderBy: { createdAt: 'desc' },
         take: limit,
         skip: offset,
       });
+
+      // Add computed fields for spreadsheet display
+      data = data.map(product => ({
+        ...product,
+        ingredients: product.activeIngredients?.map(i => i.name).join("; ") || "",
+        stockCount: product.stock?.reduce((acc, s) => acc + s.addedQuantity, 0) || 0,
+        bulkPricesText: product.bulkPrices?.map(b => `${b.name}(${b.quantity}x @ ₦${b.price})`).join("; ") || "",
+      }));
     } else if (model === "stock") {
       data = await prisma.stock.findMany({
         include: { product: { select: { id: true, name: true } } },
@@ -95,9 +121,16 @@ export async function GET(req: NextRequest) {
     }
 
     // Also return total count for pagination UI if needed
-    const total = await modelMap[model].count();
+    const whereClause = search ? {
+      name: { contains: search, mode: 'insensitive' as const }
+    } : {};
+    const total = await modelMap[model].count({ where: whereClause });
 
-    return NextResponse.json({ data, total, limit, offset });
+    return NextResponse.json({ data, total, limit, offset }, {
+      headers: {
+        'Cache-Control': 'private, max-age=30', // Cache for 30 seconds
+      },
+    });
   } catch (error) {
     console.error("Sheet Fetch Error:", error);
     return NextResponse.json({ error: "Fetch failed" }, { status: 500 });

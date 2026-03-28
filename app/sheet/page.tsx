@@ -1,6 +1,7 @@
 "use client"
 
 import { useState, useEffect, useRef, useMemo } from "react"
+import { useVirtualizer } from '@tanstack/react-virtual'
 import { useAppContext } from "@/hooks/useAppContext"
 import { Button } from "@/components/ui/button"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
@@ -122,6 +123,10 @@ const Sheet = () => {
   const { user } = useAppContext()
   const router = useRouter()
   const [activeTab, setActiveTab] = useState("products")
+  const [currentPage, setCurrentPage] = useState(0)
+  const [limit, setLimit] = useState(50)
+  const [totalItems, setTotalItems] = useState(0)
+  const [lastAutoSave, setLastAutoSave] = useState<Date | null>(null)
   const [products, setProducts] = useState<Product[]>([])
   const [categories, setCategories] = useState<Category[]>([])
   const [brands, setBrands] = useState<Brand[]>([])
@@ -161,6 +166,7 @@ const Sheet = () => {
   const [resizeStartX, setResizeStartX] = useState<number>(0)
   const [startWidth, setStartWidth] = useState<number>(0)
   const [searchQuery, setSearchQuery] = useState("")
+  const [debouncedSearchQuery, setDebouncedSearchQuery] = useState("")
   const [selectedRows, setSelectedRows] = useState<Set<string>>(new Set())
   const [history, setHistory] = useState<any[]>([])
   const [historyIndex, setHistoryIndex] = useState(-1)
@@ -172,17 +178,20 @@ const Sheet = () => {
   const [selectedProductForBulk, setSelectedProductForBulk] = useState<Product | null>(null)
   const [newBulkPrice, setNewBulkPrice] = useState({ name: '', quantity: 1, price: 0 })
   const [pendingChanges, setPendingChanges] = useState<Record<string, { id: string, model: string, field: string, value: any }>>({})
-  const [lastAutoSave, setLastAutoSave] = useState<Date | null>(null)
+  const tableContainerRef = useRef<HTMLDivElement>(null)
   
-  // Pagination State
-  const [currentPage, setCurrentPage] = useState(0)
-  const [totalItems, setTotalItems] = useState(0)
-  const [limit, setLimit] = useState(50)
+  // Debounce search query
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      setDebouncedSearchQuery(searchQuery);
+    }, 300);
+    return () => clearTimeout(timer);
+  }, [searchQuery]);
   
   useEffect(() => {
-    // Reset page when tab changes
+    // Reset page when tab changes or search changes
     setCurrentPage(0)
-  }, [activeTab])
+  }, [activeTab, debouncedSearchQuery])
 
   useEffect(() => {
     // Only proceed once user data is loaded from context
@@ -238,47 +247,53 @@ const Sheet = () => {
 
     try {
       const config = { signal: controller.signal };
-      const [
-        productsRes,
-        categoriesRes,
-        brandsRes,
-        ingredientsRes,
-        stocksRes,
-        bulkPricesRes
-      ] = await Promise.all([
-        axios.get(`/api/sheet?model=product&limit=${activeTab === 'products' ? limit : 1000}&offset=${activeTab === 'products' ? currentPage * limit : 0}`, config).catch(e => ({ data: { data: [], total: 0 } })),
-        axios.get(`/api/sheet?model=category&limit=${activeTab === 'categories' ? limit : 1000}&offset=${activeTab === 'categories' ? currentPage * limit : 0}`, config).catch(e => ({ data: { data: [], total: 0 } })),
-        axios.get(`/api/sheet?model=brand&limit=${activeTab === 'brands' ? limit : 1000}&offset=${activeTab === 'brands' ? currentPage * limit : 0}`, config).catch(e => ({ data: { data: [], total: 0 } })),
-        axios.get(`/api/sheet?model=activeIngredient&limit=${activeTab === 'ingredients' ? limit : 1000}&offset=${activeTab === 'ingredients' ? currentPage * limit : 0}`, config).catch(e => ({ data: { data: [], total: 0 } })),
-        axios.get(`/api/sheet?model=stock&limit=${activeTab === 'stocks' ? limit : 1000}&offset=${activeTab === 'stocks' ? currentPage * limit : 0}`, config).catch(e => ({ data: { data: [], total: 0 } })),
-        axios.get(`/api/sheet?model=bulkPrice&limit=${activeTab === 'bulkprices' ? limit : 1000}&offset=${activeTab === 'bulkprices' ? currentPage * limit : 0}`, config).catch(e => ({ data: { data: [], total: 0 } }))
-      ])
       
-      clearTimeout(timeoutId);
-      
-      const resMap: Record<string, any> = {
-        products: productsRes.data,
-        categories: categoriesRes.data,
-        brands: brandsRes.data,
-        ingredients: ingredientsRes.data,
-        stocks: stocksRes.data,
-        bulkprices: bulkPricesRes.data
+      // Only load the active tab data
+      let res;
+      const modelMap = {
+        products: 'product',
+        categories: 'category', 
+        brands: 'brand',
+        ingredients: 'activeIngredient',
+        stocks: 'stock',
+        bulkprices: 'bulkPrice'
       };
-
-      setProducts(productsRes.data.data)
-      setCategories(categoriesRes.data.data)
-      setBrands(brandsRes.data.data)
-      setIngredients(ingredientsRes.data.data)
-      setStocks(stocksRes.data.data)
-      setBulkPrices(bulkPricesRes.data.data)
-
-      setTotalItems(resMap[activeTab]?.total || 0)
+      
+      const apiModel = modelMap[activeTab as keyof typeof modelMap];
+      res = await axios.get(`/api/sheet?model=${apiModel}&limit=${limit}&offset=${currentPage * limit}&search=${encodeURIComponent(debouncedSearchQuery)}`, config);
+      
+      const data = res.data.data;
+      const total = res.data.total;
+      
+      // Update the appropriate state based on active tab
+      switch(activeTab) {
+        case 'products':
+          setProducts(data);
+          break;
+        case 'categories':
+          setCategories(data);
+          break;
+        case 'brands':
+          setBrands(data);
+          break;
+        case 'ingredients':
+          setIngredients(data);
+          break;
+        case 'stocks':
+          setStocks(data);
+          break;
+        case 'bulkprices':
+          setBulkPrices(data);
+          break;
+      }
+      
+      setTotalItems(total);
     } catch (error) {
       if (axios.isCancel(error)) {
         toast.error("Cloud Sync Timed Out - DB Connection Slow")
       } else {
         console.error("Critical Data Load Error:", error)
-        toast.error("Failed to sync some data tables")
+        toast.error("Failed to sync data")
       }
     } finally {
       setLoading(false)
@@ -678,6 +693,14 @@ const Sheet = () => {
       return 0;
     });
   }, [filteredData, sortConfig]);
+
+  // Virtualization setup
+  const rowVirtualizer = useVirtualizer({
+    count: sortedData.length,
+    getScrollElement: () => tableContainerRef.current,
+    estimateSize: () => 48, // Estimated row height
+    overscan: 5, // Render 5 extra rows outside visible area
+  });
 
   const deleteRow = async (id: string, model: string) => {
     if (!confirm("Are you sure? This is permanent.")) return;
@@ -1135,7 +1158,7 @@ const Sheet = () => {
           </TabsList>
 
           <Card className="flex-1 border-none shadow-xl rounded-2xl overflow-hidden bg-white">
-            <div className="overflow-auto h-[calc(100vh-280px)] scrollbar-thin scrollbar-thumb-indigo-100">
+            <div ref={tableContainerRef} className="overflow-auto h-[calc(100vh-280px)] scrollbar-thin scrollbar-thumb-indigo-100">
                 {loading ? (
                     <div className="h-full w-full flex flex-col items-center justify-center gap-4 bg-white/50 animate-pulse">
                         <Loader2 className="h-10 w-10 animate-spin text-indigo-600" />
@@ -1183,81 +1206,95 @@ const Sheet = () => {
                                 <TableHead className="w-14 bg-slate-50/50"></TableHead>
                             </TableRow>
                         </TableHeader>
-                        <TableBody>
-                            {sortedData.map((item, i) => (
-                                <TableRow key={item.id} className={cn("group hover:bg-indigo-50/20 transition-all even:bg-slate-50/30", selectedRows.has(item.id) && "bg-indigo-100/50")}>
-                                    <TableCell className="text-center border-r sticky left-0 bg-white/95 z-10 group-hover:bg-indigo-50/50 transition-colors shadow-[1px_0_0_rgba(0,0,0,0.05)]">
-                                      <Checkbox
-                                        checked={selectedRows.has(item.id)}
-                                        onCheckedChange={(checked: boolean) => {
-                                          if (checked) {
-                                            setSelectedRows(prev => new Set([...prev, item.id]));
-                                          } else {
-                                            setSelectedRows(prev => {
-                                              const newSet = new Set(prev);
-                                              newSet.delete(item.id);
-                                              return newSet;
-                                            });
-                                          }
+                        <TableBody style={{ height: `${rowVirtualizer.getTotalSize()}px`, position: 'relative' }}>
+                            {rowVirtualizer.getVirtualItems().map((virtualItem) => {
+                                const item = sortedData[virtualItem.index];
+                                return (
+                                    <TableRow 
+                                        key={item.id} 
+                                        className={cn("group hover:bg-indigo-50/20 transition-all even:bg-slate-50/30", selectedRows.has(item.id) && "bg-indigo-100/50")}
+                                        style={{
+                                            position: 'absolute',
+                                            top: 0,
+                                            left: 0,
+                                            width: '100%',
+                                            height: `${virtualItem.size}px`,
+                                            transform: `translateY(${virtualItem.start}px)`,
                                         }}
-                                      />
-                                    </TableCell>
-                                    <TableCell className="text-[10px] font-mono text-center border-r sticky left-12 bg-white/95 z-10 text-slate-400 group-hover:text-indigo-600 group-hover:bg-indigo-50/50 transition-all shadow-[1px_0_0_rgba(0,0,0,0.05)]">
-                                        {String(i + 1).padStart(3, '0')}
-                                    </TableCell>
-                                    
-                                    {(columnOrderByTab[activeTab] || []).map((field) => (
-                                      <TableCell
-                                        key={`${item.id}-${field}`}
-                                        className="p-0 border-r"
-                                        style={{ width: columnWidths[field] ? `${columnWidths[field]}px` : 'auto', minWidth: '80px' }}
-                                      >
-                                        {renderCell(item, field, tabToModel[activeTab])}
-                                      </TableCell>
-                                    ))}
+                                    >
+                                        <TableCell className="text-center border-r sticky left-0 bg-white/95 z-10 group-hover:bg-indigo-50/50 transition-colors shadow-[1px_0_0_rgba(0,0,0,0.05)]">
+                                          <Checkbox
+                                            checked={selectedRows.has(item.id)}
+                                            onCheckedChange={(checked: boolean) => {
+                                              if (checked) {
+                                                setSelectedRows(prev => new Set([...prev, item.id]));
+                                              } else {
+                                                setSelectedRows(prev => {
+                                                  const newSet = new Set(prev);
+                                                  newSet.delete(item.id);
+                                                  return newSet;
+                                                });
+                                              }
+                                            }}
+                                          />
+                                        </TableCell>
+                                        <TableCell className="text-[10px] font-mono text-center border-r sticky left-12 bg-white/95 z-10 text-slate-400 group-hover:text-indigo-600 group-hover:bg-indigo-50/50 transition-all shadow-[1px_0_0_rgba(0,0,0,0.05)]">
+                                            {String(virtualItem.index + 1).padStart(3, '0')}
+                                        </TableCell>
+                                        
+                                        {(columnOrderByTab[activeTab] || []).map((field) => (
+                                          <TableCell
+                                            key={`${item.id}-${field}`}
+                                            className="p-0 border-r"
+                                            style={{ width: columnWidths[field] ? `${columnWidths[field]}px` : 'auto', minWidth: '80px' }}
+                                          >
+                                            {renderCell(item, field, tabToModel[activeTab])}
+                                          </TableCell>
+                                        ))}
 
-                                    <TableCell className="text-center p-0">
-                                        <div className="flex items-center justify-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
-                                          <Button size="icon" variant="ghost" className="h-7 w-7" onClick={() => setEditingCell({ rowId: item.id, field: (columnOrderByTab[activeTab] || [])[0] })} aria-label="Edit row">
-                                            ✏️
-                                          </Button>
-                                          {activeTab === "products" && (
-                                            <Button size="icon" variant="ghost" className="h-7 w-7" onClick={() => {
-                                              setSelectedProductForBulk(item as Product);
-                                              setBulkPriceDialogOpen(true);
-                                            }} aria-label="Bulk options">📦</Button>
-                                          )}
-                                          <Button size="icon" variant="ghost" className="h-7 w-7" onClick={() => deleteRow(item.id, tabToModel[activeTab])} aria-label="Delete row">
-                                            🗑
-                                          </Button>
-                                        </div>
-                                        <DropdownMenu>
-                                            <DropdownMenuTrigger asChild>
-                                                <Button variant="ghost" size="icon" className="h-8 w-8 absolute top-1 right-1 opacity-0 group-hover:opacity-100 transition-opacity">
-                                                    <MoreVertical size={14} />
-                                                </Button>
-                                            </DropdownMenuTrigger>
-                                            <DropdownMenuContent align="end" className="text-[11px] font-bold uppercase tracking-wider">
-                                                <DropdownMenuItem className="gap-2" onClick={() => window.open(`/products/${item.id || (item as any).productId}`)}><ExternalLink size={12} /> View Page</DropdownMenuItem>
-                                                {activeTab === "products" && (
-                                                    <DropdownMenuItem 
-                                                        className="gap-2" 
-                                                        onClick={() => {
-                                                            setSelectedProductForBulk(item as Product);
-                                                            setBulkPriceDialogOpen(true);
-                                                        }}
-                                                    >
-                                                        <Plus size={12} /> Add Bulk Pricing
+                                        <TableCell className="text-center p-0">
+                                            <div className="flex items-center justify-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                                              <Button size="icon" variant="ghost" className="h-7 w-7" onClick={() => setEditingCell({ rowId: item.id, field: (columnOrderByTab[activeTab] || [])[0] })} aria-label="Edit row">
+                                                ✏️
+                                              </Button>
+                                              {activeTab === "products" && (
+                                                <Button size="icon" variant="ghost" className="h-7 w-7" onClick={() => {
+                                                  setSelectedProductForBulk(item as Product);
+                                                  setBulkPriceDialogOpen(true);
+                                                }} aria-label="Bulk options">📦</Button>
+                                              )}
+                                              <Button size="icon" variant="ghost" className="h-7 w-7" onClick={() => deleteRow(item.id, tabToModel[activeTab])} aria-label="Delete row">
+                                                🗑
+                                              </Button>
+                                            </div>
+                                            <DropdownMenu>
+                                                <DropdownMenuTrigger asChild>
+                                                    <Button variant="ghost" size="icon" className="h-8 w-8 absolute top-1 right-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                                                        <MoreVertical size={14} />
+                                                    </Button>
+                                                </DropdownMenuTrigger>
+                                                <DropdownMenuContent align="end" className="text-[11px] font-bold uppercase tracking-wider">
+                                                    <DropdownMenuItem className="gap-2" onClick={() => window.open(`/products/${item.id || (item as any).productId}`)}><ExternalLink size={12} /> View Page</DropdownMenuItem>
+                                                    {activeTab === "products" && (
+                                                        <DropdownMenuItem 
+                                                            className="gap-2" 
+                                                            onClick={() => {
+                                                                setSelectedProductForBulk(item as Product);
+                                                                setBulkPriceDialogOpen(true);
+                                                            }}
+                                                        >
+                                                            <Plus size={12} /> Add Bulk Pricing
+                                                        </DropdownMenuItem>
+                                                    )}
+                                                    <DropdownMenuItem className="gap-2 text-rose-600" onClick={() => deleteRow(item.id, tabToModel[activeTab])}>
+                                                        <Trash2 size={12} /> Delete Record
                                                     </DropdownMenuItem>
-                                                )}
-                                                <DropdownMenuItem className="gap-2 text-rose-600" onClick={() => deleteRow(item.id, tabToModel[activeTab])}>
-                                                    <Trash2 size={12} /> Delete Record
-                                                </DropdownMenuItem>
-                                            </DropdownMenuContent>
-                                        </DropdownMenu>
-                                    </TableCell>
-                                </TableRow>
-                            ))}
+                                                </DropdownMenuContent>
+                                            </DropdownMenu>
+                                        </TableCell>
+                                    </TableRow>
+                                );
+                            })}
                         </TableBody>
                     </Table>
                 )}

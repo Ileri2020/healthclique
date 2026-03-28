@@ -1,7 +1,7 @@
 "use server";
 
 import { NextRequest, NextResponse } from "next/server";
-import { PrismaClient } from "@prisma/client";
+import { prisma } from "@/lib/prisma";
 import bcrypt from "bcrypt";
 import cloudinary from "cloudinary";
 import { auth } from "@/auth";
@@ -11,8 +11,6 @@ cloudinary.v2.config({
   api_key: process.env.CLOUDINARY_API_KEY,
   api_secret: process.env.CLOUDINARY_API_SECRET,
 });
-
-const prisma = new PrismaClient();
 
 const PRICE_MARKUPS: Record<string, number> = {
   customer: 1.3,
@@ -74,6 +72,7 @@ export async function GET(req: NextRequest) {
   const model = searchParams.get("model");
   const id = parseId(searchParams.get("id"), model || "");
   const limit = parseInt(searchParams.get("limit") || "50");
+  const offset = parseInt(searchParams.get("offset") || "0");
   const minimal = searchParams.get("minimal") === "true";
 
   if (!model || !modelMap[model]) return NextResponse.json({ error: "Invalid model" }, { status: 400 });
@@ -85,6 +84,7 @@ export async function GET(req: NextRequest) {
       if (model === "featuredProduct") {
         return NextResponse.json(await prisma.featuredProduct.findMany({
           take: limit,
+          skip: offset,
           include: { 
             product: { 
               include: { 
@@ -100,6 +100,7 @@ export async function GET(req: NextRequest) {
       if (model === "review" || model === "post") {
         return NextResponse.json(await prismaModel.findMany({
           take: limit,
+          skip: offset,
           include: { user: { select: { id: true, email: true, name: true, avatarUrl: true } } },
           orderBy: { createdAt: 'desc' }
         }));
@@ -107,6 +108,8 @@ export async function GET(req: NextRequest) {
 
       if (model === "category") {
         return NextResponse.json(await prisma.category.findMany({
+          take: limit,
+          skip: offset,
           include: { 
             products: { take: 3, select: { images: true } },
             _count: { select: { products: true } }
@@ -144,7 +147,8 @@ export async function GET(req: NextRequest) {
         return NextResponse.json(await prisma.product.findMany({
           where,
           include: Object.keys(include).length > 0 ? include : undefined,
-          take: 2000,
+          take: Math.min(limit, 100), // Cap product fetch to 100
+          skip: offset,
           orderBy: { createdAt: 'desc' }
         }));
       }
@@ -212,6 +216,7 @@ export async function GET(req: NextRequest) {
                   payment: true
               },
               take: limit,
+              skip: offset,
               orderBy: { createdAt: 'desc' }
           }));
       }
@@ -219,6 +224,7 @@ export async function GET(req: NextRequest) {
       return NextResponse.json(await prismaModel.findMany({ 
         where, 
         take: limit,
+        skip: offset,
         orderBy: { createdAt: 'desc' }
       }));
     } else {
