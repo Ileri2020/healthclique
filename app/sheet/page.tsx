@@ -13,6 +13,7 @@ import { Checkbox } from "@/components/ui/checkbox"
 import { toast } from "sonner"
 import axios from "axios"
 import { useRouter } from "next/navigation"
+import Papa from "papaparse"
 import {
   Table,
   TableBody,
@@ -40,9 +41,13 @@ import {
   ExternalLink,
   ChevronDown,
   Database,
-  RefreshCcw
+  RefreshCcw,
+  Filter,
+  XCircle,
+  Hash
 } from "lucide-react"
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu"
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover"
 import { cn } from "@/lib/utils"
 import {
   Dialog,
@@ -116,7 +121,7 @@ interface BulkPrice {
 
 interface ColumnFilter {
   field: string;
-  operator: 'contains' | 'equals' | 'greaterThan' | 'lessThan';
+  operator: 'contains' | 'equals' | 'greaterThan' | 'lessThan' | 'in';
   value: any;
 }
 
@@ -138,7 +143,7 @@ const Sheet = () => {
   const [editingCell, setEditingCell] = useState<{ rowId: string, field: string } | null>(null)
   const [focusedCell, setFocusedCell] = useState<{ rowId: string, field: string } | null>(null)
   const [columnOrderByTab, setColumnOrderByTab] = useState<Record<string, string[]>>({
-    products: ["name", "category", "brand", "price", "stock", "scarce", "requiresPrescription", "bulkPrices"],
+    products: ["name", "category", "brand", "price", "stock", "bulkName", "bulkQty", "bulkPrice", "scarce", "requiresPrescription"],
     categories: ["name", "products"],
     brands: ["name", "order", "products"],
     ingredients: ["name", "products"],
@@ -153,7 +158,9 @@ const Sheet = () => {
     stock: 100,
     scarce: 80,
     requiresPrescription: 90,
-    bulkPrices: 120,
+    bulkName: 140,
+    bulkQty: 100,
+    bulkPrice: 120,
     products: 120,
     order: 80,
     product: 140,
@@ -162,6 +169,7 @@ const Sheet = () => {
     createdAt: 140,
     quantity: 90
   })
+  const [activeBulkIds, setActiveBulkIds] = useState<Record<string, string>>({})
   const [draggedColumn, setDraggedColumn] = useState<string | null>(null)
   const [resizingColumn, setResizingColumn] = useState<string | null>(null)
   const [resizeStartX, setResizeStartX] = useState<number>(0)
@@ -180,6 +188,7 @@ const Sheet = () => {
   const [newBulkPrice, setNewBulkPrice] = useState({ name: '', quantity: 1, price: 0 })
   const [pendingChanges, setPendingChanges] = useState<Record<string, { id: string, model: string, field: string, value: any }>>({})
   const tableContainerRef = useRef<HTMLDivElement>(null)
+  const fileInputRef = useRef<HTMLInputElement>(null)
   
   // Debounce search query
   useEffect(() => {
@@ -261,7 +270,7 @@ const Sheet = () => {
       };
       
       const apiModel = modelMap[activeTab as keyof typeof modelMap];
-      res = await axios.get(`/api/sheet?model=${apiModel}&limit=${limit}&offset=${currentPage * limit}&search=${encodeURIComponent(debouncedSearchQuery)}`, config);
+      res = await axios.get(`/api/sheet?model=${apiModel}&limit=${limit}&offset=${currentPage * limit}&search=${encodeURIComponent(debouncedSearchQuery)}&details=true`, config);
       
       // Handle lookup data fetching for products tab (non-blocking)
       if (activeTab === 'products' && (categories.length === 0 || brands.length === 0)) {
@@ -601,72 +610,142 @@ const Sheet = () => {
     }
   }
 
-  const exportToCSV = () => {
-    let data;
-    switch (activeTab) {
-      case 'products': data = products; break;
-      case 'categories': data = categories; break;
-      case 'brands': data = brands; break;
-      case 'ingredients': data = ingredients; break;
-      case 'stocks': data = stocks; break;
-      case 'bulkprices': data = bulkPrices; break;
-      default: return;
-    }
+  const toggleFilter = (field: string, operator: ColumnFilter['operator'], value: any) => {
+    setFilters(prev => {
+      const idx = prev.findIndex(f => f.field === field);
+      if (idx > -1) {
+        if (value === "" || (Array.isArray(value) && value.length === 0)) {
+          const next = [...prev];
+          next.splice(idx, 1);
+          return next;
+        }
+        const next = [...prev];
+        next[idx] = { field, operator, value };
+        return next;
+      }
+      if (value === "" || (Array.isArray(value) && value.length === 0)) return prev;
+      return [...prev, { field, operator, value }];
+    });
+    setCurrentPage(0);
+  }
 
-    if (data.length === 0) return;
+  const applyFiltersToData = (data: any[]) => {
+    return data.filter(row =>
+      filters.every(filter => {
+        let cellValue = row[filter.field];
+        
+        // Handle nested logic and objects
+        if (cellValue && typeof cellValue === 'object') {
+           if (Array.isArray(cellValue)) {
+              // Special case for stock array in products
+              if (filter.field === 'stock') cellValue = cellValue.reduce((acc: number, s: any) => acc + (s.addedQuantity || 0), 0);
+           } else if (cellValue.name) {
+              cellValue = cellValue.name;
+           } else if (cellValue.id) {
+              cellValue = cellValue.id;
+           }
+        }
 
-    // Define custom columns based on active tab to include nested data
-    let headers: string[] = [];
-    let getRowData: (row: any) => string[] = (row) => [];
+        if (filter.value === undefined || filter.value === null || filter.value === "") return true;
 
-    if (activeTab === 'products') {
-      headers = ["ID", "Name", "Price", "Category", "Brand", "Scarce", "Rx Req", "Created At"];
-      getRowData = (p) => [
-        p.id,
-        p.name,
-        p.price,
-        p.category?.name || "N/A",
-        p.brand?.name || "N/A",
-        p.scarce ? "YES" : "NO",
-        p.requiresPrescription ? "YES" : "NO",
-        p.createdAt
-      ];
-    } else if (activeTab === 'stocks') {
-      headers = ["ID", "Product", "Quantity", "Cost", "Date"];
-      getRowData = (s) => [
-        s.id,
-        s.product?.name || "N/A",
-        s.addedQuantity,
-        s.costPerProduct || 0,
-        s.createdAt
-      ];
-    } else if (activeTab === 'bulkprices') {
-      headers = ["ID", "Product", "Unit Label", "Threshold Qty", "Price"];
-      getRowData = (bp) => [
-        bp.id,
-        bp.product?.name || "N/A",
-        bp.name,
-        bp.quantity,
-        bp.price
-      ];
+        switch (filter.operator) {
+          case 'contains': 
+            return cellValue?.toString().toLowerCase().includes(filter.value.toString().toLowerCase());
+          case 'equals': 
+            return cellValue?.toString().toLowerCase() === filter.value.toString().toLowerCase();
+          case 'in':
+            return Array.isArray(filter.value) ? filter.value.includes(cellValue?.toString()) : false;
+          case 'greaterThan': 
+            return parseFloat(cellValue) > parseFloat(filter.value);
+          case 'lessThan': 
+            return parseFloat(cellValue) < parseFloat(filter.value);
+          default: return true;
+        }
+      })
+    );
+  }
+
+  const exportToCSV = async (scope: 'page' | 'all') => {
+    let data: any[] = [];
+    if (scope === 'all') {
+      try {
+        setLoading(true);
+        const res = await axios.get(`/api/sheet?model=${tabToModel[activeTab]}&limit=2000&details=true`);
+        data = applyFiltersToData(res.data.data);
+      } catch (err) {
+        toast.error("Failed to fetch all data for export");
+        return;
+      } finally {
+        setLoading(false);
+      }
     } else {
-        // Fallback for simple tables
-        headers = Object.keys(data[0]);
-        getRowData = (row) => headers.map(h => row[h]);
+      data = sortedData;
     }
 
-    const csvContent = [
-      headers.join(','),
-      ...data.map((row: any) => getRowData(row).map(v => `"${String(v).replace(/"/g, '""')}"`).join(','))
-    ].join('\n');
+    if (!data.length) {
+      toast.error("No data to export");
+      return;
+    }
 
-    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+    const csvData = data.map(row => {
+      const flatRow: any = { id: row.id };
+      (columnOrderByTab[activeTab] || []).forEach(field => {
+        flatRow[columnLabelByField[field] || field] = row[field];
+      });
+      return flatRow;
+    });
+
+    const csv = Papa.unparse(csvData);
+    const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
     const url = URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = `${activeTab}_export_${new Date().toISOString().split('T')[0]}.csv`;
-    a.click();
-    URL.revokeObjectURL(url);
+    const link = document.createElement('a');
+    link.href = url;
+    link.setAttribute('download', `${activeTab}_${scope}_${new Date().toISOString()}.csv`);
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+  }
+
+  const handleImportCSV = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    Papa.parse(file, {
+      header: true,
+      skipEmptyLines: true,
+      complete: (results) => {
+        const rows = results.data;
+        const newChanges = { ...pendingChanges };
+        let count = 0;
+
+        rows.forEach((row: any) => {
+          const id = row.id || row.ID || row._id;
+          if (!id) return;
+
+          Object.entries(row).forEach(([label, value]) => {
+            if (label.toLowerCase() === 'id') return;
+            
+            // Try to find the field key from label
+            const field = Object.keys(columnLabelByField).find(k => columnLabelByField[k] === label) || label;
+            
+            newChanges[`${tabToModel[activeTab]}-${id}-${field}`] = {
+              id,
+              model: tabToModel[activeTab],
+              field,
+              value: value === "true" ? true : value === "false" ? false : value
+            };
+            count++;
+          });
+        });
+
+        setPendingChanges(newChanges);
+        toast.success(`Staged ${count} changes from CSV. Click Save to commit.`);
+        if (fileInputRef.current) fileInputRef.current.value = '';
+      },
+      error: (err) => {
+        toast.error("CSV Parse Error: " + err.message);
+      }
+    });
   }
 
   const filteredData = useMemo(() => {
@@ -681,18 +760,8 @@ const Sheet = () => {
       default: data = [];
     }
 
-    return data.filter(row =>
-      filters.every(filter => {
-        const cellValue = row[filter.field];
-        switch (filter.operator) {
-          case 'contains': return cellValue?.toString().toLowerCase().includes(filter.value.toLowerCase());
-          case 'equals': return cellValue === filter.value;
-          case 'greaterThan': return cellValue > filter.value;
-          case 'lessThan': return cellValue < filter.value;
-          default: return true;
-        }
-      })
-    );
+    // First apply local filtering
+    return applyFiltersToData(data);
   }, [activeTab, products, categories, brands, ingredients, stocks, bulkPrices, filters]);
 
   const sortedData = useMemo(() => {
@@ -749,7 +818,10 @@ const Sheet = () => {
     addedQuantity: "Quantity",
     costPerProduct: "Cost",
     createdAt: "Added Date",
-    quantity: "Bulk Qty"
+    quantity: "Bulk Qty",
+    bulkName: "Bulk Name",
+    bulkQty: "Unit Qty",
+    bulkPrice: "Bulk Price"
   };
 
   const createRow = async (model: string) => {
@@ -900,24 +972,90 @@ const Sheet = () => {
           </div>
         )
       
-      case "stock":
-        const total = product.stock?.reduce((s, x) => s + x.addedQuantity, 0) || 0;
+      case "stock": {
+        const total = product.stock?.reduce((s: any, x: any) => s + x.addedQuantity, 0) || 0;
         return <Badge variant={total > 0 ? "default" : "outline"} className="text-[10px] h-5 font-mono">{total} Units</Badge>
+      }
 
-      case "bulkPrices":
+      case "bulkName": {
+        const bulks = product.bulkPrices || [];
+        const activeId = activeBulkIds[product.id] || bulks[0]?.id;
+        const currentBulk = bulks.find(b => b.id === activeId);
+
         return (
-          <Button
-            variant="outline"
-            size="sm"
-            className="text-[10px] h-6 px-2"
-            onClick={() => {
-              setSelectedProductForBulk(product);
-              setBulkPriceDialogOpen(true);
-            }}
-          >
-            🔍 View Bulk
-          </Button>
+          <div className="flex items-center gap-1 w-full px-1">
+            <Select 
+              value={activeId || "none"} 
+              onValueChange={(val) => {
+                if (val === "create") {
+                  setSelectedProductForBulk(product);
+                  setBulkPriceDialogOpen(true);
+                  return;
+                }
+                setActiveBulkIds(prev => ({ ...prev, [product.id]: val }));
+              }}
+            >
+              <SelectTrigger className="h-7 text-[10px] border-none bg-indigo-50/50 hover:bg-indigo-100 transition-all font-bold">
+                <SelectValue placeholder="Add Bulk" />
+              </SelectTrigger>
+              <SelectContent>
+                {bulks.map(b => (
+                  <SelectItem key={b.id} value={b.id} className="text-[10px] font-bold">
+                    {b.name} ({b.quantity}x)
+                  </SelectItem>
+                ))}
+                <SelectItem value="create" className="text-[10px] font-black text-indigo-600 bg-indigo-50">+ Add New Option</SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
         )
+      }
+
+      case "bulkQty": {
+        const bulks = product.bulkPrices || [];
+        const activeId = activeBulkIds[product.id] || bulks[0]?.id;
+        const currentBulk = bulks.find(b => b.id === activeId);
+        if (!currentBulk) return <div className="text-muted-foreground/30 text-center">—</div>;
+
+        return isEditing ? (
+          <Input 
+            type="number"
+            defaultValue={currentBulk.quantity}
+            onBlur={(e) => {
+              const val = parseInt(e.target.value);
+              if (val !== currentBulk.quantity) updateCell(currentBulk.id, "quantity", val, "bulkPrice");
+              setEditingCell(null);
+            }}
+            className="h-7 text-[10px] text-center font-mono"
+            autoFocus
+          />
+        ) : (
+          <div className="w-full text-center text-[10px] font-mono font-bold" onClick={() => setEditingCell({ rowId: product.id, field })}>{currentBulk.quantity} Units</div>
+        )
+      }
+
+      case "bulkPrice": {
+        const bulks = product.bulkPrices || [];
+        const activeId = activeBulkIds[product.id] || bulks[0]?.id;
+        const currentBulk = bulks.find(b => b.id === activeId);
+        if (!currentBulk) return <div className="text-muted-foreground/30 text-center">—</div>;
+
+        return isEditing ? (
+          <Input 
+            type="number"
+            defaultValue={currentBulk.price}
+            onBlur={(e) => {
+              const val = parseFloat(e.target.value);
+              if (val !== currentBulk.price) updateCell(currentBulk.id, "price", val, "bulkPrice");
+              setEditingCell(null);
+            }}
+            className="h-7 text-[10px] text-right font-mono"
+            autoFocus
+          />
+        ) : (
+          <div className="w-full text-right text-[10px] font-mono font-bold text-emerald-600" onClick={() => setEditingCell({ rowId: product.id, field })}>₦{currentBulk.price.toLocaleString()}</div>
+        )
+      }
 
       default: return <div>{(product as any)[field]}</div>
     }
@@ -1101,15 +1239,6 @@ const Sheet = () => {
                 Delete ({selectedRows.size})
             </Button>
             <Button 
-              variant="outline" 
-              size="sm" 
-              onClick={exportToCSV}
-              className="h-9 gap-2 border-2 text-[11px] font-bold uppercase tracking-wider"
-            >
-                <ExternalLink size={14} />
-                Export CSV
-            </Button>
-            <Button 
                 variant="outline" 
                 size="sm" 
                 onClick={discardChanges} 
@@ -1167,6 +1296,37 @@ const Sheet = () => {
             <TabsTrigger value="bulkprices" className="rounded-lg data-[state=active]:bg-indigo-600 data-[state=active]:text-white gap-2 text-xs font-bold px-5">
               <DollarSign size={14} /> Bulk Pricing
             </TabsTrigger>
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <Button variant="outline" size="sm" className="h-9 gap-2 border-2 text-[11px] font-bold uppercase tracking-wider">
+                  <Database size={14} /> 
+                  Data Ops
+                  <ChevronDown size={14} />
+                </Button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent className="text-[11px] font-bold uppercase tracking-wider p-2 w-56">
+                <div className="px-2 py-1.5 text-xs text-slate-400 font-black">Export Data</div>
+                <DropdownMenuItem onClick={() => exportToCSV('page')} className="gap-2 cursor-pointer">
+                  📄 Current Page CSV
+                </DropdownMenuItem>
+                <DropdownMenuItem onClick={() => exportToCSV('all')} className="gap-2 cursor-pointer">
+                  🌐 Full Database CSV
+                </DropdownMenuItem>
+                <div className="h-px bg-slate-100 my-2" />
+                <div className="px-2 py-1.5 text-xs text-slate-400 font-black">Import Data</div>
+                <DropdownMenuItem onClick={() => fileInputRef.current?.click()} className="gap-2 cursor-pointer bg-indigo-50 text-indigo-700 hover:bg-indigo-100">
+                  📥 Upload CSV File
+                </DropdownMenuItem>
+              </DropdownMenuContent>
+            </DropdownMenu>
+
+            <input 
+              type="file" 
+              ref={fileInputRef} 
+              className="hidden" 
+              accept=".csv" 
+              onChange={handleImportCSV} 
+            />
           </TabsList>
 
           <Card className="flex-1 border-none shadow-xl rounded-2xl overflow-hidden bg-white">
@@ -1196,26 +1356,72 @@ const Sheet = () => {
                                 {(columnOrderByTab[activeTab] || []).map((field) => (
                                   <TableHead
                                     key={field}
-                                    draggable
-                                    onDragStart={() => onColumnDragStart(field)}
-                                    onDragOver={(e: React.DragEvent) => e.preventDefault()}
-                                    onDrop={() => onColumnDrop(field)}
-                                    className={cn(
-                                      "text-[10px] font-black uppercase border-r px-4 h-12 relative bg-slate-50/50",
-                                      field === "name" && "sticky left-[96px] z-[110] bg-slate-100 shadow-[2px_0_0_rgba(0,0,0,0.05)] border-r-2"
-                                    )}
                                     style={{ width: columnWidths[field] ? `${columnWidths[field]}px` : 'auto', minWidth: '80px' }}
+                                    className={cn(
+                                      "text-[10px] font-black uppercase tracking-wider relative group border-t border-r bg-slate-50/50 p-0",
+                                      field === "name" && "sticky left-[96px] z-[110] bg-slate-50 shadow-[2px_0_0_rgba(0,0,0,0.05)] border-r-slate-300"
+                                    )}
                                   >
-                                    <div className="flex items-center justify-between gap-1">
-                                      <span className="truncate cursor-pointer" onClick={() => setSortConfig(prev => prev?.field === field ? { field, direction: prev.direction === 'asc' ? 'desc' : 'asc' } : { field, direction: 'asc' })}>
-                                        {columnLabelByField[field] || field}
-                                        {sortConfig?.field === field ? (sortConfig.direction === 'asc' ? ' ▲' : ' ▼') : ''}
-                                      </span>
-                                      <div
-                                        onMouseDown={(e) => startColumnResize(field, e)}
-                                        className="h-full w-1 cursor-col-resize absolute right-0 top-0"
-                                      />
+                                    <div className="flex flex-col w-full h-full p-2 gap-1 px-3">
+                                      <div className="flex items-center justify-between w-full">
+                                        <span className="truncate flex-1">{columnLabelByField[field] || field}</span>
+                                        <Popover>
+                                          <PopoverTrigger asChild>
+                                            <Button variant="ghost" size="icon" className={cn("h-5 w-5 rounded-md transition-all shadow-sm", filters.some(f => f.field === field) ? "bg-indigo-600 text-white hover:bg-indigo-700" : "text-slate-400 hover:bg-slate-200")}>
+                                              <Filter size={10} />
+                                            </Button>
+                                          </PopoverTrigger>
+                                          <PopoverContent className="w-64 p-4 shadow-2xl border-2 border-indigo-100 z-[1000] bg-white rounded-xl">
+                                             <div className="flex flex-col gap-4">
+                                               <div className="flex items-center justify-between border-b pb-2">
+                                                 <div className="flex items-center gap-2">
+                                                    <div className="p-1.5 bg-indigo-50 rounded-lg"><Filter size={12} className="text-indigo-600" /></div>
+                                                    <span className="text-[10px] font-black uppercase tracking-widest text-slate-500">{columnLabelByField[field] || field}</span>
+                                                 </div>
+                                                 {filters.some(f => f.field === field) && (
+                                                   <Button variant="ghost" size="sm" onClick={() => toggleFilter(field, 'contains', '')} className="h-5 px-2 text-[9px] text-rose-500 font-black hover:bg-rose-50 rounded-full border border-rose-100">RESET</Button>
+                                                 )}
+                                               </div>
+                                               <div className="flex flex-col gap-3">
+                                                  <div className="flex flex-col gap-1.5">
+                                                     <Label className="text-[9px] font-bold text-slate-400 uppercase ml-1">Logic</Label>
+                                                     <Select 
+                                                       defaultValue={filters.find(f => f.field === field)?.operator || (['price', 'addedQuantity', 'quantity', 'stock'].includes(field) ? 'greaterThan' : 'contains')}
+                                                       onValueChange={(op: ColumnFilter['operator']) => toggleFilter(field, op, filters.find(f => f.field === field)?.value || '')}
+                                                     >
+                                                       <SelectTrigger className="h-9 text-[11px] font-bold bg-slate-50 border-slate-200">
+                                                         <SelectValue placeholder="Operator" />
+                                                       </SelectTrigger>
+                                                       <SelectContent className="z-[1100]">
+                                                         <SelectItem value="contains">Contains</SelectItem>
+                                                         <SelectItem value="equals">Exact Match</SelectItem>
+                                                         <SelectItem value="greaterThan">Greater Than</SelectItem>
+                                                         <SelectItem value="lessThan">Less Than</SelectItem>
+                                                       </SelectContent>
+                                                     </Select>
+                                                  </div>
+                                                  <div className="flex flex-col gap-1.5">
+                                                     <Label className="text-[9px] font-bold text-slate-400 uppercase ml-1">Search Term</Label>
+                                                     <div className="relative">
+                                                        <Search className="absolute left-2.5 top-2.5 h-3.5 w-3.5 text-slate-400" />
+                                                        <Input 
+                                                          placeholder="Search value..."
+                                                          className="h-9 text-[11px] font-mono pl-8 bg-slate-50 border-slate-200"
+                                                          defaultValue={filters.find(f => f.field === field)?.value || ''}
+                                                          onChange={(e) => toggleFilter(field, filters.find(f => f.field === field)?.operator || 'contains', e.target.value)}
+                                                        />
+                                                     </div>
+                                                  </div>
+                                               </div>
+                                             </div>
+                                          </PopoverContent>
+                                        </Popover>
+                                      </div>
                                     </div>
+                                    <div
+                                        onMouseDown={(e) => startColumnResize(field, e)}
+                                        className="h-full w-1 cursor-col-resize absolute right-0 top-0 group-hover:bg-indigo-400/30 transition-colors z-20"
+                                      />
                                   </TableHead>
                                 ))}
                                 <TableHead className="w-[60px] min-w-[60px] bg-slate-100 text-[10px] font-black text-center sticky right-0 top-0 z-[110] border-l shadow-[-2px_0_0_rgba(0,0,0,0.05)] uppercase">Actions</TableHead>
