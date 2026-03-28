@@ -93,13 +93,7 @@ export async function GET(req: NextRequest) {
         skip: offset,
       });
 
-      // Add computed fields for spreadsheet display
-      data = data.map(product => ({
-        ...product,
-        ingredients: product.activeIngredients?.map(i => i.name).join("; ") || "",
-        stockCount: product.stock?.reduce((acc, s) => acc + s.addedQuantity, 0) || 0,
-        bulkPricesText: product.bulkPrices?.map(b => `${b.name}(${b.quantity}x @ ₦${b.price})`).join("; ") || "",
-      }));
+      // Computed fields removed - now handled by client browsers to improve performance
     } else if (model === "stock") {
       data = await prisma.stock.findMany({
         include: { product: { select: { id: true, name: true } } },
