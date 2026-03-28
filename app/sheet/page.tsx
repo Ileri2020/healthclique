@@ -1166,9 +1166,9 @@ const Sheet = () => {
                     </div>
                 ) : (
                     <Table className="border-collapse border border-slate-200 bg-white">
-                        <TableHeader className="bg-slate-50/80 sticky top-0 z-20 backdrop-blur-md">
+                        <TableHeader className="bg-slate-50/90 sticky top-0 z-[100] backdrop-blur-md border-b-2 shadow-sm">
                             <TableRow className="border-b shadow-none hover:bg-transparent">
-                                <TableHead className="w-12 text-center text-[10px] font-black border-r sticky left-0 bg-slate-100/90 z-40 shadow-[1px_0_0_rgba(0,0,0,0.1)] backdrop-blur-sm">
+                                <TableHead className="w-12 text-center text-[10px] font-black border-r sticky left-0 top-0 bg-slate-100 z-[110] shadow-[2px_0_0_rgba(0,0,0,0.05)]">
                                   <Checkbox
                                     checked={selectedRows.size > 0 && selectedRows.size === sortedData.length}
                                     onCheckedChange={(checked: boolean) => {
@@ -1180,7 +1180,7 @@ const Sheet = () => {
                                     }}
                                   />
                                 </TableHead>
-                                <TableHead className="w-12 text-center text-[10px] font-black border-r sticky left-12 bg-slate-100/90 z-30 shadow-[1px_0_0_rgba(0,0,0,0.1)] backdrop-blur-sm">#</TableHead>
+                                <TableHead className="w-12 text-center text-[10px] font-black border-r sticky left-12 top-0 bg-slate-100 z-[110] shadow-[2px_0_0_rgba(0,0,0,0.05)] font-mono text-slate-400">#</TableHead>
                                 {(columnOrderByTab[activeTab] || []).map((field) => (
                                   <TableHead
                                     key={field}
@@ -1188,7 +1188,10 @@ const Sheet = () => {
                                     onDragStart={() => onColumnDragStart(field)}
                                     onDragOver={(e: React.DragEvent) => e.preventDefault()}
                                     onDrop={() => onColumnDrop(field)}
-                                    className="text-[10px] font-black uppercase border-r px-4 h-12 relative"
+                                    className={cn(
+                                      "text-[10px] font-black uppercase border-r px-4 h-12 relative bg-slate-50/50",
+                                      field === "name" && "sticky left-[96px] z-[110] bg-slate-100 shadow-[2px_0_0_rgba(0,0,0,0.05)] border-r-2"
+                                    )}
                                     style={{ width: columnWidths[field] ? `${columnWidths[field]}px` : 'auto', minWidth: '80px' }}
                                   >
                                     <div className="flex items-center justify-between gap-1">
@@ -1222,7 +1225,7 @@ const Sheet = () => {
                                             transform: `translateY(${virtualItem.start}px)`,
                                         }}
                                     >
-                                        <TableCell className="text-center border-r sticky left-0 bg-white/95 z-10 group-hover:bg-indigo-50/50 transition-colors shadow-[1px_0_0_rgba(0,0,0,0.05)]">
+                                        <TableCell className="text-center border-r sticky left-0 bg-white z-[40] group-hover:bg-indigo-50/80 transition-colors shadow-[2px_0_0_rgba(0,0,0,0.05)] border-r-indigo-100/50">
                                           <Checkbox
                                             checked={selectedRows.has(item.id)}
                                             onCheckedChange={(checked: boolean) => {
@@ -1238,14 +1241,17 @@ const Sheet = () => {
                                             }}
                                           />
                                         </TableCell>
-                                        <TableCell className="text-[10px] font-mono text-center border-r sticky left-12 bg-white/95 z-10 text-slate-400 group-hover:text-indigo-600 group-hover:bg-indigo-50/50 transition-all shadow-[1px_0_0_rgba(0,0,0,0.05)]">
+                                        <TableCell className="text-[10px] font-mono text-center border-r sticky left-12 bg-white z-[40] text-slate-400 group-hover:text-indigo-600 group-hover:bg-indigo-50/80 transition-all shadow-[2px_0_0_rgba(0,0,0,0.05)] border-r-indigo-100/50">
                                             {String(virtualItem.index + 1).padStart(3, '0')}
                                         </TableCell>
                                         
                                         {(columnOrderByTab[activeTab] || []).map((field) => (
                                           <TableCell
                                             key={`${item.id}-${field}`}
-                                            className="p-0 border-r"
+                                            className={cn(
+                                              "p-0 border-r group-hover:bg-indigo-50/10 transition-colors",
+                                              field === "name" && "sticky left-[96px] bg-white z-[40] group-hover:bg-indigo-50/80 shadow-[2px_0_0_rgba(0,0,0,0.05)] border-r-2 border-r-indigo-100/50"
+                                            )}
                                             style={{ width: columnWidths[field] ? `${columnWidths[field]}px` : 'auto', minWidth: '80px' }}
                                           >
                                             {renderCell(item, field, tabToModel[activeTab])}

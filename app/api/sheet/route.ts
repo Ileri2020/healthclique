@@ -69,11 +69,15 @@ export async function GET(req: NextRequest) {
         brand: { select: { id: true, name: true } },
       };
 
-      const includeClause = details ? {
-        activeIngredients: { select: { id: true, name: true } },
-        stock: { select: { id: true, addedQuantity: true, costPerProduct: true, createdAt: true } },
-        bulkPrices: { select: { id: true, name: true, quantity: true, price: true } },
-      } : {};
+      const productSelect: any = {
+        ...baseSelect,
+      };
+      
+      if (details) {
+        productSelect.activeIngredients = { select: { id: true, name: true } };
+        productSelect.stock = { select: { id: true, addedQuantity: true, costPerProduct: true, createdAt: true } };
+        productSelect.bulkPrices = { select: { id: true, name: true, quantity: true, price: true } };
+      }
 
       const whereClause = search ? {
         name: { contains: search, mode: 'insensitive' as const }
@@ -81,8 +85,7 @@ export async function GET(req: NextRequest) {
 
       data = await prisma.product.findMany({
         where: whereClause,
-        select: baseSelect,
-        include: includeClause,
+        select: productSelect,
         orderBy: { createdAt: 'desc' },
         take: limit,
         skip: offset,
