@@ -690,7 +690,11 @@ const Sheet = () => {
     const csvData = data.map(row => {
       const flatRow: any = { id: row.id };
       (columnOrderByTab[activeTab] || []).forEach(field => {
-        flatRow[columnLabelByField[field] || field] = row[field];
+        let value = row[field];
+        if ((field === 'price' || field === 'bulkPrice') && typeof value === 'number') {
+          value = value.toFixed(3);
+        }
+        flatRow[columnLabelByField[field] || field] = value;
       });
       return flatRow;
     });
@@ -914,6 +918,7 @@ const Sheet = () => {
         return isEditing ? (
           <Input
             type="number"
+            step="0.001"
             id={`cell-${product.id}-price`}
             defaultValue={product.price}
             className="h-8 text-xs font-mono text-right border border-slate-300 focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
@@ -926,7 +931,10 @@ const Sheet = () => {
             autoFocus
           />
         ) : (
-          <div className="cursor-text w-full text-xs font-mono text-right font-black focus:outline-none focus:ring-2 focus:ring-blue-500 px-1" tabIndex={0} onClick={() => setEditingCell({ rowId: product.id, field })}>₦{product.price.toLocaleString()}</div>
+          <div className="group cursor-text w-full text-xs font-mono text-right font-black focus:outline-none focus:ring-2 focus:ring-blue-500 px-1 hover:bg-slate-50 transition-colors" tabIndex={0} onClick={() => setEditingCell({ rowId: product.id, field })}>
+            <span className="text-[9px] text-slate-400 mr-1 uppercase font-black">Base</span>
+            ₦{product.price.toFixed(3)}
+          </div>
         )
 
       case "category":
@@ -1043,6 +1051,7 @@ const Sheet = () => {
         return isEditing ? (
           <Input 
             type="number"
+            step="0.001"
             defaultValue={currentBulk.price}
             onBlur={(e) => {
               const val = parseFloat(e.target.value);
@@ -1053,7 +1062,7 @@ const Sheet = () => {
             autoFocus
           />
         ) : (
-          <div className="w-full text-right text-[10px] font-mono font-bold text-emerald-600" onClick={() => setEditingCell({ rowId: product.id, field })}>₦{currentBulk.price.toLocaleString()}</div>
+          <div className="w-full text-right text-[10px] font-mono font-bold text-emerald-600" onClick={() => setEditingCell({ rowId: product.id, field })}>₦{currentBulk.price.toFixed(3)}</div>
         )
       }
 
