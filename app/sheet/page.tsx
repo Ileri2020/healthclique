@@ -787,8 +787,9 @@ const Sheet = () => {
           Object.entries(row).forEach(([label, value]) => {
             if (label.toLowerCase() === 'id') return;
             
-            // Try to find the field key from label
-            const field = Object.keys(columnLabelByField).find(k => columnLabelByField[k] === label) || label;
+            // Try to find the field key from label, restricted to current tab's columns to avoid conflicts
+            const activeDbFields = columnOrderByTab[activeTab] || [];
+            const field = Object.keys(columnLabelByField).find(k => columnLabelByField[k] === label && activeDbFields.includes(k)) || label;
             
             newChanges[`${tabToModel[activeTab]}-${id}-${field}`] = {
               id,
@@ -874,7 +875,7 @@ const Sheet = () => {
     category: "Category",
     brand: "Brand",
     vendor: "Vendor",
-    price: "Base Price",
+    price: "Cost Price",
     stock: "In Stock",
     numberPcs: "Pack Size",
     form: "Form",
@@ -1040,7 +1041,7 @@ const Sheet = () => {
           />
         ) : (
           <div className="group cursor-text w-full text-xs font-mono text-right font-black focus:outline-none focus:ring-2 focus:ring-blue-500 px-1 hover:bg-slate-50 transition-colors" tabIndex={0} onClick={() => setEditingCell({ rowId: product.id, field })}>
-            <span className="text-[9px] text-slate-400 mr-1 uppercase font-black">Base</span>
+            <span className="text-[9px] text-slate-400 mr-1 uppercase font-black">Cost</span>
             ₦{product.price.toFixed(3)}
           </div>
         )
