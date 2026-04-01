@@ -730,11 +730,26 @@ const Sheet = () => {
       return;
     }
 
-    const csvData = data.map(row => {
+    const csvData = data.map((row: any) => {
       const flatRow: any = { id: row.id };
       (columnOrderByTab[activeTab] || []).forEach(field => {
         let value = row[field];
-        if ((field === 'price' || field === 'bulkPrice') && typeof value === 'number') {
+        if (field === 'vendor') {
+          const defaultVendor = row.vendors?.find((v: any) => v.isDefault);
+          value = defaultVendor ? defaultVendor.vendor?.name : (row.vendors?.[0]?.vendor?.name || '');
+        } else if (field === 'category') {
+          value = row.category?.name || '';
+        } else if (field === 'brand') {
+          value = row.brand?.name || '';
+        } else if (field === 'stock') {
+          value = row.stock?.reduce((acc: number, s: any) => acc + s.addedQuantity, 0) || 0;
+        } else if (field === 'bulkName') {
+          value = row.bulkPrices?.[0]?.name || '';
+        } else if (field === 'bulkQty') {
+          value = row.bulkPrices?.[0]?.quantity || '';
+        } else if (field === 'bulkPrice') {
+          value = typeof row.bulkPrices?.[0]?.price === 'number' ? row.bulkPrices[0].price.toFixed(3) : '';
+        } else if (field === 'price' && typeof value === 'number') {
           value = value.toFixed(3);
         }
         flatRow[columnLabelByField[field] || field] = value;
