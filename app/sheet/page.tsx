@@ -74,8 +74,11 @@ interface Product {
   activeIngredients?: { id: string, name: string }[]
   stock?: { id: string, addedQuantity: number, costPerProduct?: number }[]
   bulkPrices?: { id: string, name: string, quantity: number, price: number }[]
+  vendors?: { id: string, vendor: { id: string, name: string }, costPrice: number, isDefault: boolean }[]
   scarce: boolean
   requiresPrescription: boolean
+  numberPcs?: string
+  form?: string
   createdAt: string
 }
 
@@ -92,6 +95,23 @@ interface Brand {
   name: string
   order: number
   _count?: { products: number }
+}
+
+interface Vendor {
+  id: string
+  name: string
+  address?: string
+  _count?: { products: number }
+}
+
+interface ProductVendor {
+  id: string
+  productId: string
+  vendorId: string
+  costPrice: number
+  isDefault: boolean
+  vendor?: { id: string, name: string }
+  product?: { id: string, name: string }
 }
 
 interface ActiveIngredient {
@@ -136,6 +156,8 @@ const Sheet = () => {
   const [products, setProducts] = useState<Product[]>([])
   const [categories, setCategories] = useState<Category[]>([])
   const [brands, setBrands] = useState<Brand[]>([])
+  const [vendors, setVendors] = useState<Vendor[]>([])
+  const [productVendors, setProductVendors] = useState<ProductVendor[]>([])
   const [ingredients, setIngredients] = useState<ActiveIngredient[]>([])
   const [stocks, setStocks] = useState<Stock[]>([])
   const [bulkPrices, setBulkPrices] = useState<BulkPrice[]>([])
@@ -143,19 +165,24 @@ const Sheet = () => {
   const [editingCell, setEditingCell] = useState<{ rowId: string, field: string } | null>(null)
   const [focusedCell, setFocusedCell] = useState<{ rowId: string, field: string } | null>(null)
   const [columnOrderByTab, setColumnOrderByTab] = useState<Record<string, string[]>>({
-    products: ["name", "category", "brand", "price", "stock", "bulkName", "bulkQty", "bulkPrice", "scarce", "requiresPrescription"],
+    products: ["name", "category", "brand", "vendor", "price", "stock", "numberPcs", "form", "bulkName", "bulkQty", "bulkPrice", "scarce", "requiresPrescription"],
     categories: ["name", "products"],
     brands: ["name", "order", "products"],
+    vendors: ["name", "address", "products"],
     ingredients: ["name", "products"],
     stocks: ["product", "addedQuantity", "costPerProduct", "createdAt"],
-    bulkprices: ["product", "name", "quantity", "price"]
+    bulkprices: ["product", "name", "quantity", "price"],
+    productvendors: ["product", "vendor", "costPrice", "isDefault"]
   })
   const [columnWidths, setColumnWidths] = useState<Record<string, number>>({
     name: 200,
     category: 140,
     brand: 140,
+    vendor: 140,
     price: 100,
     stock: 100,
+    numberPcs: 120,
+    form: 100,
     scarce: 80,
     requiresPrescription: 90,
     bulkName: 140,
@@ -166,6 +193,9 @@ const Sheet = () => {
     product: 140,
     addedQuantity: 100,
     costPerProduct: 120,
+    costPrice: 100,
+    isDefault: 80,
+    address: 200,
     createdAt: 140,
     quantity: 90
   })
@@ -186,6 +216,9 @@ const Sheet = () => {
   const [bulkPriceDialogOpen, setBulkPriceDialogOpen] = useState(false)
   const [selectedProductForBulk, setSelectedProductForBulk] = useState<Product | null>(null)
   const [newBulkPrice, setNewBulkPrice] = useState({ name: '', quantity: 1, price: 0 })
+  const [vendorDialogOpen, setVendorDialogOpen] = useState(false)
+  const [selectedProductForVendor, setSelectedProductForVendor] = useState<Product | null>(null)
+  const [newVendor, setNewVendor] = useState({ name: '', address: '', costPrice: 0 })
   const [pendingChanges, setPendingChanges] = useState<Record<string, { id: string, model: string, field: string, value: any }>>({})
   const tableContainerRef = useRef<HTMLDivElement>(null)
   const fileInputRef = useRef<HTMLInputElement>(null)
@@ -264,22 +297,26 @@ const Sheet = () => {
         products: 'product',
         categories: 'category', 
         brands: 'brand',
+        vendors: 'vendor',
         ingredients: 'activeIngredient',
         stocks: 'stock',
-        bulkprices: 'bulkPrice'
+        bulkprices: 'bulkPrice',
+        productvendors: 'productVendor'
       };
       
       const apiModel = modelMap[activeTab as keyof typeof modelMap];
       res = await axios.get(`/api/sheet?model=${apiModel}&limit=${limit}&offset=${currentPage * limit}&search=${encodeURIComponent(debouncedSearchQuery)}&details=true`, config);
       
       // Handle lookup data fetching for products tab (non-blocking)
-      if (activeTab === 'products' && (categories.length === 0 || brands.length === 0)) {
+      if (activeTab === 'products' && (categories.length === 0 || brands.length === 0 || vendors.length === 0)) {
         Promise.all([
           axios.get('/api/sheet?model=category&limit=500', config),
-          axios.get('/api/sheet?model=brand&limit=500', config)
-        ]).then(([catsRes, brandsRes]) => {
+          axios.get('/api/sheet?model=brand&limit=500', config),
+          axios.get('/api/sheet?model=vendor&limit=500', config)
+        ]).then(([catsRes, brandsRes, vendorsRes]) => {
           setCategories(catsRes.data.data);
           setBrands(brandsRes.data.data);
+          setVendors(vendorsRes.data.data);
         }).catch(err => console.error("Lookup data fetch failed:", err));
       }
       
@@ -297,6 +334,9 @@ const Sheet = () => {
         case 'brands':
           setBrands(data);
           break;
+        case 'vendors':
+          setVendors(data);
+          break;
         case 'ingredients':
           setIngredients(data);
           break;
@@ -305,6 +345,9 @@ const Sheet = () => {
           break;
         case 'bulkprices':
           setBulkPrices(data);
+          break;
+        case 'productvendors':
+          setProductVendors(data);
           break;
       }
       
@@ -758,15 +801,17 @@ const Sheet = () => {
       case 'products': data = products; break;
       case 'categories': data = categories; break;
       case 'brands': data = brands; break;
+      case 'vendors': data = vendors; break;
       case 'ingredients': data = ingredients; break;
       case 'stocks': data = stocks; break;
       case 'bulkprices': data = bulkPrices; break;
+      case 'productvendors': data = productVendors; break;
       default: data = [];
     }
 
     // First apply local filtering
     return applyFiltersToData(data);
-  }, [activeTab, products, categories, brands, ingredients, stocks, bulkPrices, filters]);
+  }, [activeTab, products, categories, brands, vendors, ingredients, stocks, bulkPrices, productVendors, filters]);
 
   const sortedData = useMemo(() => {
     if (!sortConfig) return filteredData;
@@ -802,17 +847,22 @@ const Sheet = () => {
     products: "product",
     categories: "category",
     brands: "brand",
+    vendors: "vendor",
     ingredients: "activeIngredient",
     stocks: "stock",
-    bulkprices: "bulkPrice"
+    bulkprices: "bulkPrice",
+    productvendors: "productVendor"
   };
 
   const columnLabelByField: Record<string, string> = {
     name: "Name",
     category: "Category",
     brand: "Brand",
+    vendor: "Vendor",
     price: "Base Price",
     stock: "In Stock",
+    numberPcs: "Pack Size",
+    form: "Form",
     scarce: "Scarce",
     requiresPrescription: "Rx Req",
     bulkPrices: "Bulk",
@@ -821,6 +871,9 @@ const Sheet = () => {
     product: "Product",
     addedQuantity: "Quantity",
     costPerProduct: "Cost",
+    costPrice: "Cost Price",
+    isDefault: "Default",
+    address: "Address",
     createdAt: "Added Date",
     quantity: "Bulk Qty",
     bulkName: "Bulk Name",
@@ -838,12 +891,51 @@ const Sheet = () => {
     }
   };
 
+  const handleAddVendor = async () => {
+    if (!selectedProductForVendor) return;
+    try {
+      setLoading(true);
+      
+      // First create the vendor
+      const vendorRes = await axios.post("/api/sheet", { 
+        model: "vendor", 
+        data: {
+          name: newVendor.name,
+          address: newVendor.address || null
+        }
+      });
+      
+      const newVendorData = vendorRes.data;
+      
+      // Then create the product-vendor relationship
+      await axios.post("/api/sheet", { 
+        model: "productVendor", 
+        data: {
+          productId: selectedProductForVendor.id,
+          vendorId: newVendorData.id,
+          costPrice: newVendor.costPrice,
+          isDefault: true // Make this the default vendor
+        }
+      });
+      
+      toast.success("Vendor added successfully");
+      setVendorDialogOpen(false);
+      setNewVendor({ name: '', address: '', costPrice: 0 });
+      setSelectedProductForVendor(null);
+      loadData();
+    } catch (err) {
+      toast.error("Failed to add vendor");
+    } finally {
+      setLoading(false);
+    }
+  };
+
   const handleAddBulkPrice = async () => {
     if (!selectedProductForBulk) return;
     try {
       setLoading(true);
-      await axios.post("/api/sheet", { 
-        model: "bulkPrice", 
+      await axios.post("/api/sheet", {
+        model: "bulkPrice",
         data: {
           productId: selectedProductForBulk.id,
           name: newBulkPrice.name,
@@ -851,12 +943,11 @@ const Sheet = () => {
           price: newBulkPrice.price
         }
       });
-      toast.success("Bulk price added");
-      setBulkPriceDialogOpen(false);
+      toast.success("Bulk option added successfully");
       setNewBulkPrice({ name: '', quantity: 1, price: 0 });
       loadData();
     } catch (err) {
-      toast.error("Failed to add bulk price");
+      toast.error("Failed to add bulk option");
     } finally {
       setLoading(false);
     }
@@ -882,9 +973,11 @@ const Sheet = () => {
           {model === "product" && renderProductCell(item as Product, field, isEditing)}
           {model === "category" && renderCategoryCell(item as Category, field, isEditing)}
           {model === "brand" && renderBrandCell(item as Brand, field, isEditing)}
+          {model === "vendor" && renderVendorCell(item as Vendor, field, isEditing)}
           {model === "activeIngredient" && renderActiveIngredientCell(item as ActiveIngredient, field, isEditing)}
           {model === "stock" && renderStockCell(item as Stock, field, isEditing)}
           {model === "bulkPrice" && renderBulkPriceCell(item as BulkPrice, field, isEditing)}
+          {model === "productVendor" && renderProductVendorCell(item as ProductVendor, field, isEditing)}
         </div>
         {validationError && (
           <div className="absolute -bottom-6 left-0 text-[10px] text-destructive bg-white px-1 rounded shadow-sm border">
@@ -985,6 +1078,71 @@ const Sheet = () => {
         return <Badge variant={total > 0 ? "default" : "outline"} className="text-[10px] h-5 font-mono">{total} Units</Badge>
       }
 
+      case "vendor": {
+        const productVendors = product.vendors || [];
+        const defaultVendor = productVendors.find(pv => pv.isDefault);
+        
+        if (productVendors.length === 0) {
+          return (
+            <Select
+              value=""
+              onValueChange={(value: string) => {
+                if (value === "create") {
+                  // Open create vendor dialog
+                  setVendorDialogOpen(true);
+                  setSelectedProductForVendor(product);
+                  return;
+                }
+                // This shouldn't happen for empty vendors
+              }}
+            >
+              <SelectTrigger className="h-7 text-[10px] border-none bg-transparent hover:bg-muted/50 transition-colors">
+                <SelectValue placeholder="Add Vendor" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="create" className="text-[10px] font-black text-indigo-600 bg-indigo-50">+ Create New Vendor</SelectItem>
+              </SelectContent>
+            </Select>
+          );
+        }
+
+        return (
+          <div className="flex items-center gap-1 w-full px-1">
+            <Select 
+              value={defaultVendor?.vendor?.id || productVendors[0]?.vendor?.id || ""}
+              onValueChange={(val) => {
+                if (val === "create") {
+                  setVendorDialogOpen(true);
+                  setSelectedProductForVendor(product);
+                  return;
+                }
+                // Update default vendor
+                const currentDefault = productVendors.find(pv => pv.isDefault);
+                if (currentDefault && currentDefault.vendor?.id !== val) {
+                  updateCell(currentDefault.id, "isDefault", false, "productVendor");
+                }
+                const newDefault = productVendors.find(pv => pv.vendor?.id === val);
+                if (newDefault) {
+                  updateCell(newDefault.id, "isDefault", true, "productVendor");
+                }
+              }}
+            >
+              <SelectTrigger className="h-7 text-[10px] border-none bg-green-50/50 hover:bg-green-100 transition-all font-bold">
+                <SelectValue placeholder="Select Vendor" />
+              </SelectTrigger>
+              <SelectContent>
+                {productVendors.map(pv => (
+                  <SelectItem key={pv.id} value={pv.vendor?.id || pv.id} className="text-[10px] font-bold">
+                    {pv.vendor?.name} - ₦{pv.costPrice.toLocaleString()} {pv.isDefault ? "(Default)" : ""}
+                  </SelectItem>
+                ))}
+                <SelectItem value="create" className="text-[10px] font-black text-indigo-600 bg-indigo-50">+ Create New Vendor</SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
+        );
+      }
+
       case "bulkName": {
         const bulks = product.bulkPrices || [];
         const activeId = activeBulkIds[product.id] || bulks[0]?.id;
@@ -1065,6 +1223,56 @@ const Sheet = () => {
           <div className="w-full text-right text-[10px] font-mono font-bold text-emerald-600" onClick={() => setEditingCell({ rowId: product.id, field })}>₦{currentBulk.price.toFixed(3)}</div>
         )
       }
+
+      case "numberPcs":
+        return isEditing ? (
+          <Input
+            defaultValue={product.numberPcs || ""}
+            id={`cell-${product.id}-numberPcs`}
+            className="h-8 text-xs border border-slate-300 focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+            onBlur={(e: React.FocusEvent<HTMLInputElement>) => {
+                if (e.target.value !== (product.numberPcs || "")) updateCell(product.id, field, e.target.value || null);
+                setEditingCell(null);
+            }}
+            onKeyDown={(e: React.KeyboardEvent) => handleKeyDown(e, product.id, field)}
+            autoFocus
+          />
+        ) : (
+          <div className="cursor-text w-full text-xs focus:outline-none focus:ring-2 focus:ring-blue-500 px-1" tabIndex={0} onClick={() => setEditingCell({ rowId: product.id, field })}>
+            {product.numberPcs || <span className="text-muted-foreground/40 italic">e.g. 60 (capsules)</span>}
+          </div>
+        )
+
+      case "form":
+        return isEditing ? (
+          <Select
+            value={product.form || ""}
+            onValueChange={(value: string) => {
+              updateCell(product.id, field, value || null);
+              setEditingCell(null);
+            }}
+          >
+            <SelectTrigger className="h-7 text-[10px] border border-slate-300 focus:ring-2 focus:ring-blue-500 focus:border-blue-500">
+              <SelectValue placeholder="Select form" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="">None</SelectItem>
+              <SelectItem value="capsule">Capsule</SelectItem>
+              <SelectItem value="liquid">Liquid</SelectItem>
+              <SelectItem value="powder">Powder</SelectItem>
+              <SelectItem value="tablet">Tablet</SelectItem>
+              <SelectItem value="cream">Cream</SelectItem>
+              <SelectItem value="ointment">Ointment</SelectItem>
+              <SelectItem value="syrup">Syrup</SelectItem>
+              <SelectItem value="injection">Injection</SelectItem>
+              <SelectItem value="other">Other</SelectItem>
+            </SelectContent>
+          </Select>
+        ) : (
+          <div className="cursor-text w-full text-xs focus:outline-none focus:ring-2 focus:ring-blue-500 px-1" tabIndex={0} onClick={() => setEditingCell({ rowId: product.id, field })}>
+            {product.form || <span className="text-muted-foreground/40 italic">Select form</span>}
+          </div>
+        )
 
       default: return <div>{(product as any)[field]}</div>
     }
@@ -1193,6 +1401,76 @@ const Sheet = () => {
     }
   }
 
+  const renderVendorCell = (vendor: Vendor, field: string, isEditing: boolean) => {
+    switch (field) {
+      case "name":
+        return isEditing ? (
+          <Input
+            defaultValue={vendor.name}
+            onBlur={(e: React.FocusEvent<HTMLInputElement>) => { updateCell(vendor.id, field, e.target.value, "vendor"); setEditingCell(null); }}
+            autoFocus
+            className="h-8 text-xs"
+          />
+        ) : (
+          <div className="w-full text-xs font-bold" onClick={() => setEditingCell({ rowId: vendor.id, field })}>
+            {vendor.name}
+          </div>
+        )
+      case "address":
+        return isEditing ? (
+          <Input
+            defaultValue={vendor.address || ""}
+            onBlur={(e: React.FocusEvent<HTMLInputElement>) => { updateCell(vendor.id, field, e.target.value || null, "vendor"); setEditingCell(null); }}
+            autoFocus
+            className="h-8 text-xs"
+          />
+        ) : (
+          <div className="w-full text-xs" onClick={() => setEditingCell({ rowId: vendor.id, field })}>
+            {vendor.address || <span className="text-muted-foreground/40 italic">No address</span>}
+          </div>
+        )
+      case "products":
+        return <div className="text-xs font-mono text-center">{vendor._count?.products || 0}</div>
+      default:
+        return <div>{(vendor as any)[field]}</div>
+    }
+  }
+
+  const renderProductVendorCell = (productVendor: ProductVendor, field: string, isEditing: boolean) => {
+    switch (field) {
+      case "product":
+        return <div className="text-xs font-bold text-indigo-600">{productVendor.product?.name || "—"}</div>
+      case "vendor":
+        return <div className="text-xs font-bold text-green-600">{productVendor.vendor?.name || "—"}</div>
+      case "costPrice":
+        return isEditing ? (
+          <Input
+            type="number"
+            step="0.01"
+            defaultValue={productVendor.costPrice}
+            onBlur={(e: React.FocusEvent<HTMLInputElement>) => { updateCell(productVendor.id, field, parseFloat(e.target.value) || 0, "productVendor"); setEditingCell(null); }}
+            autoFocus
+            className="h-8 text-xs text-right"
+          />
+        ) : (
+          <div className="w-full text-xs font-mono text-right font-bold" onClick={() => setEditingCell({ rowId: productVendor.id, field })}>
+            ₦{productVendor.costPrice.toLocaleString()}
+          </div>
+        )
+      case "isDefault":
+        return (
+          <div className="flex justify-center w-full">
+            <Checkbox
+              checked={productVendor.isDefault}
+              onCheckedChange={(checked: boolean) => updateCell(productVendor.id, field, checked, "productVendor")}
+            />
+          </div>
+        )
+      default:
+        return <div>{(productVendor as any)[field]}</div>
+    }
+  }
+
   return (
     <div className="min-h-screen bg-[#f8f9fa] flex flex-col select-none">
       {/* APP BAR */}
@@ -1276,7 +1554,7 @@ const Sheet = () => {
                 <RefreshCcw size={14} className={loading ? "animate-spin" : ""} />
                 Cloud Sync
             </Button>
-            <Button size="sm" onClick={() => createRow(activeTab === "products" ? "product" : activeTab === "categories" ? "category" : activeTab === "brands" ? "brand" : activeTab === "ingredients" ? "activeIngredient" : "product")} className="h-9 gap-2 bg-indigo-600 hover:bg-indigo-700 shadow-lg shadow-indigo-100 uppercase text-[11px] font-bold tracking-wider">
+            <Button size="sm" onClick={() => createRow(activeTab === "products" ? "product" : activeTab === "categories" ? "category" : activeTab === "brands" ? "brand" : activeTab === "vendors" ? "vendor" : activeTab === "ingredients" ? "activeIngredient" : "product")} className="h-9 gap-2 bg-indigo-600 hover:bg-indigo-700 shadow-lg shadow-indigo-100 uppercase text-[11px] font-bold tracking-wider">
                 <Plus size={14} />
                 New Record
             </Button>
@@ -1295,6 +1573,9 @@ const Sheet = () => {
             </TabsTrigger>
             <TabsTrigger value="brands" className="rounded-lg data-[state=active]:bg-indigo-600 data-[state=active]:text-white gap-2 text-xs font-bold px-5">
               <Building size={14} /> Brands
+            </TabsTrigger>
+            <TabsTrigger value="vendors" className="rounded-lg data-[state=active]:bg-indigo-600 data-[state=active]:text-white gap-2 text-xs font-bold px-5">
+              <Users size={14} /> Vendors
             </TabsTrigger>
             <TabsTrigger value="ingredients" className="rounded-lg data-[state=active]:bg-indigo-600 data-[state=active]:text-white gap-2 text-xs font-bold px-5">
               <Pill size={14} /> Ingredients
@@ -1764,6 +2045,75 @@ const Sheet = () => {
               className="h-12 w-full text-[11px] font-black uppercase tracking-[0.2em] rounded-2xl hover:bg-slate-50 border-2"
             >
               Finalize & Exit Manager
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={vendorDialogOpen} onOpenChange={setVendorDialogOpen}>
+        <DialogContent className="sm:max-w-[600px] p-0 gap-0 border-none shadow-2xl rounded-3xl">
+          <DialogHeader className="p-8 pb-4 bg-green-600 text-white rounded-t-3xl">
+            <DialogTitle className="flex items-center gap-3 text-xl font-black uppercase tracking-tight">
+              <div className="h-10 w-10 bg-white/20 rounded-xl flex items-center justify-center backdrop-blur-md">
+                <Users size={20} />
+              </div>
+              Add New Vendor
+            </DialogTitle>
+            <DialogDescription className="text-green-100 font-medium">
+              Creating vendor relationship for <span className="text-white font-bold decoration-white/30 underline underline-offset-4">{selectedProductForVendor?.name}</span>
+            </DialogDescription>
+          </DialogHeader>
+
+          <div className="p-8 bg-slate-50/50">
+            <div className="space-y-6">
+              <div className="space-y-2">
+                <Label className="text-sm font-bold text-slate-700">Vendor Name *</Label>
+                <Input
+                  placeholder="Enter vendor company name"
+                  value={newVendor.name}
+                  onChange={(e) => setNewVendor(prev => ({ ...prev, name: e.target.value }))}
+                  className="h-12 text-sm border-2 border-slate-200 focus:border-green-400 rounded-xl"
+                />
+              </div>
+
+              <div className="space-y-2">
+                <Label className="text-sm font-bold text-slate-700">Address</Label>
+                <Input
+                  placeholder="Vendor address (optional)"
+                  value={newVendor.address}
+                  onChange={(e) => setNewVendor(prev => ({ ...prev, address: e.target.value }))}
+                  className="h-12 text-sm border-2 border-slate-200 focus:border-green-400 rounded-xl"
+                />
+              </div>
+
+              <div className="space-y-2">
+                <Label className="text-sm font-bold text-slate-700">Cost Price (₦) *</Label>
+                <Input
+                  type="number"
+                  step="0.01"
+                  placeholder="Enter cost price from this vendor"
+                  value={newVendor.costPrice || ''}
+                  onChange={(e) => setNewVendor(prev => ({ ...prev, costPrice: parseFloat(e.target.value) || 0 }))}
+                  className="h-12 text-sm border-2 border-slate-200 focus:border-green-400 rounded-xl"
+                />
+              </div>
+            </div>
+          </div>
+
+          <DialogFooter className="p-8 bg-white border-t border-slate-100 rounded-b-3xl gap-3">
+            <Button 
+              variant="outline" 
+              onClick={() => setVendorDialogOpen(false)} 
+              className="h-12 flex-1 text-[11px] font-black uppercase tracking-[0.2em] rounded-2xl hover:bg-slate-50 border-2"
+            >
+              Cancel
+            </Button>
+            <Button 
+              onClick={handleAddVendor}
+              disabled={!newVendor.name || newVendor.costPrice <= 0}
+              className="h-12 flex-1 bg-green-600 hover:bg-green-700 text-[11px] font-black uppercase tracking-[0.2em] rounded-2xl shadow-lg shadow-green-100"
+            >
+              Create Vendor & Link Product
             </Button>
           </DialogFooter>
         </DialogContent>

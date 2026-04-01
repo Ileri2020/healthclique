@@ -24,8 +24,12 @@ export function LoginPopup() {
     if (status === "unauthenticated") {
       const hasPopped = localStorage.getItem("health-clique-login-popped");
       if (!hasPopped) {
-        setIsOpen(true);
-        localStorage.setItem("health-clique-login-popped", "true");
+        const timer = setTimeout(() => {
+          setIsOpen(true);
+          localStorage.setItem("health-clique-login-popped", "true");
+        }, 60000); // 1 minute delay
+
+        return () => clearTimeout(timer);
       }
     }
   }, [status]);

@@ -109,6 +109,9 @@ model Product {
   regulatoryClassification  String?                    @default("OTC") // "Prescription Medicine", "OTC", "Pharmacy Only Medicine", "Controlled Medicine"
   requiresPrescription      Boolean                    @default(false)
   weight                    String? // e.g. "500mg", "10 caps", "100ml"
+  numberPcs                 String? // e.g. "60 (capsules)", "150ml", "12*4"
+  form                      String? // e.g. "capsule", "liquid", "powder", "counting"
+  vendors                   ProductVendor[]
   bulkPrices                BulkPrice[]
   createdAt                 DateTime                   @default(now())
   updatedAt                 DateTime                   @updatedAt
@@ -314,6 +317,32 @@ model Brand {
   version   Int       @default(0)
 
   @@index([order])
+}
+
+model Vendor {
+  id        String            @id @default(auto()) @map("_id") @db.ObjectId
+  name      String            @unique
+  address   String?
+  products  ProductVendor[]
+  createdAt DateTime          @default(now())
+  updatedAt DateTime          @updatedAt
+  version   Int               @default(0)
+}
+
+model ProductVendor {
+  id              String   @id @default(auto()) @map("_id") @db.ObjectId
+  product         Product  @relation(fields: [productId], references: [id])
+  productId       String   @db.ObjectId
+  vendor          Vendor   @relation(fields: [vendorId], references: [id])
+  vendorId        String   @db.ObjectId
+  costPrice       Float    // Cost price from this vendor
+  isDefault       Boolean  @default(false) // Whether this is the default vendor for the product
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  @@unique([productId, vendorId])
+  @@index([productId])
+  @@index([vendorId])
 }
 
 model ActiveIngredient {

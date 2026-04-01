@@ -7,10 +7,12 @@ const modelMap: Record<string, any> = {
   product: prisma.product,
   category: prisma.category,
   brand: prisma.brand,
+  vendor: prisma.vendor,
   activeIngredient: prisma.activeIngredient,
   healthConcern: prisma.healthConcern,
   stock: prisma.stock,
   bulkPrice: prisma.bulkPrice,
+  productVendor: prisma.productVendor,
   user: prisma.user,
 };
 
@@ -64,6 +66,8 @@ export async function GET(req: NextRequest) {
         price: true,
         scarce: true,
         requiresPrescription: true,
+        numberPcs: true,
+        form: true,
         createdAt: true,
         categoryId: true,
         brandId: true,
@@ -79,6 +83,14 @@ export async function GET(req: NextRequest) {
         productSelect.activeIngredients = { select: { id: true, name: true } };
         productSelect.stock = { select: { id: true, addedQuantity: true, costPerProduct: true, createdAt: true } };
         productSelect.bulkPrices = { select: { id: true, name: true, quantity: true, price: true } };
+        productSelect.vendors = { 
+          select: { 
+            id: true, 
+            costPrice: true, 
+            isDefault: true,
+            vendor: { select: { id: true, name: true } }
+          } 
+        };
       }
 
       const whereClause = search ? {
@@ -124,6 +136,38 @@ export async function GET(req: NextRequest) {
       name: { contains: search, mode: 'insensitive' as const }
     } : {};
     const total = await modelMap[model].count({ where: whereClause });
+
+    if (model === 'vendor') {
+      // include product count for vendor row
+      const vendorWithCounts = await prisma.vendor.findMany({
+        take: limit,
+        skip: offset,
+        orderBy: { createdAt: 'desc' },
+        include: { _count: { select: { products: true } } }
+      });
+      return NextResponse.json({ data: vendorWithCounts, total, limit, offset }, {
+        headers: {
+          'Cache-Control': 'private, max-age=30', // Cache for 30 seconds
+        },
+      });
+    }
+
+    if (model === 'productVendor') {
+      const productVendorData = await prisma.productVendor.findMany({
+        take: limit,
+        skip: offset,
+        orderBy: { createdAt: 'desc' },
+        include: {
+          product: { select: { id: true, name: true } },
+          vendor: { select: { id: true, name: true } }
+        }
+      });
+      return NextResponse.json({ data: productVendorData, total, limit, offset }, {
+        headers: {
+          'Cache-Control': 'private, max-age=30',
+        },
+      });
+    }
 
     return NextResponse.json({ data, total, limit, offset }, {
       headers: {

@@ -134,6 +134,34 @@ const Description = () => {
             ₦ {formatPrice(getProductPrice(product, user?.role))}
           </div>
 
+          {/* Product Specifications */}
+          <div className="grid grid-cols-1 gap-4 rounded-2xl bg-muted/30 p-4 sm:grid-cols-2">
+            {product.form && (
+              <div className="flex items-center gap-3">
+                <span className="text-sm font-medium text-muted-foreground">Form:</span>
+                <span className="text-sm font-bold capitalize">{product.form}</span>
+              </div>
+            )}
+            {product.numberPcs && (
+              <div className="flex items-center gap-3">
+                <span className="text-sm font-medium text-muted-foreground">Pack Size:</span>
+                <span className="text-sm font-bold">{product.numberPcs}</span>
+              </div>
+            )}
+            {product.weight && (
+              <div className="flex items-center gap-3">
+                <span className="text-sm font-medium text-muted-foreground">Weight:</span>
+                <span className="text-sm font-bold">{product.weight}</span>
+              </div>
+            )}
+            {product.regulatoryClassification && (
+              <div className="flex items-center gap-3">
+                <span className="text-sm font-medium text-muted-foreground">Classification:</span>
+                <span className="text-sm font-bold">{product.regulatoryClassification}</span>
+              </div>
+            )}
+          </div>
+
           <div className="prose prose-sm max-w-none text-muted-foreground">
             <p className="whitespace-pre-line">{product.description || "No description available."}</p>
           </div>
