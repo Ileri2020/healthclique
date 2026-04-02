@@ -7,13 +7,16 @@ import { ProductCard } from "./productCard";
 import { useCart } from "@/hooks/use-cart";
 import { Skeleton } from "@/components/ui/skeleton";
 import { useIsAdmin } from "@/hooks/useIsAdmin";
-import { Plus, ChevronLeft, ChevronRight } from "lucide-react";
+import { useIsMobile } from "@/hooks/use-mobile";
+import { Plus, ChevronLeft, ChevronRight, LayoutGrid, LayoutList } from "lucide-react";
 import {
   Dialog,
   DialogContent,
   DialogHeader,
   DialogTitle,
   DialogTrigger,
+  DialogDescription,
+  DialogFooter,
 } from "@/components/ui/dialog";
 import ProductForm from "@/prisma/forms/ProductForm";
 
@@ -30,9 +33,12 @@ const Stocks = () => {
   const { addItem } = useCart();
   const [products, setProducts] = useState<any[]>([]);
   const isAdmin = useIsAdmin();
+  const isMobile = useIsMobile();
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [currentPage, setCurrentPage] = useState(1);
+  const [cardOrientation, setCardOrientation] = useState<"horizontal" | "vertical">("horizontal");
+  const [showOrientationPopup, setShowOrientationPopup] = useState(false);
 
   const fetchProducts = useCallback(async () => {
     setLoading(true);
@@ -77,6 +83,34 @@ const Stocks = () => {
   useEffect(() => {
     fetchProducts();
   }, [fetchProducts]);
+
+  // Load card orientation from localStorage
+  useEffect(() => {
+    const saved = localStorage.getItem('store-card-orientation');
+    if (saved === 'vertical' || saved === 'horizontal') {
+      setCardOrientation(saved);
+    }
+  }, []);
+
+  // Show orientation popup for first-time mobile visitors
+  useEffect(() => {
+    if (isMobile) {
+      const hasSeenPopup = localStorage.getItem('store-orientation-popup-seen');
+      if (!hasSeenPopup) {
+        const timer = setTimeout(() => {
+          setShowOrientationPopup(true);
+          localStorage.setItem('store-orientation-popup-seen', 'true');
+        }, 10000); // 10 seconds
+        return () => clearTimeout(timer);
+      }
+    }
+  }, [isMobile]);
+
+  const toggleOrientation = () => {
+    const newOrientation = cardOrientation === 'horizontal' ? 'vertical' : 'horizontal';
+    setCardOrientation(newOrientation);
+    localStorage.setItem('store-card-orientation', newOrientation);
+  };
 
   const handleAddToWishlist = (productId: string) => {
     alert(`Adding product ${productId} to wishlist`);
@@ -141,14 +175,27 @@ const Stocks = () => {
         </div>
       )}
 
+      {/* 📱 Mobile Card Orientation Toggle */}
+      {isMobile && (
+        <div className="fixed bottom-6 right-6 z-50">
+          <Button
+            size="lg"
+            onClick={toggleOrientation}
+            className="gap-2 bg-primary hover:bg-primary/90 shadow-xl rounded-full px-4 py-3 font-semibold text-sm"
+            title={`Switch to ${cardOrientation === 'horizontal' ? 'vertical' : 'horizontal'} layout`}
+          >
+            {cardOrientation === 'horizontal' ? <LayoutList className="h-5 w-5" /> : <LayoutGrid className="h-5 w-5" />}
+          </Button>
+        </div>
+      )}
+
       {currentItems.length > 0 ? (
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6 px-4 max-w-7xl w-full">
           {currentItems.map((product) => (
             <ProductCard
               key={product.id}
               className="w-full group"
-              orientation="horizontal"   // mobile: show as horizontal card
-              // md+ the card's internal flex already adapts via md:flex-col class
+              orientation={cardOrientation}
               product={{ 
                 ...product, 
                 inStock: true, 
@@ -217,6 +264,29 @@ const Stocks = () => {
           </Button>
         </div>
       )}
+
+      {/* Mobile Orientation Popup */}
+      <Dialog open={showOrientationPopup} onOpenChange={setShowOrientationPopup}>
+        <DialogContent className="max-w-sm">
+          <DialogHeader>
+            <DialogTitle>Customize Your View</DialogTitle>
+            <DialogDescription>
+              Try switching between horizontal and vertical product card layouts to see which one you prefer!
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter className="flex gap-2">
+            <Button variant="outline" onClick={() => setShowOrientationPopup(false)}>
+              Maybe Later
+            </Button>
+            <Button onClick={() => {
+              setShowOrientationPopup(false);
+              toggleOrientation();
+            }}>
+              Try It Now
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 };

@@ -15,13 +15,13 @@
  */
 
 export const PRICE_MARKUPS = {
-    customer: 1.3,
+    customer: 1.35,
     professional: 1.2,
     wholesaler: 1.1,
     admin: 1.1,
     staff: 1.1,
-    visitor: 1.3,
-    user: 1.3,
+    visitor: 1.35,
+    user: 1.35,
 } as const;
 
 /** Round a price UP to the nearest 5 NGN. e.g. 25472.8 → 25475 */

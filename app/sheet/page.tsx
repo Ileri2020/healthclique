@@ -1594,7 +1594,7 @@ const Sheet = () => {
               <Users size={14} /> Vendors
             </TabsTrigger>
             <TabsTrigger value="ingredients" className="rounded-lg data-[state=active]:bg-indigo-600 data-[state=active]:text-white gap-2 text-xs font-bold px-5">
-              <Pill size={14} /> Ingredients
+              <Pill size={14} /> Active Ingredients
             </TabsTrigger>
             <TabsTrigger value="stocks" className="rounded-lg data-[state=active]:bg-indigo-600 data-[state=active]:text-white gap-2 text-xs font-bold px-5">
               <TrendingUp size={14} /> Inventory

@@ -44,6 +44,7 @@ model User {
   acceptedTerms             Boolean                    @default(false)
   acceptedPrivacy           Boolean                    @default(false)
   acceptedReturns           Boolean                    @default(false)
+  affiliate                 Affiliate?
 }
 
 model Post {
@@ -169,6 +170,7 @@ model Cart {
   pharmacistSummary String?
   couponCode        String?
   discountAmount    Float?     @default(0)
+  affiliateId       String?
   createdAt         DateTime   @default(now())
   updatedAt         DateTime   @updatedAt
 }
@@ -370,6 +372,46 @@ model Visit {
   ip        String?
   browserId String?
   createdAt DateTime @default(now())
+}
+
+model Affiliate {
+  id          String   @id @default(auto()) @map("_id") @db.ObjectId
+  user        User     @relation(fields: [userId], references: [id])
+  userId      String   @db.ObjectId @unique
+  affiliateId String   @unique
+  name        String   @unique
+  earnings    Float    @default(0.0)
+  referrals   AffiliateReferral[]
+  payouts     AffiliatePayout[]
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+}
+
+model AffiliateReferral {
+  id                   String   @id @default(auto()) @map("_id") @db.ObjectId
+  affiliate            Affiliate @relation(fields: [affiliateIdFk], references: [id])
+  affiliateIdFk        String   @db.ObjectId
+  referredUserId       String?  @db.ObjectId
+  cartId               String?  @db.ObjectId
+  orderId              String
+  totalAmount          Float
+  affiliateCommission  Float
+  referredBonus        Float
+  status               String   @default("pending") // pending / paid
+  createdAt            DateTime @default(now())
+  updatedAt            DateTime @updatedAt
+}
+
+model AffiliatePayout {
+  id          String   @id @default(auto()) @map("_id") @db.ObjectId
+  affiliate   Affiliate @relation(fields: [affiliateIdFk], references: [id])
+  affiliateIdFk String   @db.ObjectId
+  amount      Float
+  status      String   @default("requested") // requested / paid / cancelled
+  requestedAt DateTime @default(now())
+  paidAt      DateTime?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
 }
 
 model Advertext {

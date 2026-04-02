@@ -201,6 +201,15 @@ export async function GET(req: Request) {
       value: u._count.role
     }));
 
+    /* ================= UNIQUE BROWSERS COUNT ================= */
+    const uniqueBrowsers = await prisma.visit.findMany({
+      where: { createdAt: { gte: from, lte: to } },
+      select: { browserId: true },
+      distinct: ['browserId']
+    });
+
+    const totalUniqueBrowsers = uniqueBrowsers.length;
+
     return NextResponse.json({
       revenue: totalRevenue,
       profit: totalProfit,
@@ -213,6 +222,7 @@ export async function GET(req: Request) {
       refunds,
       postsByCategory,
       userRoles,
+      uniqueBrowsers: totalUniqueBrowsers,
       kpis: {
         totalRevenue,
         totalOrders: ordersCount,
@@ -224,7 +234,8 @@ export async function GET(req: Request) {
         totalPosts,
         newPosts,
         totalBrands,
-        totalVisits
+        totalVisits,
+        totalUniqueBrowsers
       }
     });
   } catch (error) {

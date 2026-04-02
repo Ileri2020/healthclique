@@ -24,6 +24,7 @@ import { NotificationBell } from "../myComponents/subs/NotificationUI";
 import { useSession } from "next-auth/react";
 import { useAppContext } from "@/hooks/useAppContext";
 import { useEffect } from "react";
+import { initializeAffiliateTracking } from "@/lib/affiliate-tracking";
 
 const Navbar = (): JSX.Element => {
   const { setUser, user } = useAppContext();
@@ -36,6 +37,7 @@ const Navbar = (): JSX.Element => {
         avatarUrl: session.user.image,
       });
     }
+    initializeAffiliateTracking();
   }, [status, session, user.email, setUser]);
 
   return (

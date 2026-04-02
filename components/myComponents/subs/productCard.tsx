@@ -10,10 +10,11 @@ import { cn } from "@/lib/utils";
 import { getProductPrice, isProductInStock, PRICE_MARKUPS, formatPrice } from "@/lib/stock-pricing";
 import Link from "next/link";
 import * as React from "react";
-import { MessageCircle, ShoppingCart, Heart, Star, Edit3, Trash2, Eye, FileText } from "lucide-react";
+import { MessageCircle, ShoppingCart, Heart, Star, Edit3, Trash2, Eye, FileText, Link } from "lucide-react";
 import { InlinePriceFeedback } from "@/components/myComponents/subs/priceFeedback";
 import { useAppContext } from "@/hooks/useAppContext";
 import { useIsAdmin } from "@/hooks/useIsAdmin";
+import { toast } from "sonner";
 import {
   Dialog,
   DialogContent,
@@ -32,7 +33,6 @@ import {
 } from "@/components/ui/sheet";
 import ProductForm from "@/prisma/forms/ProductForm";
 import axios from "axios";
-import { toast } from "sonner";
 
 type ProductCardProps = Omit<
   React.HTMLAttributes<HTMLDivElement>,
@@ -59,6 +59,8 @@ export function ProductCard({
   const [isHovered, setIsHovered] = React.useState(false);
   const [isAddingToCart, setIsAddingToCart] = React.useState(false);
   const [isInWishlist, setIsInWishlist] = React.useState(false);
+  const [isAffiliate, setIsAffiliate] = React.useState(false);
+  const [affiliateData, setAffiliateData] = React.useState<any>(null);
 
   React.useEffect(() => {
     if (product?.id) {
@@ -70,6 +72,17 @@ export function ProductCard({
         .catch(() => { });
     }
   }, [product?.id]);
+
+  React.useEffect(() => {
+    // Check if user is an affiliate
+    fetch("/api/affiliate")
+      .then((res) => res.json())
+      .then((data) => {
+        setIsAffiliate(data.isAffiliate);
+        setAffiliateData(data.affiliate);
+      })
+      .catch(() => {});
+  }, []);
 
   const handleAddToCart = (e: React.MouseEvent) => {
     e.preventDefault();
@@ -96,6 +109,21 @@ export function ProductCard({
       }
     } catch (err) {
       setIsInWishlist(startState);
+    }
+  };
+
+  const handleCopyAffiliateLink = async (e: React.MouseEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    if (!affiliateData) return;
+
+    const baseUrl = process.env.NEXT_PUBLIC_ORIGIN_URL || window.location.origin;
+    const affiliateLink = `${baseUrl}/product/${product.id}?affiliate=${affiliateData.affiliateId}`;
+    try {
+      await navigator.clipboard.writeText(affiliateLink);
+      toast.success("Affiliate link copied to clipboard!");
+    } catch (err) {
+      toast.error("Failed to copy link");
     }
   };
 
@@ -368,39 +396,81 @@ export function ProductCard({
 
             {variant === "default" && (
               <CardFooter className="p-4 pt-0">
-                <Button
-                  className={cn(
-                    "w-full gap-2 transition-all",
-                    isAddingToCart && "opacity-70",
-                    isControlled && "bg-accent hover:bg-accent/90"
-                  )}
-                  disabled={isAddingToCart}
-                  onClick={(e) => {
-                    if (isControlled) {
-                      e.preventDefault();
-                      e.stopPropagation();
-                      window.open(speakToRepUrl, "_blank");
-                    } else {
-                      handleAddToCart(e);
-                    }
-                  }}
-                >
-                  {isControlled ? (
-                    <>
-                      <MessageCircle className="h-4 w-4" />
-                      Speak to Rep
-                    </>
-                  ) : (
-                    <>
-                      {isAddingToCart ? (
-                        <div className="h-4 w-4 animate-spin rounded-full border-2 border-background border-t-transparent" />
+                {isAffiliate ? (
+                  <div className="w-full flex gap-2">
+                    <Button
+                      className="flex-1 gap-2 transition-all"
+                      disabled={isAddingToCart}
+                      onClick={(e) => {
+                        if (isControlled) {
+                          e.preventDefault();
+                          e.stopPropagation();
+                          window.open(speakToRepUrl, "_blank");
+                        } else {
+                          handleAddToCart(e);
+                        }
+                      }}
+                    >
+                      {isControlled ? (
+                        <>
+                          <MessageCircle className="h-4 w-4" />
+                          Speak to Rep
+                        </>
                       ) : (
-                        <ShoppingCart className="h-4 w-4" />
+                        <>
+                          {isAddingToCart ? (
+                            <div className="h-4 w-4 animate-spin rounded-full border-2 border-background border-t-transparent" />
+                          ) : (
+                            <ShoppingCart className="h-4 w-4" />
+                          )}
+                          Add to Cart
+                        </>
                       )}
-                      Add to Cart
-                    </>
-                  )}
-                </Button>
+                    </Button>
+                    <Button
+                      variant="outline"
+                      className="gap-2"
+                      onClick={handleCopyAffiliateLink}
+                      title="Copy affiliate link"
+                    >
+                      <Link className="h-4 w-4" />
+                    </Button>
+                  </div>
+                ) : (
+                  <Button
+                    className={cn(
+                      "w-full gap-2 transition-all",
+                      isAddingToCart && "opacity-70",
+                      isControlled && "bg-accent hover:bg-accent/90"
+                    )}
+                    disabled={isAddingToCart}
+                    onClick={(e) => {
+                      if (isControlled) {
+                        e.preventDefault();
+                        e.stopPropagation();
+                        window.open(speakToRepUrl, "_blank");
+                      } else {
+                        handleAddToCart(e);
+                      }
+                    }}
+                  >
+                    {isControlled ? (
+                      <>
+                        <MessageCircle className="h-4 w-4" />
+                        Speak to Rep
+                      </>
+                    ) : (
+                      <>
+                        {isAddingToCart ? (
+                          <div className="h-4 w-4 animate-spin rounded-full border-2 border-background border-t-transparent" />
+                        ) : (
+                          <ShoppingCart className="h-4 w-4" />
+                        )}
+                        Add to Cart
+                      </>
+                    )}
+                  </Button>
+                )}
               </CardFooter>
             )}
 

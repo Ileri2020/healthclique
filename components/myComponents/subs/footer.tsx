@@ -1,10 +1,11 @@
 "use client";
 import React from "react";
-import { Facebook, Instagram, Linkedin, Twitter } from "lucide-react";
+import { Facebook, Instagram, Linkedin, Twitter, Users } from "lucide-react";
 import Link from "next/link";
 import { SEO_CONFIG } from "../../../app/layout";
 import { cn } from "@/lib/utils"
 import { Button } from "@/components/ui/button";
+import { AffiliateDialog } from "./AffiliateDialog";
 
 export function Footer({ className }: { className?: string }) {
   const [categories, setCategories] = React.useState<{ id: string, name: string }[]>([]);
@@ -83,7 +84,7 @@ export function Footer({ className }: { className?: string }) {
   
   
   return (
-    <footer className={cn("border-t bg-slate-900 text-slate-200 font-sans", className)}>
+    <footer className={cn("border-t bg-background text-foreground font-sans", className)}>
       <div
         className={`container mx-auto max-w-7xl px-4 py-12 sm:px-6 lg:px-8 `}
       >
@@ -98,13 +99,13 @@ export function Footer({ className }: { className?: string }) {
               {SEO_CONFIG.name}
             </span>
           </Link>
-          <p className="text-sm text-slate-400 max-w-sm font-medium">
+          <p className="text-sm text-muted-foreground max-w-sm font-medium">
             Professional pharmaceuticals and healthcare specialties delivered with excellence.
           </p>
 
           <div className="flex space-x-4">
              <Button
-                className="h-9 w-9 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-600"
+                className="h-9 w-9 rounded-xl bg-secondary hover:bg-secondary/80 text-secondary-foreground"
                 size="icon"
                 variant="ghost"
                 asChild
@@ -114,7 +115,7 @@ export function Footer({ className }: { className?: string }) {
                 </Link>
               </Button>
               <Button
-                className="h-9 w-9 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-600"
+                className="h-9 w-9 rounded-xl bg-secondary hover:bg-secondary/80 text-secondary-foreground"
                 size="icon"
                 variant="ghost"
                 asChild
@@ -123,6 +124,17 @@ export function Footer({ className }: { className?: string }) {
                   <Facebook className="h-5 w-5" />
                 </Link>
               </Button>
+          </div>
+
+          <div className="pt-4">
+            <AffiliateDialog
+              trigger={
+                <Button variant="outline" size="sm" className="gap-2 bg-primary/10 hover:bg-primary/20 border-primary/20">
+                  <Users className="h-4 w-4" />
+                  Become an Affiliate
+                </Button>
+              }
+            />
           </div>
         </div>
 

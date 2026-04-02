@@ -13,11 +13,12 @@ import { Loader2, RefreshCcw, ShoppingCart, Plus, Search, ArrowLeftRight, Shield
 import React, { useEffect, useState } from "react";
 import MonnifyPaymentButton from "@/components/payment/monnify";
 // Check if Flutterwave hook exists
-// import FlutterWaveButtonHook from "../../payment/flutterwavehook"; 
+// import FlutterWaveButtonHook from "../../payment/flutterwavehook";
 import { useAppContext } from "@/hooks/useAppContext";
 import { motion, AnimatePresence } from "framer-motion";
 import Link from "next/link";
 import { useCart } from "@/hooks/use-cart";
+import { getStoredAffiliateReferral } from "@/lib/affiliate-tracking";
 import { toast } from "sonner";
 
 interface CartDetailsProps {
@@ -178,7 +179,7 @@ export function CartDetails({ cartId, onPaymentSuccess }: CartDetailsProps) {
            // 1. Deduct from wallet
            const newBalance = user.walletBalance - totalAmount;
            await axios.put(`/api/dbhandler?model=user&id=${user.id}`, { walletBalance: newBalance });
-           
+
            // 2. Mark cart as paid
            await axios.put(`/api/dbhandler?model=cart&id=${cart.id}`, {
                status: "paid",
@@ -186,10 +187,28 @@ export function CartDetails({ cartId, onPaymentSuccess }: CartDetailsProps) {
                deliveryFee: deliveryFee
            });
 
-           // 3. Update local state
+           // 3. Check for affiliate referral and credit commission
+           const affiliateReferral = getStoredAffiliateReferral();
+           if (affiliateReferral) {
+               try {
+                   const commissionResponse = await axios.post('/api/affiliate/commission', {
+                       affiliateId: affiliateReferral.affiliateId,
+                       amount: totalAmount,
+                       orderId: cart.id,
+                   });
+                   if (commissionResponse.data.success) {
+                       toast.success(`Affiliate commission credited: ₦${commissionResponse.data.commission.toFixed(2)}`);
+                   }
+               } catch (commissionError) {
+                   console.error('Failed to credit affiliate commission:', commissionError);
+                   // Don't show error toast to user as payment was successful
+               }
+           }
+
+           // 4. Update local state
            setCart(prev => prev ? ({ ...prev, status: "paid" }) : null);
            toast.success("Order paid successfully via Health Wallet!");
-           
+
            if (onPaymentSuccess) onPaymentSuccess();
         } catch (err) {
            console.error("Wallet payment failed", err);
@@ -688,6 +707,26 @@ export function CartDetails({ cartId, onPaymentSuccess }: CartDetailsProps) {
                                                      },
                                                  });
                                                  setCart({ ...cart, status: 'paid' });
+
+                                                 // Check for affiliate referral and credit commission
+                                                 const affiliateReferral = getStoredAffiliateReferral();
+                                                 if (affiliateReferral) {
+                                                     try {
+                                                         const commissionResponse = await axios.post('/api/affiliate/commission', {
+                                                             affiliateId: affiliateReferral.affiliateId,
+                                                             amount: totalAmount,
+                                                             orderId: cart.id,
+                                                             cartId: cart.id,
+                                                         });
+                                                         if (commissionResponse.data.success) {
+                                                             toast.success(`Affiliate commission credited: ₦${commissionResponse.data.commission.toFixed(2)}`);
+                                                         }
+                                                     } catch (commissionError) {
+                                                         console.error('Failed to credit affiliate commission:', commissionError);
+                                                         // Don't show error toast to user as payment was successful
+                                                     }
+                                                 }
+
                                                  onPaymentSuccess?.();
                                              } catch (error) {
                                                  console.error('Failed to mark cart paid after Monnify success', error);

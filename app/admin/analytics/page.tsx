@@ -2,6 +2,7 @@
 
 import { KpiSection } from "@/components/analytics/KpiSection";
 import { ChartCard } from "@/components/analytics/cards/ChartCard";
+import { BrowserVisitCard } from "@/components/analytics/cards/BrowserVisitCard";
 import { RevenueChart } from "@/components/analytics/charts/RevenueChart";
 import { CartStatusChart } from "@/components/analytics/charts/CartStatusChart";
 import { TopProductsChart } from "@/components/analytics/charts/TopProductsChart";
@@ -170,7 +171,7 @@ export default function AnalyticsDashboard() {
           </div>
 
           {/* Additional Charts */}
-          <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
+          <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-5">
             <ChartCard title="New Users (Period)" className="col-span-2">
               <div className="flex flex-col items-center justify-center h-48">
                 <span className="text-4xl font-bold text-primary">
@@ -193,6 +194,10 @@ export default function AnalyticsDashboard() {
                 </span>
               </div>
             </ChartCard>
+            <BrowserVisitCard
+              uniqueBrowsers={data?.kpis?.totalUniqueBrowsers ?? 0}
+              isLoading={isLoading}
+            />
             <ChartCard title="Brands" className="col-span-2">
               <div className="flex flex-col items-center justify-center h-48">
                 <span className="text-4xl font-bold text-primary">

@@ -13,7 +13,8 @@ import {
   LayoutList,
   MapPin,
   AlertCircle,
-  Ticket
+  Ticket,
+  Users
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Button } from '@/components/ui/button';
@@ -48,9 +49,11 @@ import { toast } from 'sonner';
 import MonnifyPaymentButton from '../../payment/monnify';
 import { ManualTransfer } from "../../payment/manual";
 import { AddressEdit } from "./AddressEdit";
+import { AffiliateDialog } from "./AffiliateDialog";
 import Login from "./login";
 import Signup from "./signup";
 import { TermsAgreements } from './TermsAgreements';
+import { getStoredAffiliateReferral } from '@/lib/affiliate-tracking';
 
 type CartClientProps = {
   className?: string;
@@ -206,7 +209,8 @@ export function CartClient({ className, cart: _unusedCart }: CartClientProps) {
         deliveryAddressId: selectedAddressId,
         forcedAmount,
         couponCode: appliedCoupon?.code || null,
-        discountAmount: discountAmountRounded
+        discountAmount: discountAmountRounded,
+        affiliateId: getStoredAffiliateReferral()?.affiliateId || null
       };
 
       const res = await axios.post('/api/payment', payload);
@@ -562,6 +566,14 @@ export function CartClient({ className, cart: _unusedCart }: CartClientProps) {
 
       {/* 4. Footer Links (Fixed at bottom) */}
       <div className="p-6 pt-2 space-y-3 bg-background border-t shrink-0 shadow-inner text-center z-20">
+        <AffiliateDialog
+          trigger={
+            <Button variant="outline" size="sm" className="w-full gap-2">
+              <Users className="h-4 w-4" />
+              Affiliate Program
+            </Button>
+          }
+        />
         <Link href="/cart" onClick={() => setIsOpen(false)} className="inline-block w-full">
           <Button className="w-full h-11 rounded-xl font-black" variant="secondary">
              VIEW ALL SAVED CARTS
@@ -643,7 +655,35 @@ export function CartClient({ className, cart: _unusedCart }: CartClientProps) {
               amount={checkoutData.amount}
               email={user.email}
               name={user.name || 'User'}
-              onSuccess={() => { clearCart(); setCheckoutData(null); setIsOpen(false); window.location.reload(); }}
+              onSuccess={async () => {
+                try {
+                  // Check for affiliate referral and credit commission
+                  const affiliateReferral = getStoredAffiliateReferral();
+                  if (affiliateReferral) {
+                    try {
+                      const commissionResponse = await axios.post('/api/affiliate/commission', {
+                        affiliateId: affiliateReferral.affiliateId,
+                        amount: checkoutData.amount,
+                        orderId: checkoutData.cartId,
+                        cartId: checkoutData.cartId,
+                      });
+                      if (commissionResponse.data.success) {
+                        toast.success(`Affiliate commission credited: ₦${commissionResponse.data.commission.toFixed(2)}`);
+                      }
+                    } catch (commissionError) {
+                      console.error('Failed to credit affiliate commission:', commissionError);
+                      // Don't show error toast to user as payment was successful
+                    }
+                  }
+                } catch (error) {
+                  console.error('Error in payment success handler:', error);
+                }
+
+                clearCart();
+                setCheckoutData(null);
+                setIsOpen(false);
+                window.location.reload();
+              }}
               ref={monnifyRef}
               reference={checkoutData.tx_ref}
             />

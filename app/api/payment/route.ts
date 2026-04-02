@@ -127,6 +127,52 @@ export async function POST(req: NextRequest) {
             data: { method: method || "online" }
           });
 
+          // Check for affiliate referral and credit commission
+          if (payment.cart.affiliateId) {
+            try {
+              const affiliate = await prisma.affiliate.findUnique({
+                where: { affiliateId: payment.cart.affiliateId },
+              });
+
+              if (affiliate) {
+                const ownerCommission = payment.cart.total * 0.035;
+                const userBonus = payment.cart.total * 0.015;
+
+                await prisma.affiliate.update({
+                  where: { id: affiliate.id },
+                  data: { earnings: { increment: ownerCommission } },
+                });
+
+                await prisma.user.update({
+                  where: { id: affiliate.userId },
+                  data: { walletBalance: { increment: ownerCommission } },
+                });
+
+                await prisma.affiliateReferral.create({
+                  data: {
+                    affiliateIdFk: affiliate.id,
+                    referredUserId: payment.cart.user?.id || null,
+                    cartId: payment.cart.id,
+                    orderId: payment.cart.id,
+                    totalAmount: payment.cart.total,
+                    affiliateCommission: ownerCommission,
+                    referredBonus: userBonus,
+                    status: 'paid',
+                  },
+                });
+
+                await prisma.user.update({
+                  where: { id: payment.cart.user.id },
+                  data: { walletBalance: { increment: userBonus } },
+                });
+
+                console.log(`Affiliate commission credited: ₦${ownerCommission} to ${affiliate.affiliateId}, bonus ₦${userBonus} to buyer`);
+              }
+            } catch (commissionError) {
+              console.error('Error crediting affiliate commission:', commissionError);
+            }
+          }
+
           // Send confirmation email to user
           if (payment.cart.user?.email) {
             await sendPaymentConfirmationEmail(payment.cart.user.email, {
@@ -148,7 +194,7 @@ export async function POST(req: NextRequest) {
     }
 
     // ---------------- INITIATE CHECKOUT ----------------
-    const { userId, items, cartId, deliveryFee = 0, deliveryAddressId, couponCode, discountAmount = 0 } = body;
+    const { userId, items, cartId, deliveryFee = 0, deliveryAddressId, couponCode, discountAmount = 0, affiliateId } = body;
 
     if (!userId || !items?.length) {
       return NextResponse.json({ error: "Invalid payload" }, { status: 400 });
@@ -205,6 +251,7 @@ export async function POST(req: NextRequest) {
           status: body.status || "pending",
           couponCode: couponCode || null,
           discountAmount: discAmountRounded,
+          affiliateId: affiliateId || null,
           products: {
             create: items.map((i: any) => ({
               productId: i.productId,
@@ -228,6 +275,7 @@ export async function POST(req: NextRequest) {
           status: body.status || "pending",
           couponCode: couponCode || null,
           discountAmount: discAmountRounded,
+          affiliateId: affiliateId || null,
           products: {
             create: items.map((i: any) => ({
               productId: i.productId,

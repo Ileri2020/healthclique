@@ -1,4 +1,5 @@
 "use client"
+import React, { useEffect, useState } from "react"
 import { motion } from "framer-motion"
 import { Signup } from "@/components/myComponents/subs"
 import EditUser from "@/components/myComponents/subs/useredit"
@@ -7,6 +8,7 @@ const Login = dynamic(() => import('@/components/myComponents/subs').then((e) =>
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
 import { Separator } from "@/components/ui/separator"
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog"
 import { useAppContext } from "@/hooks/useAppContext"
 import { ProfileImg } from "@/components/myComponents/subs/fileupload"
 import { signOut } from "next-auth/react"
@@ -17,6 +19,7 @@ import { toast } from "sonner"
 import { AccountUpgrade } from "@/components/myComponents/subs/AccountUpgrade"
 import { AdminUserManager } from "@/components/myComponents/subs/AdminUserManager"
 import { AdminBulkManager } from "@/components/myComponents/subs/AdminBulkManager"
+import { AffiliateDialog } from "@/components/myComponents/subs/AffiliateDialog"
 import {
   User,
   Mail,
@@ -34,11 +37,105 @@ import {
   AlertCircle,
   CreditCard,
   Plus,
-  Database
+  Database,
+  LayoutGrid,
+  LayoutList,
+  Users,
+  Copy
 } from "lucide-react"
 
 const Account = () => {
   const { user, setUser } = useAppContext()
+  const [cardOrientation, setCardOrientation] = useState<"horizontal" | "vertical">("horizontal");
+  const [isAffiliate, setIsAffiliate] = useState(false);
+  const [affiliateData, setAffiliateData] = useState<any>(null);
+  const [referrals, setReferrals] = useState<any[]>([]);
+  const [payouts, setPayouts] = useState<any[]>([]);
+  const [showAffiliateLinkDialog, setShowAffiliateLinkDialog] = useState(false);
+  const [affiliateLinkInput, setAffiliateLinkInput] = useState("");
+
+  const appUrl = process.env.NEXT_PUBLIC_APP_URL || "https://localhost:3000";
+
+  useEffect(() => {
+    const saved = localStorage.getItem('store-card-orientation');
+    if (saved === 'vertical' || saved === 'horizontal') {
+      setCardOrientation(saved);
+    }
+  }, []);
+
+  useEffect(() => {
+    fetch("/api/affiliate")
+      .then((res) => res.json())
+      .then((data) => {
+        setIsAffiliate(data.isAffiliate);
+        setAffiliateData(data.affiliate);
+        if (!data.isAffiliate) {
+          setShowAffiliateLinkDialog(true);
+        }
+      })
+      .catch(() => {});
+  }, []);
+
+  useEffect(() => {
+    if (!isAffiliate) return;
+
+    const fetchReferrals = async () => {
+      const res = await fetch('/api/affiliate/referrals');
+      const resp = await res.json();
+      if (res.ok) setReferrals(resp.referrals || []);
+    };
+
+    const fetchPayouts = async () => {
+      const res = await fetch('/api/affiliate/payouts');
+      const resp = await res.json();
+      if (res.ok) setPayouts(resp.payouts || []);
+    };
+
+    fetchReferrals();
+    fetchPayouts();
+  }, [isAffiliate]);
+
+  const toggleOrientation = () => {
+    const newOrientation = cardOrientation === 'horizontal' ? 'vertical' : 'horizontal';
+    setCardOrientation(newOrientation);
+    localStorage.setItem('store-card-orientation', newOrientation);
+  };
+
+  const copyAffiliateId = async () => {
+    if (affiliateData?.affiliateId) {
+      try {
+        await navigator.clipboard.writeText(affiliateData.affiliateId);
+        toast.success("Affiliate ID copied to clipboard!");
+      } catch (err) {
+        toast.error("Failed to copy affiliate ID");
+      }
+    }
+  };
+
+  const copyAffiliateLink = async () => {
+    if (affiliateData?.affiliateId) {
+      const link = `${appUrl}?affiliate=${affiliateData.affiliateId}`;
+      try {
+        await navigator.clipboard.writeText(link);
+        toast.success("Affiliate link copied to clipboard!");
+      } catch (err) {
+        toast.error("Failed to copy affiliate link");
+      }
+    }
+  };
+
+  const applyAffiliateLink = async () => {
+    const match = affiliateLinkInput.trim().match(/affiliate=([A-Z0-9_-]+)/i);
+    if (!match) {
+      toast.error("Enter a valid affiliate link");
+      return;
+    }
+
+    const affiliateId = match[1];
+    localStorage.setItem('healthclique_affiliate_referral', JSON.stringify({ affiliateId, timestamp: Date.now(), source: 'manual' }));
+    toast.success('Affiliate link applied for your next purchase.');
+    setShowAffiliateLinkDialog(false);
+  };
 
   if (user.name === "visitor" && user.email === "nil") {
     return (
@@ -133,6 +230,17 @@ const Account = () => {
               </h2>
             </div>
 
+            {isAffiliate && affiliateData?.earnings != null && (
+              <div className="rounded-xl border border-white/20 bg-white/10 p-3 mt-3">
+                <p className="text-xs text-indigo-200 uppercase tracking-widest font-black">Affiliate Earnings</p>
+                <p className="text-xl font-bold">
+                  {user.walletCurrency || "₦"}
+                  {affiliateData.earnings.toLocaleString(undefined, { minimumFractionDigits: 2 })}
+                </p>
+                <p className="text-xs text-indigo-100">Total earned from referrals</p>
+              </div>
+            )}
+
             <div className="flex items-end justify-between">
               <div className="space-y-1">
                 <p className="text-[8px] uppercase tracking-widest text-indigo-200 font-bold">Holder</p>
@@ -167,6 +275,47 @@ const Account = () => {
             </div>
           </div>
         </div>
+
+        {isAffiliate && (
+          <div className="rounded-xl border bg-card shadow-sm p-4 space-y-4">
+            <h2 className="text-sm font-semibold text-muted-foreground uppercase tracking-wide">Affiliate Dashboard</h2>
+
+            <div className="grid gap-4 md:grid-cols-2">
+              <div className="p-3 border rounded-lg">
+                <p className="text-xs font-semibold text-muted-foreground">Referral history</p>
+                {referrals.length === 0 ? (
+                  <p className="text-xs text-muted-foreground mt-2">No referrals yet</p>
+                ) : (
+                  <ul className="mt-2 space-y-2 text-xs">
+                    {referrals.slice(0, 8).map((r) => (
+                      <li key={r.id} className="flex justify-between gap-2 items-center">
+                        <span className="truncate">#{r.orderId}</span>
+                        <span className="font-medium">{(r.affiliateCommission || 0).toFixed(2)}</span>
+                        <Badge variant={r.status === 'paid' ? 'secondary' : 'outline'}>{r.status}</Badge>
+                      </li>
+                    ))}
+                  </ul>
+                )}
+              </div>
+
+              <div className="p-3 border rounded-lg">
+                <p className="text-xs font-semibold text-muted-foreground">Payouts history</p>
+                {payouts.length === 0 ? (
+                  <p className="text-xs text-muted-foreground mt-2">No payout requests yet</p>
+                ) : (
+                  <ul className="mt-2 space-y-2 text-xs">
+                    {payouts.slice(0, 8).map((p) => (
+                      <li key={p.id} className="flex justify-between gap-2 items-center">
+                        <span>₦{p.amount.toFixed(2)}</span>
+                        <Badge variant={p.status === 'paid' ? 'secondary' : 'outline'}>{p.status}</Badge>
+                      </li>
+                    ))}
+                  </ul>
+                )}
+              </div>
+            </div>
+          </div>
+        )}
 
         {/* Admin: full user manager. Staff: nothing. Customer/Professional/Wholesaler: upgrade prompt */}
         {user.role === "admin" ? (
@@ -332,7 +481,7 @@ const Account = () => {
         </div>
 
         {/* ── Quick Links ── */}
-        <div className="grid grid-cols-2 gap-3">
+        <div className="grid grid-cols-3 gap-3">
           <Link href="/wishlist">
             <div className="rounded-xl border bg-card shadow-sm p-4 flex items-center gap-3 hover:bg-accent/50 transition-colors cursor-pointer">
               <div className="w-9 h-9 rounded-full bg-rose-500/10 flex items-center justify-center">
@@ -356,10 +505,104 @@ const Account = () => {
               </div>
             </div>
           </Link>
+
+          {isAffiliate ? (
+            <div className="rounded-xl border bg-card shadow-sm p-4 space-y-3">
+              <div className="flex items-center gap-3">
+                <div className="w-9 h-9 rounded-full bg-green-500/10 flex items-center justify-center">
+                  <Users className="h-4 w-4 text-green-500" />
+                </div>
+                <div className="flex-1">
+                  <p className="text-sm font-medium">Affiliate ID</p>
+                  <p className="text-xs text-muted-foreground font-mono">{affiliateData?.affiliateId}</p>
+                  <p className="text-xs text-muted-foreground mt-1">Name: {affiliateData?.name}</p>
+                </div>
+                <div className="flex items-center gap-1">
+                  <Button variant="outline" size="sm" onClick={copyAffiliateId}>Copy ID</Button>
+                  <Button variant="secondary" size="sm" onClick={copyAffiliateLink}>Copy Link</Button>
+                </div>
+              </div>
+
+              <div className="rounded-xl border border-green-300 bg-green-50 p-3 text-xs">
+                <p className="font-medium text-green-700">Affiliate link:</p>
+                <p className="break-all text-sm">{`${appUrl}?affiliate=${affiliateData?.affiliateId}`}</p>
+              </div>
+
+              <div className="space-y-2">
+                <p className="text-sm font-bold">Referral performance</p>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
+                  <div className="rounded-lg border bg-white p-2">
+                    <p className="text-xs text-muted-foreground">Total referrals</p>
+                    <p className="text-lg font-bold">{referrals.length}</p>
+                  </div>
+                  <div className="rounded-lg border bg-white p-2">
+                    <p className="text-xs text-muted-foreground">Total payouts</p>
+                    <p className="text-lg font-bold">{payouts.reduce((sum,e) => sum + e.amount, 0).toLocaleString()}</p>
+                  </div>
+                </div>
+              </div>
+            </div>
+          ) : (
+            <AffiliateDialog
+              onSuccess={async () => {
+                try {
+                  const res = await fetch("/api/affiliate");
+                  const data = await res.json();
+                  setIsAffiliate(data.isAffiliate);
+                  setAffiliateData(data.affiliate);
+                  toast.success("Affiliate program activated!");
+                } catch (err) {
+                  console.error(err);
+                  toast.error("Could not fetch affiliate details");
+                }
+              }}
+              trigger={
+                <div className="rounded-xl border bg-card shadow-sm p-4 flex items-center gap-3 hover:bg-accent/50 transition-colors cursor-pointer">
+                  <div className="w-9 h-9 rounded-full bg-green-500/10 flex items-center justify-center">
+                    <Users className="h-4 w-4 text-green-500" />
+                  </div>
+                  <div>
+                    <p className="text-sm font-medium">Affiliate Program</p>
+                    <p className="text-xs text-muted-foreground">Earn commissions</p>
+                  </div>
+                </div>
+              }
+            />
+          )}
+
+          <Dialog open={showAffiliateLinkDialog} onOpenChange={setShowAffiliateLinkDialog}>
+            <DialogContent className="max-w-md">
+              <DialogHeader>
+                <DialogTitle>Enter Affiliate Link (for bonus)</DialogTitle>
+              </DialogHeader>
+              <div className="space-y-3 mt-2">
+                <input
+                  className="w-full rounded-lg border p-2"
+                  placeholder="https://yourapp.com?affiliate=AFF12345"
+                  value={affiliateLinkInput}
+                  onChange={(e) => setAffiliateLinkInput(e.target.value)}
+                />
+                <p className="text-xs text-muted-foreground">Use a valid affiliate URL to get a 1.5% wallet bonus on next purchase.</p>
+              </div>
+              <DialogFooter className="pt-4">
+                <Button variant="outline" onClick={() => setShowAffiliateLinkDialog(false)}>Skip</Button>
+                <Button onClick={applyAffiliateLink}>Apply</Button>
+              </DialogFooter>
+            </DialogContent>
+          </Dialog>
         </div>
 
         {/* ── Action Buttons ── */}
         <div className="flex flex-row gap-3">
+          <Button
+            variant="outline"
+            size="icon"
+            onClick={toggleOrientation}
+            title={`Switch to ${cardOrientation === 'horizontal' ? 'vertical' : 'horizontal'} layout`}
+            className="border-2"
+          >
+            {cardOrientation === 'horizontal' ? <LayoutList className="h-4 w-4" /> : <LayoutGrid className="h-4 w-4" />}
+          </Button>
           <Button
             className="flex-1 border-2 border-destructive text-destructive hover:bg-destructive hover:text-destructive-foreground gap-2"
             variant="outline"
