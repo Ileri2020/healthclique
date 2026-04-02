@@ -46,7 +46,7 @@ export async function GET(req: NextRequest) {
   
   // Optimization: Default limit to 50 for better performance
   const requestedLimit = parseInt(searchParams.get("limit") || "50");
-  const limit = isAdmin ? Math.min(requestedLimit, 500) : Math.min(requestedLimit, 50);
+  const limit = isAdmin ? Math.min(requestedLimit, 2000) : Math.min(requestedLimit, 50);
   const offset = parseInt(searchParams.get("offset") || "0");
   const search = searchParams.get("search") || "";
   const details = searchParams.get("details") === "true"; // Lazy load heavy relations

@@ -752,7 +752,7 @@ const Sheet = () => {
         } else if (field === 'price' && typeof value === 'number') {
           value = value.toFixed(3);
         }
-        flatRow[columnLabelByField[field] || field] = value;
+        flatRow[columnLabelByField[field] || field] = value ?? "";
       });
       return flatRow;
     });

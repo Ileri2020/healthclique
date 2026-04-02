@@ -30,13 +30,12 @@ const Sidenav = () => {
     useEffect(() => {
         const fetchData = async () => {
             try {
-                const catRes = await axios.get("/api/dbhandler?model=category");
+                const [catRes, concernRes] = await Promise.all([
+                    axios.get("/api/dbhandler?model=category"),
+                    axios.get("/api/dbhandler?model=healthConcern")
+                ]);
                 setCategories(catRes.data);
-
-                const prodRes = await axios.get("/api/dbhandler?model=product");
-                const allProducts = prodRes.data;
-                const uniqueConcerns = Array.from(new Set(allProducts.flatMap((p: any) => p.healthConcerns || []))) as string[];
-                setConcerns(uniqueConcerns);
+                setConcerns(concernRes.data.map((c: any) => c.name));
             } catch (error) {
                 console.error("Error fetching sidebar data:", error);
             }
@@ -115,7 +114,7 @@ const Sidenav = () => {
                                 {displayedCategories.map((category) => (
                                     <Link 
                                         key={category.id}
-                                        href={`/store?category=${category.id}`}
+                                        href={`/store?category=${encodeURIComponent(category.name)}`}
                                         onClick={closeSheet}
                                         className="text-sm p-3 hover:bg-muted rounded-xl flex items-center justify-between group transition-all"
                                     >

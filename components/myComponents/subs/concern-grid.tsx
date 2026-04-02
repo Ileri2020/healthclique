@@ -39,7 +39,7 @@ const ShopByConcern = () => {
           {concerns.map((concern) => (
             <Link 
               key={concern.name}
-              href={`/store?category=${encodeURIComponent(concern.category)}`}
+              href={`/store?concern=${encodeURIComponent(concern.name)}`}
               className="flex flex-col items-center p-6 rounded-2xl border bg-card hover:border-primary hover:shadow-lg transition-all duration-300 group"
             >
               <div className={`w-12 h-12 rounded-xl ${concern.bg} flex items-center justify-center mb-4 group-hover:scale-110 transition-transform`}>
