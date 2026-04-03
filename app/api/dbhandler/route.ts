@@ -128,7 +128,7 @@ export async function GET(req: NextRequest) {
         if (brand) where.brand = { name: { equals: brand.trim(), mode: 'insensitive' } };
         if (categoryId) where.categoryId = categoryId;
         if (categoryName) where.category = { name: { equals: categoryName.trim(), mode: 'insensitive' } };
-        if (concern) where.healthConcerns = { some: { name: { equals: concern.trim(), mode: 'insensitive' } } };
+        if (concern) where.category = { name: { equals: concern.trim(), mode: 'insensitive' } };
 
         const include: any = {};
         if (includeParams) {

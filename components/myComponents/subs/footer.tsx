@@ -84,7 +84,7 @@ export function Footer({ className }: { className?: string }) {
   
   
   return (
-    <footer className={cn("border-t bg-background text-foreground font-sans", className)}>
+    <footer className={cn("border-t bg-muted text-foreground font-sans", className)}>
       <div
         className={`container mx-auto max-w-7xl px-4 py-12 sm:px-6 lg:px-8 `}
       >
