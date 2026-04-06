@@ -20,6 +20,7 @@ import { AccountUpgrade } from "@/components/myComponents/subs/AccountUpgrade"
 import { AdminUserManager } from "@/components/myComponents/subs/AdminUserManager"
 import { AdminBulkManager } from "@/components/myComponents/subs/AdminBulkManager"
 import { AffiliateDialog } from "@/components/myComponents/subs/AffiliateDialog"
+import { ProfileSkeleton, TableSkeleton } from "@/components/skeletons"
 import {
   User,
   Mail,
@@ -53,6 +54,7 @@ const Account = () => {
   const [payouts, setPayouts] = useState<any[]>([]);
   const [showAffiliateLinkDialog, setShowAffiliateLinkDialog] = useState(false);
   const [affiliateLinkInput, setAffiliateLinkInput] = useState("");
+  const [loadingAffiliateData, setLoadingAffiliateData] = useState(true);
 
   const appUrl = process.env.NEXT_PUBLIC_APP_URL || "https://localhost:3000";
 
@@ -69,11 +71,14 @@ const Account = () => {
       .then((data) => {
         setIsAffiliate(data.isAffiliate);
         setAffiliateData(data.affiliate);
+        setLoadingAffiliateData(false);
         if (!data.isAffiliate) {
           setShowAffiliateLinkDialog(true);
         }
       })
-      .catch(() => {});
+      .catch(() => {
+        setLoadingAffiliateData(false);
+      });
   }, []);
 
   useEffect(() => {

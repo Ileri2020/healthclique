@@ -6,6 +6,23 @@ body {
   font-family: Arial, Helvetica, sans-serif;
 }
 
+/* Shimmer animation for skeleton loaders */
+@keyframes shimmer {
+  -100% {
+    background-position: 100% 0;
+  }
+  100% {
+    background-position: -100% 0;
+  }
+}
+
+@layer utilities {
+  .animate-shimmer {
+    animation: shimmer 2s infinite;
+    background-size: 200% 100%;
+  }
+}
+
 @layer base {
   :root {
     --background: 0 0% 100%;
@@ -113,15 +130,15 @@ body {
 }
 
 .bg-blur {
-  backdrop-filter: blur(2px);
   -webkit-backdrop-filter: blur(2px);
+  backdrop-filter: blur(2px);
 }
 
 .glass {
   background: rgba(255, 255, 255, 0.31);
   box-shadow: 0 4px 30px rgba(0, 0, 0, 0.1);
-  backdrop-filter: blur(5px);
   -webkit-backdrop-filter: blur(5px);
+  backdrop-filter: blur(5px);
   border: 1px solid rgba(255, 255, 255, 0.3);
 }
 
@@ -129,8 +146,8 @@ body {
   background: rgba(255, 255, 255, 0.3);
   border-radius: 16px;
   box-shadow: 0 4px 30px rgba(0, 0, 0, 0.1);
-  backdrop-filter: blur(8.6px);
   -webkit-backdrop-filter: blur(8.6px);
+  backdrop-filter: blur(8.6px);
   border: 1px solid rgba(255, 255, 255, 1);
 }
 
@@ -138,8 +155,8 @@ body {
   background: rgba(0, 255, 80, 0.1);
   border-radius: 16px;
   box-shadow: 0 4px 30px rgba(0, 0, 0, 0.1);
-  backdrop-filter: blur(11.4px);
   -webkit-backdrop-filter: blur(11.4px);
+  backdrop-filter: blur(11.4px);
   border: 1px solid rgba(0, 255, 80, 0.4);
 }
 
@@ -158,6 +175,7 @@ body {
   /*font-family: Poppins;*/
   /*text-transform: uppercase;*/
   -webkit-background-clip: text;
+  background-clip: text;
   -webkit-text-fill-color: transparent;
 }
 

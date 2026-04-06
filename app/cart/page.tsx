@@ -4,6 +4,7 @@ import { CartClient } from "@/components/myComponents/subs/cart-client";
 import { CartDetails } from "@/components/myComponents/subs/CartDetails";
 import { DataTableDemo } from "@/components/myComponents/subs/datatable";
 import { useAppContext } from "@/hooks/useAppContext";
+import { CartPageSkeleton, TableSkeleton } from "@/components/skeletons";
 import axios from "axios";
 import { ShoppingBag } from "lucide-react";
 import { useEffect, useState } from "react";
@@ -212,7 +213,7 @@ export default function CartPage() {
                 </CardHeader>
                 <CardContent>
                   {loading ? (
-                    <div className="text-center py-4">Loading history...</div>
+                    <TableSkeleton rows={5} columns={4} />
                   ) : carts.length > 0 ? (
                     <DataTableDemo
                       data={carts}

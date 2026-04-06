@@ -5,6 +5,7 @@ import { useState, useMemo } from "react";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Input } from "@/components/ui/input";
 import { DataTableDemo } from "@/components/myComponents/subs/datatable";
+import { TableSkeleton } from "@/components/skeletons";
 
 import UserForm from "@/prisma/forms/UserForm";
 import ProductForm from "@/prisma/forms/ProductForm";
@@ -311,11 +312,15 @@ const Admin = () => {
           </div>
         </div>
         
-        <DataTableDemo
-          columns={cartColumns}
-          data={cartData}
-          onRowClick={handleCartRowClick}
-        />
+        {loadingCart ? (
+          <TableSkeleton rows={8} columns={4} />
+        ) : (
+          <DataTableDemo
+            columns={cartColumns}
+            data={cartData}
+            onRowClick={handleCartRowClick}
+          />
+        )}
       </div>
 
       <CartDetailsDialog 

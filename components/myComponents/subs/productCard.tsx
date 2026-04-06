@@ -10,7 +10,7 @@ import { cn } from "@/lib/utils";
 import { getProductPrice, isProductInStock, PRICE_MARKUPS, formatPrice } from "@/lib/stock-pricing";
 import Link from "next/link";
 import * as React from "react";
-import { MessageCircle, ShoppingCart, Heart, Star, Edit3, Trash2, Eye, FileText, Link } from "lucide-react";
+import { MessageCircle, ShoppingCart, Heart, Star, Edit3, Trash2, Eye, FileText, Link as LinkIcon } from "lucide-react";
 import { InlinePriceFeedback } from "@/components/myComponents/subs/priceFeedback";
 import { useAppContext } from "@/hooks/useAppContext";
 import { useIsAdmin } from "@/hooks/useIsAdmin";
@@ -433,7 +433,7 @@ export function ProductCard({
                       onClick={handleCopyAffiliateLink}
                       title="Copy affiliate link"
                     >
-                      <Link className="h-4 w-4" />
+                      <LinkIcon className="h-4 w-4" />
                     </Button>
                   </div>
                 ) : (
