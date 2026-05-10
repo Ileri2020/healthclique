@@ -165,7 +165,7 @@ const Sheet = () => {
   const [editingCell, setEditingCell] = useState<{ rowId: string, field: string } | null>(null)
   const [focusedCell, setFocusedCell] = useState<{ rowId: string, field: string } | null>(null)
   const [columnOrderByTab, setColumnOrderByTab] = useState<Record<string, string[]>>({
-    products: ["name", "category", "brand", "vendor", "price", "stock", "numberPcs", "form", "bulkName", "bulkQty", "bulkPrice", "scarce", "requiresPrescription"],
+    products: ["name", "category", "brand", "vendor", "price", "stock", "numberPcs", "form", "image", "bulkName", "bulkQty", "bulkPrice", "scarce", "requiresPrescription"],
     categories: ["name", "products"],
     brands: ["name", "order", "products"],
     vendors: ["name", "address", "products"],
@@ -183,6 +183,7 @@ const Sheet = () => {
     stock: 100,
     numberPcs: 120,
     form: 100,
+    image: 100,
     scarce: 80,
     requiresPrescription: 90,
     bulkName: 140,
@@ -708,6 +709,46 @@ const Sheet = () => {
     );
   }
 
+  const downloadAllDatabaseObjects = async () => {
+    try {
+      setLoading(true);
+      const allData: Record<string, any[]> = {};
+      
+      // Define all tabs to export
+      const tabs = ['products', 'categories', 'brands', 'vendors', 'ingredients', 'stocks', 'bulkprices', 'productvendors'];
+      
+      // Fetch data from all tabs
+      for (const tab of tabs) {
+        try {
+          const model = tabToModel[tab as keyof typeof tabToModel];
+          const res = await axios.get(`/api/sheet?model=${model}&limit=2000&details=true`);
+          allData[tab] = res.data.data || [];
+        } catch (err) {
+          console.error(`Failed to fetch ${tab}:`, err);
+          allData[tab] = [];
+        }
+      }
+      
+      // Create JSON file with all data
+      const jsonData = JSON.stringify(allData, null, 2);
+      const blob = new Blob([jsonData], { type: 'application/json;charset=utf-8;' });
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.href = url;
+      link.setAttribute('download', `all-database-objects_${new Date().toISOString()}.json`);
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      
+      toast.success("All database objects downloaded successfully!");
+    } catch (err) {
+      toast.error("Failed to download all database objects");
+      console.error(err);
+    } finally {
+      setLoading(false);
+    }
+  }
+
   const exportToCSV = async (scope: 'page' | 'all') => {
     let data: any[] = [];
     if (scope === 'all') {
@@ -741,8 +782,21 @@ const Sheet = () => {
           value = row.category?.name || '';
         } else if (field === 'brand') {
           value = row.brand?.name || '';
+          // Ensure empty string if brand is null/undefined or if somehow contains just the field name
+          if (!value || value === 'brand' || (typeof value === 'string' && !value.trim())) {
+            value = '';
+          }
         } else if (field === 'stock') {
           value = row.stock?.reduce((acc: number, s: any) => acc + s.addedQuantity, 0) || 0;
+        } else if (field === 'image') {
+          // Create Excel IMAGE formula for direct image display
+          const imageUrl = row.image || '';
+          if (imageUrl && imageUrl.trim()) {
+            // Use Excel IMAGE function: =IMAGE(url, [alt_text], [width], [height])
+            value = `=IMAGE("${imageUrl}","Product Image",80,60)`;
+          } else {
+            value = '';
+          }
         } else if (field === 'bulkName') {
           value = row.bulkPrices?.[0]?.name || '';
         } else if (field === 'bulkQty') {
@@ -775,34 +829,71 @@ const Sheet = () => {
     Papa.parse(file, {
       header: true,
       skipEmptyLines: true,
-      complete: (results) => {
+      complete: async (results) => {
         const rows = results.data;
-        const newChanges = { ...pendingChanges };
-        let count = 0;
+        let successCount = 0;
+        let errorCount = 0;
+        let stagedCount = 0;
 
-        rows.forEach((row: any) => {
-          const id = row.id || row.ID || row._id;
-          if (!id) return;
+        // Get the current table model
+        const model = tabToModel[activeTab];
+        const activeDbFields = columnOrderByTab[activeTab] || [];
 
-          Object.entries(row).forEach(([label, value]) => {
-            if (label.toLowerCase() === 'id') return;
-            
-            // Try to find the field key from label, restricted to current tab's columns to avoid conflicts
-            const activeDbFields = columnOrderByTab[activeTab] || [];
-            const field = Object.keys(columnLabelByField).find(k => columnLabelByField[k] === label && activeDbFields.includes(k)) || label;
-            
-            newChanges[`${tabToModel[activeTab]}-${id}-${field}`] = {
-              id,
-              model: tabToModel[activeTab],
-              field,
-              value: value === "true" ? true : value === "false" ? false : value
-            };
-            count++;
-          });
-        });
+        for (const row of rows) {
+          try {
+            const id = row.id || row.ID || row._id;
+            if (!id) continue;
 
-        setPendingChanges(newChanges);
-        toast.success(`Staged ${count} changes from CSV. Click Save to commit.`);
+            const updateData: Record<string, any> = {};
+            let hasChanges = false;
+
+            Object.entries(row).forEach(([label, value]: [string, any]) => {
+              if (label.toLowerCase() === 'id' || !value) return;
+              
+              // Skip image formulas - they're display-only
+              if (label === 'Product Image' || (typeof value === 'string' && value.startsWith('=IMAGE'))) {
+                return;
+              }
+
+              // Map label to field name
+              const field = Object.keys(columnLabelByField).find(k => columnLabelByField[k] === label && activeDbFields.includes(k)) || label;
+              
+              // Process value
+              let processedValue = value;
+              if (value === "true") processedValue = true;
+              else if (value === "false") processedValue = false;
+              else if (!isNaN(value) && value !== "") processedValue = parseFloat(value);
+
+              if (processedValue !== "") {
+                updateData[field] = processedValue;
+                hasChanges = true;
+              }
+            });
+
+            // If there are changes, update the record directly in database
+            if (hasChanges) {
+              try {
+                await axios.put(`/api/dbhandler?model=${model}&id=${id}`, updateData);
+                successCount++;
+              } catch (err) {
+                console.error(`Failed to update ${model} ${id}:`, err);
+                errorCount++;
+              }
+            }
+          } catch (err) {
+            console.error("Error processing row:", err);
+            errorCount++;
+          }
+        }
+
+        // Show results
+        if (successCount > 0) {
+          toast.success(`Imported ${successCount} records successfully${errorCount > 0 ? ` (${errorCount} failed)` : ''}`);
+          loadData(); // Refresh the data
+        } else if (errorCount > 0) {
+          toast.error(`Failed to import. Errors: ${errorCount}`);
+        }
+
         if (fileInputRef.current) fileInputRef.current.value = '';
       },
       error: (err) => {
@@ -879,6 +970,7 @@ const Sheet = () => {
     stock: "In Stock",
     numberPcs: "Pack Size",
     form: "Form",
+    image: "Product Image",
     scarce: "Scarce",
     requiresPrescription: "Rx Req",
     bulkPrices: "Bulk",
@@ -1602,35 +1694,22 @@ const Sheet = () => {
             <TabsTrigger value="bulkprices" className="rounded-lg data-[state=active]:bg-indigo-600 data-[state=active]:text-white gap-2 text-xs font-bold px-5">
               <DollarSign size={14} /> Bulk Pricing
             </TabsTrigger>
-            <DropdownMenu>
-              <DropdownMenuTrigger asChild>
-                <Button variant="outline" size="sm" className="h-9 gap-2 border-2 text-[11px] font-bold uppercase tracking-wider">
-                  <Database size={14} /> 
-                  Data Ops
-                  <ChevronDown size={14} />
-                </Button>
-              </DropdownMenuTrigger>
-              <DropdownMenuContent className="text-[11px] font-bold uppercase tracking-wider p-2 w-56">
-                <div className="px-2 py-1.5 text-xs text-slate-400 font-black">Export Data</div>
-                <DropdownMenuItem onClick={() => exportToCSV('page')} className="gap-2 cursor-pointer">
-                  📄 Current Page CSV
-                </DropdownMenuItem>
-                <DropdownMenuItem onClick={() => exportToCSV('all')} className="gap-2 cursor-pointer">
-                  🌐 Full Database CSV
-                </DropdownMenuItem>
-                <div className="h-px bg-slate-100 my-2" />
-                <div className="px-2 py-1.5 text-xs text-slate-400 font-black">Import Data</div>
-                <DropdownMenuItem onClick={() => fileInputRef.current?.click()} className="gap-2 cursor-pointer bg-indigo-50 text-indigo-700 hover:bg-indigo-100">
-                  📥 Upload CSV File
-                </DropdownMenuItem>
-              </DropdownMenuContent>
-            </DropdownMenu>
+            <Button 
+              size="sm" 
+              onClick={downloadAllDatabaseObjects}
+              disabled={loading}
+              className="h-9 gap-2 border-2 bg-indigo-600 hover:bg-indigo-700 text-white text-[11px] font-bold uppercase tracking-wider shadow-lg shadow-indigo-200"
+            >
+              <Database size={14} /> 
+              {loading ? <Loader2 size={14} className="animate-spin" /> : "Download All DB Objects"}
+            </Button>
 
             <input 
               type="file" 
               ref={fileInputRef} 
               className="hidden" 
-              accept=".csv" 
+              accept=".csv"
+              title="import-csv"
               onChange={handleImportCSV} 
             />
           </TabsList>

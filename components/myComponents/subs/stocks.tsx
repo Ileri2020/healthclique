@@ -117,10 +117,11 @@ const Stocks = () => {
   };
 
   // Pagination Logic
-  const totalPages = Math.ceil(products.length / ITEMS_PER_PAGE);
+  const visibleProducts = isAdmin ? products : products.filter((p) => p.price > 0);
+  const totalPages = Math.ceil(visibleProducts.length / ITEMS_PER_PAGE);
   const indexOfLastItem = currentPage * ITEMS_PER_PAGE;
   const indexOfFirstItem = indexOfLastItem - ITEMS_PER_PAGE;
-  const currentItems = products.slice(indexOfFirstItem, indexOfLastItem);
+  const currentItems = visibleProducts.slice(indexOfFirstItem, indexOfLastItem);
 
   const paginate = (pageNumber: number) => {
     setCurrentPage(pageNumber);

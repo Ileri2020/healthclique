@@ -1,6 +1,6 @@
 ================================================================================
 LOIS SPICE PROJECT - SOURCE CODE CONSOLIDATION
-Generated: 2026-04-02 08:32:45
+Generated: 2026-04-12 16:53:32
 ================================================================================
 
 
@@ -452,7 +452,8 @@ const About = () => {
            <div className="flex flex-col sm:flex-row items-center justify-center gap-4 text-sm font-medium">
              <a 
                href="https://www.instagram.com/healthclique_specialties?utm_source=qr" 
-               target="_blank" 
+               target="_blank"
+               rel="noopener"
                className="flex items-center gap-2 px-4 py-2 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 transition-colors"
              >
                <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect x="2" y="2" width="20" height="20" rx="5" ry="5"></rect><path d="M16 11.37A4 4 0 1 1 12.63 8 4 4 0 0 1 16 11.37z"></path><line x1="17.5" y1="6.5" x2="17.51" y2="6.5"></line></svg>
@@ -475,6 +476,24 @@ const About = () => {
 };
 
 export default About;
+
+
+
+================================================================================
+LOCATION: app\account\loading.tsx
+================================================================================
+
+import { ProfileSkeleton } from "@/components/skeletons";
+
+export default function LoadingAccount() {
+  return (
+    <div className="min-h-screen space-y-8 p-4 md:p-8">
+      <ProfileSkeleton />
+      <ProfileSkeleton />
+      <ProfileSkeleton />
+    </div>
+  );
+}
 
 
 
@@ -504,6 +523,7 @@ import { AccountUpgrade } from "@/components/myComponents/subs/AccountUpgrade"
 import { AdminUserManager } from "@/components/myComponents/subs/AdminUserManager"
 import { AdminBulkManager } from "@/components/myComponents/subs/AdminBulkManager"
 import { AffiliateDialog } from "@/components/myComponents/subs/AffiliateDialog"
+import { ProfileSkeleton, TableSkeleton } from "@/components/skeletons"
 import {
   User,
   Mail,
@@ -537,6 +557,7 @@ const Account = () => {
   const [payouts, setPayouts] = useState<any[]>([]);
   const [showAffiliateLinkDialog, setShowAffiliateLinkDialog] = useState(false);
   const [affiliateLinkInput, setAffiliateLinkInput] = useState("");
+  const [loadingAffiliateData, setLoadingAffiliateData] = useState(true);
 
   const appUrl = process.env.NEXT_PUBLIC_APP_URL || "https://localhost:3000";
 
@@ -553,11 +574,14 @@ const Account = () => {
       .then((data) => {
         setIsAffiliate(data.isAffiliate);
         setAffiliateData(data.affiliate);
+        setLoadingAffiliateData(false);
         if (!data.isAffiliate) {
           setShowAffiliateLinkDialog(true);
         }
       })
-      .catch(() => {});
+      .catch(() => {
+        setLoadingAffiliateData(false);
+      });
   }, []);
 
   useEffect(() => {
@@ -1120,6 +1144,22 @@ export default Account
 
 
 ================================================================================
+LOCATION: app\admin\analytics\loading.tsx
+================================================================================
+
+import { PageSkeleton } from "@/components/skeletons";
+
+export default function LoadingAnalytics() {
+  return (
+    <div className="flex-1 space-y-6 p-4 md:p-8 pt-6">
+      <PageSkeleton />
+    </div>
+  );
+}
+
+
+
+================================================================================
 LOCATION: app\admin\analytics\page.tsx
 ================================================================================
 
@@ -1138,6 +1178,7 @@ import { UserRoleChart } from "@/components/analytics/charts/UserRoleChart";
 import { PostCategoryChart } from "@/components/analytics/charts/PostCategoryChart";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
+import { KpiSectionSkeleton, ChartSkeleton } from "@/components/skeletons";
 import { Download, Calendar as CalendarIcon } from "lucide-react";
 import { useState } from "react";
 import { DateRange } from "react-day-picker";
@@ -1179,17 +1220,60 @@ export default function AnalyticsDashboard() {
       });
   }, [queryParams.from, queryParams.to]);
 
-  if (isLoading) {
-    return (
-      <div className="flex flex-col items-center justify-center p-20">
-        <Skeleton className="h-10 w-10 rounded-full bg-muted/40 mb-4" />
-        <Skeleton className="h-6 w-[220px] bg-muted/30 mb-2" />
-        <p className="text-center font-black animate-pulse">
-          Loading Analytics...
-        </p>
+  return (
+    <div className="flex-1 space-y-6 p-4 md:p-8 pt-6">
+      <div className="flex flex-col space-y-2 md:flex-row md:items-center md:justify-between space-x-2">
+        <h2 className="text-3xl font-bold tracking-tight">
+          Analytics Dashboard
+        </h2>
+        <div className="flex items-center space-x-2">
+          <Popover>
+            <PopoverTrigger asChild>
+              <Button
+                variant="outline"
+                className="justify-start text-left font-normal w-[240px]"
+              >
+                <CalendarIcon className="mr-2 h-4 w-4" />
+                {date?.from ? (
+                  date.to ? (
+                    <>
+                      {format(date.from, "LLL dd, y")} -{" "}
+                      {format(date.to, "LLL dd, y")}
+                    </>
+                  ) : (
+                    format(date.from, "LLL dd, y")
+                  )
+                ) : (
+                  <span>Pick a date range</span>
+                )}
+              </Button>
+            </PopoverTrigger>
+            <PopoverContent className="w-auto p-0" align="end">
+              <Calendar
+                initialFocus
+                mode="range"
+                defaultMonth={date?.from}
+                selected={date}
+                onSelect={setDate}
+                numberOfMonths={2}
+              />
+            </PopoverContent>
+          </Popover>
+          <Button>
+            <Download className="mr-2 h-4 w-4" />
+            Export
+          </Button>
+        </div>
       </div>
-    );
-  }
+
+      {isLoading ? (
+        <>
+          <KpiSectionSkeleton count={4} />
+          <ChartSkeleton />
+          <ChartSkeleton />
+          <ChartSkeleton />
+        </>
+      ) : data ? (
   return (
     <div className="flex-1 space-y-6 p-4 md:p-8 pt-6">
       <div className="flex flex-col space-y-2 md:flex-row md:items-center md:justify-between space-x-2">
@@ -1352,7 +1436,33 @@ export default function AnalyticsDashboard() {
             </ChartCard>
           </div>
         </>
+      ) : (
+        <div className="text-center py-12">
+          <p className="text-muted-foreground">No data available</p>
+        </div>
       )}
+    </div>
+  );
+}
+
+
+
+================================================================================
+LOCATION: app\admin\loading.tsx
+================================================================================
+
+import { TableSkeleton, PageSkeleton } from "@/components/skeletons";
+
+export default function LoadingAdmin() {
+  return (
+    <div className="w-[100vw] p-4">
+      <div className="text-4xl font-semibold w-full text-center mb-6">
+        Admin Dashboard
+      </div>
+      <PageSkeleton />
+      <div className="mt-12 space-y-6">
+        <TableSkeleton rows={8} columns={4} />
+      </div>
     </div>
   );
 }
@@ -1370,6 +1480,7 @@ import { useState, useMemo } from "react";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Input } from "@/components/ui/input";
 import { DataTableDemo } from "@/components/myComponents/subs/datatable";
+import { TableSkeleton } from "@/components/skeletons";
 
 import UserForm from "@/prisma/forms/UserForm";
 import ProductForm from "@/prisma/forms/ProductForm";
@@ -1676,11 +1787,15 @@ const Admin = () => {
           </div>
         </div>
         
-        <DataTableDemo
-          columns={cartColumns}
-          data={cartData}
-          onRowClick={handleCartRowClick}
-        />
+        {loadingCart ? (
+          <TableSkeleton rows={8} columns={4} />
+        ) : (
+          <DataTableDemo
+            columns={cartColumns}
+            data={cartData}
+            onRowClick={handleCartRowClick}
+          />
+        )}
       </div>
 
       <CartDetailsDialog 
@@ -3570,7 +3685,7 @@ export async function GET(req: NextRequest) {
         if (brand) where.brand = { name: { equals: brand.trim(), mode: 'insensitive' } };
         if (categoryId) where.categoryId = categoryId;
         if (categoryName) where.category = { name: { equals: categoryName.trim(), mode: 'insensitive' } };
-        if (concern) where.healthConcerns = { some: { name: { equals: concern.trim(), mode: 'insensitive' } } };
+        if (concern) where.category = { name: { equals: concern.trim(), mode: 'insensitive' } };
 
         const include: any = {};
         if (includeParams) {
@@ -6188,6 +6303,35 @@ export async function GET(req: NextRequest) {
 
 
 ================================================================================
+LOCATION: app\blog\loading.tsx
+================================================================================
+
+import { ProductGridSkeleton } from "@/components/skeletons";
+
+export default function LoadingBlog() {
+  return (
+    <div className="container mx-auto py-10 px-4 min-h-screen">
+      <div className="flex flex-col items-center mb-12 text-center space-y-4">
+        <div className="h-10 w-48 bg-muted animate-pulse rounded-lg mx-auto" />
+        <div className="h-6 w-96 bg-muted animate-pulse rounded-lg mx-auto" />
+      </div>
+      <div className="flex gap-8">
+        <div className="w-1/4 space-y-3">
+          {Array.from({ length: 5 }).map((_, i) => (
+            <div key={i} className="h-10 bg-muted animate-pulse rounded-lg" />
+          ))}
+        </div>
+        <div className="w-3/4">
+          <ProductGridSkeleton count={6} />
+        </div>
+      </div>
+    </div>
+  );
+}
+
+
+
+================================================================================
 LOCATION: app\blog\page.tsx
 ================================================================================
 
@@ -6345,6 +6489,22 @@ export const getColumns = (): ColumnDef<CartSummary>[] => [
 
 
 ================================================================================
+LOCATION: app\cart\loading.tsx
+================================================================================
+
+import { CartPageSkeleton } from "@/components/skeletons";
+
+export default function LoadingCart() {
+  return (
+    <div className="container mx-auto py-8 px-4">
+      <CartPageSkeleton />
+    </div>
+  );
+}
+
+
+
+================================================================================
 LOCATION: app\cart\page.tsx
 ================================================================================
 
@@ -6354,6 +6514,7 @@ import { CartClient } from "@/components/myComponents/subs/cart-client";
 import { CartDetails } from "@/components/myComponents/subs/CartDetails";
 import { DataTableDemo } from "@/components/myComponents/subs/datatable";
 import { useAppContext } from "@/hooks/useAppContext";
+import { CartPageSkeleton, TableSkeleton } from "@/components/skeletons";
 import axios from "axios";
 import { ShoppingBag } from "lucide-react";
 import { useEffect, useState } from "react";
@@ -6562,7 +6723,7 @@ export default function CartPage() {
                 </CardHeader>
                 <CardContent>
                   {loading ? (
-                    <div className="text-center py-4">Loading history...</div>
+                    <TableSkeleton rows={5} columns={4} />
                   ) : carts.length > 0 ? (
                     <DataTableDemo
                       data={carts}
@@ -6639,6 +6800,28 @@ export default function CartPage() {
                 />
             </section>
         )}
+      </div>
+    </div>
+  );
+}
+
+
+
+================================================================================
+LOCATION: app\contact\loading.tsx
+================================================================================
+
+import { FormSkeleton } from "@/components/skeletons";
+
+export default function LoadingContact() {
+  return (
+    <div className="container mx-auto py-8 px-4 min-h-screen">
+      <div className="max-w-2xl mx-auto space-y-8">
+        <div className="text-center space-y-4">
+          <div className="h-10 w-48 bg-muted animate-pulse rounded-lg mx-auto" />
+          <div className="h-6 w-96 bg-muted animate-pulse rounded-lg mx-auto" />
+        </div>
+        <FormSkeleton />
       </div>
     </div>
   );
@@ -6725,6 +6908,23 @@ LOCATION: app\globals.css
 
 body {
   font-family: Arial, Helvetica, sans-serif;
+}
+
+/* Shimmer animation for skeleton loaders */
+@keyframes shimmer {
+  -100% {
+    background-position: 100% 0;
+  }
+  100% {
+    background-position: -100% 0;
+  }
+}
+
+@layer utilities {
+  .animate-shimmer {
+    animation: shimmer 2s infinite;
+    background-size: 200% 100%;
+  }
 }
 
 @layer base {
@@ -6834,15 +7034,15 @@ body {
 }
 
 .bg-blur {
-  backdrop-filter: blur(2px);
   -webkit-backdrop-filter: blur(2px);
+  backdrop-filter: blur(2px);
 }
 
 .glass {
   background: rgba(255, 255, 255, 0.31);
   box-shadow: 0 4px 30px rgba(0, 0, 0, 0.1);
-  backdrop-filter: blur(5px);
   -webkit-backdrop-filter: blur(5px);
+  backdrop-filter: blur(5px);
   border: 1px solid rgba(255, 255, 255, 0.3);
 }
 
@@ -6850,8 +7050,8 @@ body {
   background: rgba(255, 255, 255, 0.3);
   border-radius: 16px;
   box-shadow: 0 4px 30px rgba(0, 0, 0, 0.1);
-  backdrop-filter: blur(8.6px);
   -webkit-backdrop-filter: blur(8.6px);
+  backdrop-filter: blur(8.6px);
   border: 1px solid rgba(255, 255, 255, 1);
 }
 
@@ -6859,8 +7059,8 @@ body {
   background: rgba(0, 255, 80, 0.1);
   border-radius: 16px;
   box-shadow: 0 4px 30px rgba(0, 0, 0, 0.1);
-  backdrop-filter: blur(11.4px);
   -webkit-backdrop-filter: blur(11.4px);
+  backdrop-filter: blur(11.4px);
   border: 1px solid rgba(0, 255, 80, 0.4);
 }
 
@@ -6879,6 +7079,7 @@ body {
   /*font-family: Poppins;*/
   /*text-transform: uppercase;*/
   -webkit-background-clip: text;
+  background-clip: text;
   -webkit-text-fill-color: transparent;
 }
 
@@ -7024,6 +7225,34 @@ body {
 .group\/row:hover .animate-marquee,
 .group\/row:hover .animate-marquee-reverse {
   animation-play-state: paused;
+}
+
+
+
+================================================================================
+LOCATION: app\help\loading.tsx
+================================================================================
+
+import { Skeleton } from "@/components/ui/skeleton";
+
+export default function LoadingHelp() {
+  return (
+    <div className="container mx-auto py-8 px-4 min-h-screen space-y-8">
+      <div className="text-center space-y-4">
+        <div className="h-10 w-48 bg-muted animate-pulse rounded-lg mx-auto" />
+        <div className="h-6 w-96 bg-muted animate-pulse rounded-lg mx-auto" />
+      </div>
+      <div className="grid gap-6">
+        {Array.from({ length: 4 }).map((_, i) => (
+          <div key={i} className="border rounded-lg p-4 space-y-3">
+            <Skeleton className="h-6 w-1/2" />
+            <Skeleton className="h-4 w-full" />
+            <Skeleton className="h-4 w-3/4" />
+          </div>
+        ))}
+      </div>
+    </div>
+  );
 }
 
 
@@ -7215,6 +7444,39 @@ export default async function RootLayout({
 
 
 ================================================================================
+LOCATION: app\loading.tsx
+================================================================================
+
+import { HeroSkeleton, ProductGridSkeleton } from "@/components/skeletons";
+
+export default function LoadingHome() {
+  return (
+    <div className="min-h-screen space-y-8 p-4 md:p-8">
+      <HeroSkeleton />
+      <ProductGridSkeleton count={8} />
+    </div>
+  );
+}
+
+
+
+================================================================================
+LOCATION: app\login\loading.tsx
+================================================================================
+
+import { FormSkeleton } from "@/components/skeletons";
+
+export default function LoadingLogin() {
+  return (
+    <div className="mt-10 max-w-md w-full mx-auto rounded-none md:rounded-2xl p-4 md:p-8 shadow-input bg-card border border-border">
+      <FormSkeleton />
+    </div>
+  );
+}
+
+
+
+================================================================================
 LOCATION: app\login\page.tsx
 ================================================================================
 
@@ -7313,6 +7575,29 @@ export default Login;
 //           </span>
 //         </button> */}
 //       </form>
+
+
+================================================================================
+LOCATION: app\lunch\loading.tsx
+================================================================================
+
+import { Skeleton } from "@/components/ui/skeleton";
+
+export default function LoadingLunch() {
+  return (
+    <div className="w-[100vw] overflow-clip p-4 md:p-8 min-h-screen">
+      <div className="max-w-7xl mx-auto space-y-8">
+        <Skeleton className="h-12 w-40" />
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+          {Array.from({ length: 6 }).map((_, i) => (
+            <Skeleton key={i} className="h-64 w-full rounded-lg" />
+          ))}
+        </div>
+      </div>
+    </div>
+  );
+}
+
 
 
 ================================================================================
@@ -7664,6 +7949,77 @@ const PrivacyPolicy = () => {
 
 
 export default PrivacyPolicy;
+
+
+
+================================================================================
+LOCATION: app\products\loading.tsx
+================================================================================
+
+import { ProductGridSkeleton } from "@/components/skeletons";
+
+export default function LoadingProducts() {
+  return (
+    <div className="container mx-auto p-4 md:p-8">
+      <div className="mb-8 space-y-4">
+        <div className="h-10 w-40 bg-muted animate-pulse rounded-lg" />
+        <ProductGridSkeleton count={12} />
+      </div>
+    </div>
+  );
+}
+
+
+
+================================================================================
+LOCATION: app\products\[id]\loading.tsx
+================================================================================
+
+import { Skeleton } from "@/components/ui/skeleton";
+
+export default function LoadingProductDetail() {
+  return (
+    <div className="container mx-auto p-4 md:p-8">
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-8 mb-8">
+        {/* Image Gallery Skeleton */}
+        <div className="space-y-4">
+          <Skeleton className="h-96 w-full rounded-lg" />
+          <div className="flex gap-2">
+            {Array.from({ length: 4 }).map((_, i) => (
+              <Skeleton key={i} className="h-20 w-20 rounded-lg" />
+            ))}
+          </div>
+        </div>
+
+        {/* Product Info Skeleton */}
+        <div className="space-y-4">
+          <Skeleton className="h-8 w-3/4" />
+          <Skeleton className="h-6 w-1/2" />
+          <Skeleton className="h-4 w-full" />
+          <Skeleton className="h-4 w-3/4" />
+          
+          <div className="space-y-3 pt-4">
+            <Skeleton className="h-10 w-full" />
+            <Skeleton className="h-10 w-full" />
+            <Skeleton className="h-10 w-full" />
+          </div>
+        </div>
+      </div>
+
+      {/* Reviews Skeleton */}
+      <div className="space-y-4">
+        <Skeleton className="h-6 w-40" />
+        {Array.from({ length: 3 }).map((_, i) => (
+          <div key={i} className="space-y-2 p-4 border rounded-lg">
+            <Skeleton className="h-4 w-32" />
+            <Skeleton className="h-3 w-full" />
+            <Skeleton className="h-3 w-3/4" />
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
 
 
 
@@ -10215,6 +10571,22 @@ export default Sheet
 
 
 ================================================================================
+LOCATION: app\signup\loading.tsx
+================================================================================
+
+import { FormSkeleton } from "@/components/skeletons";
+
+export default function LoadingSignup() {
+  return (
+    <div className="mt-10 max-w-md w-full mx-auto rounded-none md:rounded-2xl p-4 md:p-8 shadow-input bg-card border border-border">
+      <FormSkeleton />
+    </div>
+  );
+}
+
+
+
+================================================================================
 LOCATION: app\signup\page.tsx
 ================================================================================
 
@@ -10294,6 +10666,22 @@ const Register = async () => {
   );
 };
 export default Register;
+
+
+
+================================================================================
+LOCATION: app\store\loading.tsx
+================================================================================
+
+import { SidebarWithContentSkeleton } from "@/components/skeletons";
+
+export default function LoadingStore() {
+  return (
+    <div className="w-full overflow-clip p-2 md:p-4">
+      <SidebarWithContentSkeleton />
+    </div>
+  );
+}
 
 
 
@@ -16873,14 +17261,14 @@ import {
 } from "lucide-react";
 
 const concerns = [
-  { name: "Pain Relief",      icon: HeartPulse,   color: "text-red-500",    bg: "bg-red-50 dark:bg-red-950/40", category: "Analgesics" },
-  { name: "Cough, Cold & Flu",icon: Activity,     color: "text-blue-500",   bg: "bg-blue-50 dark:bg-blue-950/40", category: "Respiratory" },
-  { name: "Mother & Kids",    icon: Baby,         color: "text-pink-500",   bg: "bg-pink-50 dark:bg-pink-950/40", category: "Baby Care" },
-  { name: "Gut Health",       icon: Zap,          color: "text-orange-500", bg: "bg-orange-50 dark:bg-orange-950/40", category: "Digestive" },
-  { name: "Vitamins",         icon: Trees,        color: "text-green-500",  bg: "bg-green-50 dark:bg-green-950/40", category: "Vitamins & Supplements" },
-  { name: "His Health",       icon: User,         color: "text-indigo-500", bg: "bg-indigo-50 dark:bg-indigo-950/40", category: "Men's Health" },
-  { name: "Her Health",       icon: Users,        color: "text-purple-500", bg: "bg-purple-50 dark:bg-purple-950/40", category: "Women's Health" },
-  { name: "Mental Wellness",  icon: BrainCircuit, color: "text-teal-500",   bg: "bg-teal-50 dark:bg-teal-950/40", category: "Nervous System" },
+  { name: "Pain Relief",      icon: HeartPulse,   color: "text-red-500",    bg: "bg-red-50 dark:bg-red-950/40", category: "Pain Relief" },
+  { name: "Cough, Cold & Flu",icon: Activity,     color: "text-blue-500",   bg: "bg-blue-50 dark:bg-blue-950/40", category: "Cough, Cold & Flu" },
+  { name: "Mother & Kids",    icon: Baby,         color: "text-pink-500",   bg: "bg-pink-50 dark:bg-pink-950/40", category: "Baby & Child Health" },
+  { name: "Gut Health",       icon: Zap,          color: "text-orange-500", bg: "bg-orange-50 dark:bg-orange-950/40", category: "Gut Health" },
+  { name: "Vitamins",         icon: Trees,        color: "text-green-500",  bg: "bg-green-50 dark:bg-green-950/40", category: "Vitamins" },
+  { name: "His Health",       icon: User,         color: "text-indigo-500", bg: "bg-indigo-50 dark:bg-indigo-950/40", category: "His Health" },
+  { name: "Her Health",       icon: Users,        color: "text-purple-500", bg: "bg-purple-50 dark:bg-purple-950/40", category: "Her Health" },
+  { name: "Mental Wellness",  icon: BrainCircuit, color: "text-teal-500",   bg: "bg-teal-50 dark:bg-teal-950/40", category: "Stress & Sleep" },
 ];
 
 const ShopByConcern = () => {
@@ -21172,7 +21560,7 @@ import { cn } from "@/lib/utils";
 import { getProductPrice, isProductInStock, PRICE_MARKUPS, formatPrice } from "@/lib/stock-pricing";
 import Link from "next/link";
 import * as React from "react";
-import { MessageCircle, ShoppingCart, Heart, Star, Edit3, Trash2, Eye, FileText, Link } from "lucide-react";
+import { MessageCircle, ShoppingCart, Heart, Star, Edit3, Trash2, Eye, FileText, Link as LinkIcon } from "lucide-react";
 import { InlinePriceFeedback } from "@/components/myComponents/subs/priceFeedback";
 import { useAppContext } from "@/hooks/useAppContext";
 import { useIsAdmin } from "@/hooks/useIsAdmin";
@@ -21595,7 +21983,7 @@ export function ProductCard({
                       onClick={handleCopyAffiliateLink}
                       title="Copy affiliate link"
                     >
-                      <Link className="h-4 w-4" />
+                      <LinkIcon className="h-4 w-4" />
                     </Button>
                   </div>
                 ) : (
@@ -27401,6 +27789,321 @@ export const config = {
 
 
 ================================================================================
+LOCATION: components\skeletons\index.tsx
+================================================================================
+
+import { Skeleton } from "@/components/ui/skeleton";
+
+/**
+ * Product Card Skeleton - Matches product card layout
+ */
+export function ProductCardSkeleton() {
+  return (
+    <div className="rounded-lg border border-muted bg-card p-4 space-y-4">
+      <Skeleton className="h-48 w-full rounded-lg" />
+      <Skeleton className="h-4 w-3/4" />
+      <Skeleton className="h-4 w-1/2" />
+      <div className="flex gap-2 pt-2">
+        <Skeleton className="h-10 flex-1" />
+        <Skeleton className="h-10 w-10" />
+      </div>
+    </div>
+  );
+}
+
+/**
+ * Product Grid Skeleton - Multiple product cards
+ */
+export function ProductGridSkeleton({ count = 12 }: { count?: number }) {
+  return (
+    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
+      {Array.from({ length: count }).map((_, i) => (
+        <ProductCardSkeleton key={i} />
+      ))}
+    </div>
+  );
+}
+
+/**
+ * KPI Card Skeleton - Analytics/Dashboard KPI
+ */
+export function KpiCardSkeleton() {
+  return (
+    <div className="rounded-lg border border-muted bg-card p-6 space-y-3">
+      <Skeleton className="h-4 w-24" />
+      <Skeleton className="h-8 w-1/2" />
+      <Skeleton className="h-3 w-32" />
+    </div>
+  );
+}
+
+/**
+ * KPI Section Skeleton - Multiple KPI cards
+ */
+export function KpiSectionSkeleton({ count = 4 }: { count?: number }) {
+  return (
+    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+      {Array.from({ length: count }).map((_, i) => (
+        <KpiCardSkeleton key={i} />
+      ))}
+    </div>
+  );
+}
+
+/**
+ * Chart Skeleton - For dashboard charts
+ */
+export function ChartSkeleton() {
+  return (
+    <div className="rounded-lg border border-muted bg-card p-6">
+      <Skeleton className="h-6 w-40 mb-4" />
+      <div className="space-y-2">
+        {Array.from({ length: 5 }).map((_, i) => (
+          <div key={i} className="flex items-end gap-2 h-12">
+            <Skeleton className={`flex-1 rounded-t-sm`} style={{ height: `${Math.random() * 100}%` }} />
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+/**
+ * Table Row Skeleton - Single table row
+ */
+export function TableRowSkeleton({ columns = 5 }: { columns?: number }) {
+  return (
+    <tr className="border-b">
+      {Array.from({ length: columns }).map((_, i) => (
+        <td key={i} className="px-4 py-3">
+          <Skeleton className="h-4 w-full" />
+        </td>
+      ))}
+    </tr>
+  );
+}
+
+/**
+ * Table Skeleton - Multiple rows
+ */
+export function TableSkeleton({ rows = 8, columns = 5 }: { rows?: number; columns?: number }) {
+  return (
+    <div className="rounded-lg border border-muted bg-card overflow-hidden">
+      <table className="w-full">
+        <thead className="border-b bg-muted/30">
+          <tr>
+            {Array.from({ length: columns }).map((_, i) => (
+              <th key={i} className="px-4 py-3">
+                <Skeleton className="h-4 w-20" />
+              </th>
+            ))}
+          </tr>
+        </thead>
+        <tbody>
+          {Array.from({ length: rows }).map((_, i) => (
+            <TableRowSkeleton key={i} columns={columns} />
+          ))}
+        </tbody>
+      </table>
+    </div>
+  );
+}
+
+/**
+ * Profile Skeleton - User profile card
+ */
+export function ProfileSkeleton() {
+  return (
+    <div className="rounded-lg border border-muted bg-card p-6 space-y-4">
+      <div className="flex items-center gap-4">
+        <Skeleton className="h-16 w-16 rounded-full" />
+        <div className="flex-1 space-y-2">
+          <Skeleton className="h-4 w-40" />
+          <Skeleton className="h-3 w-56" />
+        </div>
+      </div>
+      <Skeleton className="h-px w-full bg-muted" />
+      <div className="space-y-3">
+        <Skeleton className="h-4 w-1/2" />
+        <Skeleton className="h-4 w-2/3" />
+        <Skeleton className="h-4 w-1/2" />
+      </div>
+    </div>
+  );
+}
+
+/**
+ * Dialog Skeleton - Generic dialog loading state
+ */
+export function DialogSkeleton() {
+  return (
+    <div className="space-y-4">
+      <Skeleton className="h-6 w-40" />
+      <div className="space-y-3">
+        <Skeleton className="h-4 w-full" />
+        <Skeleton className="h-4 w-full" />
+        <Skeleton className="h-4 w-2/3" />
+      </div>
+      <div className="flex gap-2 pt-4">
+        <Skeleton className="h-10 flex-1" />
+        <Skeleton className="h-10 flex-1" />
+      </div>
+    </div>
+  );
+}
+
+/**
+ * Hero Section Skeleton - Landing page hero
+ */
+export function HeroSkeleton() {
+  return (
+    <div className="w-full h-96 rounded-lg bg-gradient-to-r from-muted via-muted-foreground/20 to-muted animate-pulse space-y-4 p-8 flex flex-col justify-center">
+      <Skeleton className="h-12 w-3/4" />
+      <Skeleton className="h-4 w-1/2" />
+      <div className="flex gap-3 pt-4">
+        <Skeleton className="h-10 w-32" />
+        <Skeleton className="h-10 w-32" />
+      </div>
+    </div>
+  );
+}
+
+/**
+ * Page Skeleton - Full page loading
+ */
+export function PageSkeleton() {
+  return (
+    <div className="min-h-screen space-y-8 p-4 md:p-8">
+      <Skeleton className="h-10 w-full max-w-md" />
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+        {Array.from({ length: 4 }).map((_, i) => (
+          <KpiCardSkeleton key={i} />
+        ))}
+      </div>
+      <ChartSkeleton />
+    </div>
+  );
+}
+
+/**
+ * Text Block Skeleton - Multiple text lines
+ */
+export function TextBlockSkeleton({ lines = 4 }: { lines?: number }) {
+  return (
+    <div className="space-y-2">
+      {Array.from({ length: lines }).map((_, i) => (
+        <Skeleton
+          key={i}
+          className="h-4 w-full"
+          style={{
+            width: i === lines - 1 ? "60%" : "100%"
+          }}
+        />
+      ))}
+    </div>
+  );
+}
+
+/**
+ * Form Skeleton - Form fields loading
+ */
+export function FormSkeleton() {
+  return (
+    <div className="space-y-4">
+      <div className="space-y-2">
+        <Skeleton className="h-4 w-24" />
+        <Skeleton className="h-10 w-full" />
+      </div>
+      <div className="space-y-2">
+        <Skeleton className="h-4 w-24" />
+        <Skeleton className="h-10 w-full" />
+      </div>
+      <div className="space-y-2">
+        <Skeleton className="h-4 w-24" />
+        <Skeleton className="h-20 w-full" />
+      </div>
+      <Skeleton className="h-10 w-32" />
+    </div>
+  );
+}
+
+/**
+ * Cart Item Skeleton - Shopping cart item
+ */
+export function CartItemSkeleton() {
+  return (
+    <div className="rounded-lg border border-muted bg-card p-4 flex gap-4">
+      <Skeleton className="h-24 w-24 rounded-lg flex-shrink-0" />
+      <div className="flex-1 space-y-2">
+        <Skeleton className="h-4 w-3/4" />
+        <Skeleton className="h-4 w-1/2" />
+        <Skeleton className="h-4 w-1/3" />
+      </div>
+      <div className="flex flex-col items-end gap-2">
+        <Skeleton className="h-4 w-20" />
+        <Skeleton className="h-8 w-24" />
+      </div>
+    </div>
+  );
+}
+
+/**
+ * Cart Page Skeleton - Full cart page
+ */
+export function CartPageSkeleton() {
+  return (
+    <div className="grid grid-cols-1 lg:grid-cols-3 gap-8 p-4 md:p-8">
+      <div className="lg:col-span-2 space-y-4">
+        {Array.from({ length: 3 }).map((_, i) => (
+          <CartItemSkeleton key={i} />
+        ))}
+      </div>
+      <div className="rounded-lg border border-muted bg-card p-6 h-fit space-y-4">
+        <Skeleton className="h-6 w-32" />
+        <div className="space-y-3">
+          <Skeleton className="h-4 w-full" />
+          <Skeleton className="h-4 w-full" />
+          <Skeleton className="h-4 w-2/3" />
+        </div>
+        <Skeleton className="h-px w-full bg-muted" />
+        <Skeleton className="h-8 w-full" />
+        <Skeleton className="h-10 w-full" />
+      </div>
+    </div>
+  );
+}
+
+/**
+ * Banner Skeleton - Banner/Hero with image
+ */
+export function BannerSkeleton() {
+  return (
+    <Skeleton className="w-full h-64 md:h-96 rounded-xl" />
+  );
+}
+
+/**
+ * Sidebar with Content Skeleton - Sidebar layout
+ */
+export function SidebarWithContentSkeleton() {
+  return (
+    <div className="grid grid-cols-1 md:grid-cols-4 gap-6 p-4 md:p-8">
+      <div className="space-y-3">
+        <Skeleton className="h-10 w-full" />
+        {Array.from({ length: 5 }).map((_, i) => (
+          <Skeleton key={i} className="h-8 w-full" />
+        ))}
+      </div>
+      <div className="md:col-span-3">
+        <ProductGridSkeleton count={8} />
+      </div>
+    </div>
+  );
+}
+
+
+
+================================================================================
 LOCATION: components\textArea.tsx
 ================================================================================
 
@@ -31999,7 +32702,10 @@ function Skeleton({
 }: React.HTMLAttributes<HTMLDivElement>) {
   return (
     <div
-      className={cn("animate-pulse rounded-md bg-muted", className)}
+      className={cn(
+        "overflow-hidden rounded-md bg-gradient-to-r from-muted via-muted-foreground/10 to-muted animate-shimmer",
+        className
+      )}
       {...props}
     />
   )
@@ -40468,6 +41174,112 @@ main().catch(e => console.error(e)).finally(() => prisma.$disconnect());
 
 
 ================================================================================
+LOCATION: scripts\check_health_concerns.js
+================================================================================
+
+const { PrismaClient } = require('@prisma/client')
+
+const prisma = new PrismaClient()
+
+// Health concerns from the home page concern grid
+const healthConcerns = [
+  { name: "Pain Relief", category: "Pain Relief" },
+  { name: "Cough, Cold & Flu", category: "Cough, Cold & Flu" },
+  { name: "Mother & Kids", category: "Baby & Child Health" },
+  { name: "Gut Health", category: "Gut Health" },
+  { name: "Vitamins", category: "Vitamins" },
+  { name: "His Health", category: "His Health" },
+  { name: "Her Health", category: "Her Health" },
+  { name: "Mental Wellness", category: "Stress & Sleep" },
+];
+
+async function main() {
+    console.log("Checking health concerns and their categories...\n");
+
+    for (const concern of healthConcerns) {
+        console.log(`Checking: ${concern.name} -> ${concern.category}`);
+
+        // Find the category
+        const category = await prisma.category.findFirst({
+            where: { name: concern.category },
+            include: {
+                products: {
+                    select: { id: true, name: true }
+                }
+            }
+        });
+
+        if (!category) {
+            console.log(`❌ Category "${concern.category}" does not exist in database`);
+        } else {
+            const productCount = category.products.length;
+            console.log(`✅ Category "${concern.category}" exists with ${productCount} products`);
+
+            if (productCount === 0) {
+                console.log(`⚠️  WARNING: Category has no products!`);
+            } else {
+                console.log(`   Sample products: ${category.products.slice(0, 3).map(p => p.name).join(', ')}`);
+            }
+        }
+
+        console.log(''); // Empty line for readability
+    }
+
+    // Also list all categories in the database
+    console.log("All categories in database:");
+    const allCategories = await prisma.category.findMany({
+        include: {
+            _count: {
+                select: { products: true }
+            }
+        }
+    });
+
+    allCategories.forEach(cat => {
+        console.log(`- ${cat.name}: ${cat._count.products} products`);
+    });
+}
+
+main().catch(e => console.error(e)).finally(() => prisma.$disconnect());
+
+
+================================================================================
+LOCATION: scripts\check_health_concerns_db.js
+================================================================================
+
+const { PrismaClient } = require('@prisma/client')
+
+const prisma = new PrismaClient()
+
+async function main() {
+    const products = await prisma.product.findMany({
+        take: 5,
+        include: { healthConcerns: true, category: true }
+    });
+
+    products.forEach(p => {
+        console.log(`Product: ${p.name}`);
+        console.log(`Category: ${p.category.name}`);
+        console.log(`Health Concerns: ${p.healthConcerns.map(h => h.name).join(', ') || 'None'}`);
+        console.log('---');
+    });
+
+    // Also check health concerns
+    const healthConcerns = await prisma.healthConcern.findMany({
+        take: 10,
+        include: { _count: { select: { products: true } } }
+    });
+
+    console.log('\nHealth Concerns:');
+    healthConcerns.forEach(hc => {
+        console.log(`${hc.name}: ${hc._count.products} products`);
+    });
+}
+
+main().catch(e => console.error(e)).finally(() => prisma.$disconnect());
+
+
+================================================================================
 LOCATION: scripts\check_missing_products.js
 ================================================================================
 
@@ -46303,5 +47115,5 @@ export const normalizeDateTime = (dateTime?: string): string => {
 
 
 ================================================================================
-TOTAL FILES CONSOLIDATED: 367
+TOTAL FILES CONSOLIDATED: 384
 ================================================================================

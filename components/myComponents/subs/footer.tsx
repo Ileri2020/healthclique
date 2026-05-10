@@ -89,14 +89,13 @@ export function Footer({ className }: { className?: string }) {
         className={`container mx-auto max-w-7xl px-4 py-12 sm:px-6 lg:px-8 `}
       >
         <div className="space-y-4 mb-10">
-          <Link className="flex items-center gap-2" href="/">
+          <Link className="flex items-center gap-0" href="/">
             <span
               className={`
-                bg-gradient-to-r from-primary to-primary/70 bg-clip-text
-                text-xl font-bold tracking-tight text-transparent
+                text-left text-2xl font-black text-primary tracking-tighter italic
               `}
             >
-              {SEO_CONFIG.name}
+              health<span className="text-accent">clique</span>
             </span>
           </Link>
           <p className="text-sm text-muted-foreground max-w-sm font-medium">

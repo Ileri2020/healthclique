@@ -1,5 +1,5 @@
 "use client"
-import React, { useEffect, useState } from "react"
+import React, { useEffect, useState, useRef } from "react"
 import { motion } from "framer-motion"
 import { Signup } from "@/components/myComponents/subs"
 import EditUser from "@/components/myComponents/subs/useredit"
@@ -16,6 +16,7 @@ import UserShippingAddressForm from "@/prisma/forms/userShippingAddressForm"
 import Link from "next/link"
 import axios from "axios"
 import { toast } from "sonner"
+import Papa from "papaparse"
 import { AccountUpgrade } from "@/components/myComponents/subs/AccountUpgrade"
 import { AdminUserManager } from "@/components/myComponents/subs/AdminUserManager"
 import { AdminBulkManager } from "@/components/myComponents/subs/AdminBulkManager"
@@ -42,7 +43,10 @@ import {
   LayoutGrid,
   LayoutList,
   Users,
-  Copy
+  Copy,
+  Download,
+  Loader2,
+  Upload
 } from "lucide-react"
 
 const Account = () => {
@@ -55,6 +59,8 @@ const Account = () => {
   const [showAffiliateLinkDialog, setShowAffiliateLinkDialog] = useState(false);
   const [affiliateLinkInput, setAffiliateLinkInput] = useState("");
   const [loadingAffiliateData, setLoadingAffiliateData] = useState(true);
+  const [downloadingDataOps, setDownloadingDataOps] = useState(false);
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
   const appUrl = process.env.NEXT_PUBLIC_APP_URL || "https://localhost:3000";
 
@@ -141,6 +147,194 @@ const Account = () => {
     toast.success('Affiliate link applied for your next purchase.');
     setShowAffiliateLinkDialog(false);
   };
+
+  const downloadAllDatabaseObjects = async () => {
+    try {
+      setDownloadingDataOps(true);
+      
+      // Fetch products data
+      const res = await axios.get(`/api/sheet?model=product&limit=2000&details=true`);
+      const products = res.data.data || [];
+      
+      if (!products.length) {
+        toast.error("No products to export");
+        return;
+      }
+
+      // Column order for products CSV
+      const columnOrder = ["name", "category", "brand", "vendor", "price", "stock", "numberPcs", "form", "image", "bulkName", "bulkQty", "bulkPrice", "scarce", "requiresPrescription"];
+      const columnLabels: Record<string, string> = {
+        name: "Name",
+        category: "Category",
+        brand: "Brand",
+        vendor: "Vendor",
+        price: "Cost Price",
+        stock: "In Stock",
+        numberPcs: "Pack Size",
+        form: "Form",
+        image: "Product Image",
+        scarce: "Scarce",
+        requiresPrescription: "Rx Req",
+        bulkName: "Bulk Name",
+        bulkQty: "Unit Qty",
+        bulkPrice: "Bulk Price"
+      };
+
+      // Process products data
+      const csvData = products.map((row: any) => {
+        const flatRow: any = { id: row.id };
+        columnOrder.forEach(field => {
+          let value = row[field];
+          if (field === 'vendor') {
+            const defaultVendor = row.vendors?.find((v: any) => v.isDefault);
+            value = defaultVendor ? defaultVendor.vendor?.name : (row.vendors?.[0]?.vendor?.name || '');
+          } else if (field === 'category') {
+            value = row.category?.name || '';
+          } else if (field === 'brand') {
+            value = row.brand?.name || '';
+            // Ensure empty string if brand is null/undefined
+            if (!value || value === 'brand' || (typeof value === 'string' && !value.trim())) {
+              value = '';
+            }
+          } else if (field === 'stock') {
+            value = row.stock?.reduce((acc: number, s: any) => acc + s.addedQuantity, 0) || 0;
+          } else if (field === 'image') {
+            // Create Excel IMAGE formula for direct image display
+            const imageUrl = row.image || '';
+            if (imageUrl && imageUrl.trim()) {
+              value = `=IMAGE("${imageUrl}","Product Image",80,60)`;
+            } else {
+              value = '';
+            }
+          } else if (field === 'bulkName') {
+            value = row.bulkPrices?.[0]?.name || '';
+          } else if (field === 'bulkQty') {
+            value = row.bulkPrices?.[0]?.quantity || '';
+          } else if (field === 'bulkPrice') {
+            value = typeof row.bulkPrices?.[0]?.price === 'number' ? row.bulkPrices[0].price.toFixed(3) : '';
+          } else if (field === 'price' && typeof value === 'number') {
+            value = value.toFixed(3);
+          }
+          flatRow[columnLabels[field] || field] = value ?? "";
+        });
+        return flatRow;
+      });
+
+      const csv = Papa.unparse(csvData);
+      const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.href = url;
+      link.setAttribute('download', `products_export_${new Date().toISOString()}.csv`);
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      
+      toast.success("Products CSV exported successfully!");
+    } catch (err) {
+      toast.error("Failed to export products CSV");
+      console.error(err);
+    } finally {
+      setDownloadingDataOps(false);
+    }
+  }
+
+  const handleImportCSV = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    Papa.parse(file, {
+      header: true,
+      skipEmptyLines: true,
+      complete: async (results) => {
+        const rows = results.data;
+        let successCount = 0;
+        let errorCount = 0;
+
+        // Column labels mapping
+        const columnLabels: Record<string, string> = {
+          name: "Name",
+          category: "Category",
+          brand: "Brand",
+          vendor: "Vendor",
+          price: "Cost Price",
+          stock: "In Stock",
+          numberPcs: "Pack Size",
+          form: "Form",
+          image: "Product Image",
+          scarce: "Scarce",
+          requiresPrescription: "Rx Req",
+          bulkName: "Bulk Name",
+          bulkQty: "Unit Qty",
+          bulkPrice: "Bulk Price"
+        };
+        
+        // Reverse mapping from label to field
+        const labelToField: Record<string, string> = {};
+        Object.entries(columnLabels).forEach(([field, label]) => {
+          labelToField[label] = field;
+        });
+
+        for (const row of rows) {
+          try {
+            const id = row.id || row.ID || row._id;
+            if (!id) continue;
+
+            const updateData: Record<string, any> = {};
+            let hasChanges = false;
+
+            Object.entries(row).forEach(([label, value]: [string, any]) => {
+              if (label.toLowerCase() === 'id' || !value) return;
+              
+              // Skip image formulas - they're display-only
+              if (label === 'Product Image' || (typeof value === 'string' && value.startsWith('=IMAGE'))) {
+                return;
+              }
+
+              // Map label to field name
+              const field = labelToField[label] || label;
+              
+              // Process value
+              let processedValue = value;
+              if (value === "true") processedValue = true;
+              else if (value === "false") processedValue = false;
+              else if (!isNaN(value) && value !== "") processedValue = parseFloat(value);
+
+              if (processedValue !== "") {
+                updateData[field] = processedValue;
+                hasChanges = true;
+              }
+            });
+
+            // If there are changes, update the product
+            if (hasChanges) {
+              try {
+                await axios.put(`/api/dbhandler?model=product&id=${id}`, updateData);
+                successCount++;
+              } catch (err) {
+                console.error(`Failed to update product ${id}:`, err);
+                errorCount++;
+              }
+            }
+          } catch (err) {
+            console.error("Error processing row:", err);
+            errorCount++;
+          }
+        }
+
+        if (successCount > 0) {
+          toast.success(`Imported ${successCount} products successfully${errorCount > 0 ? ` (${errorCount} failed)` : ''}`);
+        } else if (errorCount > 0) {
+          toast.error(`Failed to import. Errors: ${errorCount}`);
+        }
+
+        if (fileInputRef.current) fileInputRef.current.value = '';
+      },
+      error: (err) => {
+        toast.error("CSV Parse Error: " + err.message);
+      }
+    });
+  }
 
   if (user.name === "visitor" && user.email === "nil") {
     return (
@@ -331,13 +525,45 @@ const Account = () => {
               <div className="px-5 py-3 bg-muted/40 border-b">
                 <h2 className="text-sm font-semibold text-muted-foreground uppercase tracking-wide">Admin Tools</h2>
               </div>
-              <div className="p-5">
+              <div className="p-5 space-y-3">
                 <Link href="/sheet">
                   <Button className="w-full gap-2 bg-indigo-600 hover:bg-indigo-700 shadow-lg shadow-indigo-200">
                     <Database className="h-4 w-4" />
                     Data Sheet Manager
                   </Button>
                 </Link>
+                <Button 
+                  onClick={downloadAllDatabaseObjects}
+                  disabled={downloadingDataOps}
+                  className="w-full gap-2 bg-indigo-600 hover:bg-indigo-700 shadow-lg shadow-indigo-200"
+                >
+                  {downloadingDataOps ? (
+                    <>
+                      <Loader2 className="h-4 w-4 animate-spin" />
+                      Downloading...
+                    </>
+                  ) : (
+                    <>
+                      <Download className="h-4 w-4" />
+                      Download Products CSV
+                    </>
+                  )}
+                </Button>
+                <Button 
+                  onClick={() => fileInputRef.current?.click()}
+                  className="w-full gap-2 bg-indigo-600 hover:bg-indigo-700 shadow-lg shadow-indigo-200"
+                >
+                  <Upload className="h-4 w-4" />
+                  Upload Products CSV
+                </Button>
+                <input 
+                  type="file" 
+                  ref={fileInputRef} 
+                  className="hidden" 
+                  accept=".csv"
+                  title="import-csv"
+                  onChange={handleImportCSV} 
+                />
               </div>
             </div>
           </>
