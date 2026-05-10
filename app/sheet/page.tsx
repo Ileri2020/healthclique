@@ -830,7 +830,7 @@ const Sheet = () => {
       header: true,
       skipEmptyLines: true,
       complete: async (results) => {
-        const rows = results.data;
+        const rows = results.data as any[];
         let successCount = 0;
         let errorCount = 0;
         let stagedCount = 0;
