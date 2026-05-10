@@ -48,7 +48,7 @@ export const GlobalSearch = ({ placeholder = "Search for medications, brands or 
       return;
     }
 
-    let filtered = allProducts;
+    let filtered = allProducts.filter((p: any) => p.price > 0 && p.images && p.images.length > 0);
     
     if (value.length >= 2) {
       filtered = filtered.filter((p: any) =>

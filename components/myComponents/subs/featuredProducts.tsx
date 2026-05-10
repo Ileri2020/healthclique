@@ -68,14 +68,15 @@ const FeaturedProducts = () => {
         oralCarePromise
       ]);
 
-      setBrandProducts(brandResults.flat());
+      setBrandProducts(brandResults.flat().filter((p: any) => p.price > 0 && p.images && p.images.length > 0));
       
       // Still need some client-side filtering for complex logic if API isn't built for it, 
       // but now it's on a much smaller dataset (limit=50 default from API)
       const oral = allProdData.filter((p: any) => 
-         p.category?.name?.toLowerCase().includes("dental") || 
+         (p.category?.name?.toLowerCase().includes("dental") || 
          p.category?.name?.toLowerCase().includes("oral") ||
-         p.name.toLowerCase().includes("toothpaste")
+         p.name.toLowerCase().includes("toothpaste")) &&
+         p.price > 0 && p.images && p.images.length > 0
       ).slice(0, 15);
       setOralCare(oral);
 

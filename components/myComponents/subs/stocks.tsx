@@ -37,48 +37,60 @@ const Stocks = () => {
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [currentPage, setCurrentPage] = useState(1);
+  const [totalProducts, setTotalProducts] = useState(0);
   const [cardOrientation, setCardOrientation] = useState<"horizontal" | "vertical">("horizontal");
   const [showOrientationPopup, setShowOrientationPopup] = useState(false);
+
+  // Reset pagination when filters change
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [categoryFilter, brandFilter, concernFilter, isFeatured, isDiscounted]);
 
   const fetchProducts = useCallback(async () => {
     setLoading(true);
     try {
       let url = '/api/dbhandler?model=product&include=category,brand,stock';
       
-      // If we have multiple brands or categories, the API might not support it directly, 
-      // but we can fetch more and filter client-side if needed, OR we can stick to what works.
-      // For now, let's keep it simple: if brandFilter is "Emzor,Pfizer", we'll just use the first one 
-      // OR better, we'll just use the filter as is if the API supports it.
       if (brandFilter) url += `&brand=${encodeURIComponent(brandFilter)}`;
       if (categoryFilter) url += `&categoryName=${encodeURIComponent(categoryFilter)}`;
       if (concernFilter) url += `&concern=${encodeURIComponent(concernFilter)}`;
 
-      const res = await axios.get(url);
-      let data = res.data;
-
-      if (isFeatured) {
-        // If we want actual "FeaturedProduct" model entries
-        const featRes = await axios.get('/api/dbhandler?model=featuredProduct&minimal=true');
-        const featIds = new Set(featRes.data.map((f: any) => f.productId));
-        data = data.filter((p: any) => featIds.has(p.id));
+      if (!isAdmin) {
+         url += `&requireImages=true&requirePrice=true`;
       }
 
-      if (isDiscounted) {
-        // Fetch from heavily-discounted API
-        const discRes = await axios.get('/api/heavily-discounted?admin=false');
-        const discIds = new Set(discRes.data.map((d: any) => d.productId));
-        data = data.filter((p: any) => discIds.has(p.id));
-      }
+      if (isFeatured || isDiscounted) {
+        url += `&limit=5000`;
+        const res = await axios.get(url);
+        let data = res.data.data || res.data; // Handle potential format change just in case
 
-      setProducts(data);
-      setCurrentPage(1); // Reset pagination on filter change
+        if (isFeatured) {
+          const featRes = await axios.get('/api/dbhandler?model=featuredProduct&minimal=true');
+          const featIds = new Set(featRes.data.map((f: any) => f.productId));
+          data = data.filter((p: any) => featIds.has(p.id));
+        }
+
+        if (isDiscounted) {
+          const discRes = await axios.get('/api/heavily-discounted?admin=false');
+          const discIds = new Set(discRes.data.map((d: any) => d.productId));
+          data = data.filter((p: any) => discIds.has(p.id));
+        }
+
+        setProducts(data);
+        setTotalProducts(data.length);
+      } else {
+        url += `&pagination=true&limit=${ITEMS_PER_PAGE}&offset=${(currentPage - 1) * ITEMS_PER_PAGE}`;
+        const res = await axios.get(url);
+        setProducts(res.data.data);
+        setTotalProducts(res.data.total);
+      }
     } catch (err) {
       console.error("Failed to fetch products", err);
       setError("Failed to load products. Please try again later.");
     } finally {
       setLoading(false);
     }
-  }, [categoryFilter, brandFilter, concernFilter]);
+  }, [categoryFilter, brandFilter, concernFilter, isFeatured, isDiscounted, isAdmin, currentPage]);
 
   useEffect(() => {
     fetchProducts();
@@ -117,11 +129,11 @@ const Stocks = () => {
   };
 
   // Pagination Logic
-  const visibleProducts = isAdmin ? products : products.filter((p) => p.price > 0);
-  const totalPages = Math.ceil(visibleProducts.length / ITEMS_PER_PAGE);
-  const indexOfLastItem = currentPage * ITEMS_PER_PAGE;
-  const indexOfFirstItem = indexOfLastItem - ITEMS_PER_PAGE;
-  const currentItems = visibleProducts.slice(indexOfFirstItem, indexOfLastItem);
+  const visibleProducts = products; // Already filtered by backend if not admin
+  const totalPages = Math.ceil(totalProducts / ITEMS_PER_PAGE);
+  const currentItems = isFeatured || isDiscounted 
+    ? visibleProducts.slice((currentPage - 1) * ITEMS_PER_PAGE, currentPage * ITEMS_PER_PAGE)
+    : visibleProducts;
 
   const paginate = (pageNumber: number) => {
     setCurrentPage(pageNumber);

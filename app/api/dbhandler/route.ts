@@ -130,6 +130,13 @@ export async function GET(req: NextRequest) {
         if (categoryName) where.category = { name: { equals: categoryName.trim(), mode: 'insensitive' } };
         if (concern) where.category = { name: { equals: concern.trim(), mode: 'insensitive' } };
 
+        if (searchParams.get("requireImages") === "true") {
+          where.images = { isEmpty: false };
+        }
+        if (searchParams.get("requirePrice") === "true") {
+          where.price = { gt: 0 };
+        }
+
         const include: any = {};
         if (includeParams) {
           includeParams.forEach(inc => { if (inc !== 'reviews') include[inc] = true; });
@@ -144,13 +151,23 @@ export async function GET(req: NextRequest) {
           include.category = true;
         }
 
-        return NextResponse.json(await prisma.product.findMany({
+        const query = {
           where,
           include: Object.keys(include).length > 0 ? include : undefined,
-          take: Math.min(limit, 100), // Cap product fetch to 100
+          take: Math.min(limit, 5000), // Cap product fetch to 5000
           skip: offset,
-          orderBy: { createdAt: 'desc' }
-        }));
+          orderBy: { createdAt: 'desc' as const }
+        };
+
+        if (searchParams.get("pagination") === "true") {
+          const [data, total] = await Promise.all([
+            prisma.product.findMany(query),
+            prisma.product.count({ where })
+          ]);
+          return NextResponse.json({ data, total });
+        }
+
+        return NextResponse.json(await prisma.product.findMany(query));
       }
 
       if (model === "category") {

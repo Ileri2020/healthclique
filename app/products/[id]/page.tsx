@@ -56,7 +56,7 @@ const Description = () => {
         const simRes = await fetch(simUrl);
         const allProds = await simRes.json();
         const filtered = allProds
-          .filter((p: any) => p.id !== id)
+          .filter((p: any) => p.id !== id && p.price > 0 && p.images && p.images.length > 0)
           .sort(() => 0.5 - Math.random())
           .slice(0, 10);
         setSimilarProducts(filtered);

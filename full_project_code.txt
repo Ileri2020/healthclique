@@ -1,6 +1,6 @@
 ================================================================================
 LOIS SPICE PROJECT - SOURCE CODE CONSOLIDATION
-Generated: 2026-04-12 16:53:32
+Generated: 2026-05-10 21:15:00
 ================================================================================
 
 
@@ -502,7 +502,7 @@ LOCATION: app\account\page.tsx
 ================================================================================
 
 "use client"
-import React, { useEffect, useState } from "react"
+import React, { useEffect, useState, useRef } from "react"
 import { motion } from "framer-motion"
 import { Signup } from "@/components/myComponents/subs"
 import EditUser from "@/components/myComponents/subs/useredit"
@@ -519,6 +519,7 @@ import UserShippingAddressForm from "@/prisma/forms/userShippingAddressForm"
 import Link from "next/link"
 import axios from "axios"
 import { toast } from "sonner"
+import Papa from "papaparse"
 import { AccountUpgrade } from "@/components/myComponents/subs/AccountUpgrade"
 import { AdminUserManager } from "@/components/myComponents/subs/AdminUserManager"
 import { AdminBulkManager } from "@/components/myComponents/subs/AdminBulkManager"
@@ -545,7 +546,10 @@ import {
   LayoutGrid,
   LayoutList,
   Users,
-  Copy
+  Copy,
+  Download,
+  Loader2,
+  Upload
 } from "lucide-react"
 
 const Account = () => {
@@ -558,6 +562,8 @@ const Account = () => {
   const [showAffiliateLinkDialog, setShowAffiliateLinkDialog] = useState(false);
   const [affiliateLinkInput, setAffiliateLinkInput] = useState("");
   const [loadingAffiliateData, setLoadingAffiliateData] = useState(true);
+  const [downloadingDataOps, setDownloadingDataOps] = useState(false);
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
   const appUrl = process.env.NEXT_PUBLIC_APP_URL || "https://localhost:3000";
 
@@ -644,6 +650,194 @@ const Account = () => {
     toast.success('Affiliate link applied for your next purchase.');
     setShowAffiliateLinkDialog(false);
   };
+
+  const downloadAllDatabaseObjects = async () => {
+    try {
+      setDownloadingDataOps(true);
+      
+      // Fetch products data
+      const res = await axios.get(`/api/sheet?model=product&limit=2000&details=true`);
+      const products = res.data.data || [];
+      
+      if (!products.length) {
+        toast.error("No products to export");
+        return;
+      }
+
+      // Column order for products CSV
+      const columnOrder = ["name", "category", "brand", "vendor", "price", "stock", "numberPcs", "form", "image", "bulkName", "bulkQty", "bulkPrice", "scarce", "requiresPrescription"];
+      const columnLabels: Record<string, string> = {
+        name: "Name",
+        category: "Category",
+        brand: "Brand",
+        vendor: "Vendor",
+        price: "Cost Price",
+        stock: "In Stock",
+        numberPcs: "Pack Size",
+        form: "Form",
+        image: "Product Image",
+        scarce: "Scarce",
+        requiresPrescription: "Rx Req",
+        bulkName: "Bulk Name",
+        bulkQty: "Unit Qty",
+        bulkPrice: "Bulk Price"
+      };
+
+      // Process products data
+      const csvData = products.map((row: any) => {
+        const flatRow: any = { id: row.id };
+        columnOrder.forEach(field => {
+          let value = row[field];
+          if (field === 'vendor') {
+            const defaultVendor = row.vendors?.find((v: any) => v.isDefault);
+            value = defaultVendor ? defaultVendor.vendor?.name : (row.vendors?.[0]?.vendor?.name || '');
+          } else if (field === 'category') {
+            value = row.category?.name || '';
+          } else if (field === 'brand') {
+            value = row.brand?.name || '';
+            // Ensure empty string if brand is null/undefined
+            if (!value || value === 'brand' || (typeof value === 'string' && !value.trim())) {
+              value = '';
+            }
+          } else if (field === 'stock') {
+            value = row.stock?.reduce((acc: number, s: any) => acc + s.addedQuantity, 0) || 0;
+          } else if (field === 'image') {
+            // Create Excel IMAGE formula for direct image display
+            const imageUrl = row.image || '';
+            if (imageUrl && imageUrl.trim()) {
+              value = `=IMAGE("${imageUrl}","Product Image",80,60)`;
+            } else {
+              value = '';
+            }
+          } else if (field === 'bulkName') {
+            value = row.bulkPrices?.[0]?.name || '';
+          } else if (field === 'bulkQty') {
+            value = row.bulkPrices?.[0]?.quantity || '';
+          } else if (field === 'bulkPrice') {
+            value = typeof row.bulkPrices?.[0]?.price === 'number' ? row.bulkPrices[0].price.toFixed(3) : '';
+          } else if (field === 'price' && typeof value === 'number') {
+            value = value.toFixed(3);
+          }
+          flatRow[columnLabels[field] || field] = value ?? "";
+        });
+        return flatRow;
+      });
+
+      const csv = Papa.unparse(csvData);
+      const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.href = url;
+      link.setAttribute('download', `products_export_${new Date().toISOString()}.csv`);
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      
+      toast.success("Products CSV exported successfully!");
+    } catch (err) {
+      toast.error("Failed to export products CSV");
+      console.error(err);
+    } finally {
+      setDownloadingDataOps(false);
+    }
+  }
+
+  const handleImportCSV = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    Papa.parse(file, {
+      header: true,
+      skipEmptyLines: true,
+      complete: async (results) => {
+        const rows = results.data as any[];
+        let successCount = 0;
+        let errorCount = 0;
+
+        // Column labels mapping
+        const columnLabels: Record<string, string> = {
+          name: "Name",
+          category: "Category",
+          brand: "Brand",
+          vendor: "Vendor",
+          price: "Cost Price",
+          stock: "In Stock",
+          numberPcs: "Pack Size",
+          form: "Form",
+          image: "Product Image",
+          scarce: "Scarce",
+          requiresPrescription: "Rx Req",
+          bulkName: "Bulk Name",
+          bulkQty: "Unit Qty",
+          bulkPrice: "Bulk Price"
+        };
+        
+        // Reverse mapping from label to field
+        const labelToField: Record<string, string> = {};
+        Object.entries(columnLabels).forEach(([field, label]) => {
+          labelToField[label] = field;
+        });
+
+        for (const row of rows) {
+          try {
+            const id = row.id || row.ID || row._id;
+            if (!id) continue;
+
+            const updateData: Record<string, any> = {};
+            let hasChanges = false;
+
+            Object.entries(row).forEach(([label, value]: [string, any]) => {
+              if (label.toLowerCase() === 'id' || !value) return;
+              
+              // Skip image formulas - they're display-only
+              if (label === 'Product Image' || (typeof value === 'string' && value.startsWith('=IMAGE'))) {
+                return;
+              }
+
+              // Map label to field name
+              const field = labelToField[label] || label;
+              
+              // Process value
+              let processedValue = value;
+              if (value === "true") processedValue = true;
+              else if (value === "false") processedValue = false;
+              else if (!isNaN(value) && value !== "") processedValue = parseFloat(value);
+
+              if (processedValue !== "") {
+                updateData[field] = processedValue;
+                hasChanges = true;
+              }
+            });
+
+            // If there are changes, update the product
+            if (hasChanges) {
+              try {
+                await axios.put(`/api/dbhandler?model=product&id=${id}`, updateData);
+                successCount++;
+              } catch (err) {
+                console.error(`Failed to update product ${id}:`, err);
+                errorCount++;
+              }
+            }
+          } catch (err) {
+            console.error("Error processing row:", err);
+            errorCount++;
+          }
+        }
+
+        if (successCount > 0) {
+          toast.success(`Imported ${successCount} products successfully${errorCount > 0 ? ` (${errorCount} failed)` : ''}`);
+        } else if (errorCount > 0) {
+          toast.error(`Failed to import. Errors: ${errorCount}`);
+        }
+
+        if (fileInputRef.current) fileInputRef.current.value = '';
+      },
+      error: (err) => {
+        toast.error("CSV Parse Error: " + err.message);
+      }
+    });
+  }
 
   if (user.name === "visitor" && user.email === "nil") {
     return (
@@ -834,13 +1028,45 @@ const Account = () => {
               <div className="px-5 py-3 bg-muted/40 border-b">
                 <h2 className="text-sm font-semibold text-muted-foreground uppercase tracking-wide">Admin Tools</h2>
               </div>
-              <div className="p-5">
+              <div className="p-5 space-y-3">
                 <Link href="/sheet">
                   <Button className="w-full gap-2 bg-indigo-600 hover:bg-indigo-700 shadow-lg shadow-indigo-200">
                     <Database className="h-4 w-4" />
                     Data Sheet Manager
                   </Button>
                 </Link>
+                <Button 
+                  onClick={downloadAllDatabaseObjects}
+                  disabled={downloadingDataOps}
+                  className="w-full gap-2 bg-indigo-600 hover:bg-indigo-700 shadow-lg shadow-indigo-200"
+                >
+                  {downloadingDataOps ? (
+                    <>
+                      <Loader2 className="h-4 w-4 animate-spin" />
+                      Downloading...
+                    </>
+                  ) : (
+                    <>
+                      <Download className="h-4 w-4" />
+                      Download Products CSV
+                    </>
+                  )}
+                </Button>
+                <Button 
+                  onClick={() => fileInputRef.current?.click()}
+                  className="w-full gap-2 bg-indigo-600 hover:bg-indigo-700 shadow-lg shadow-indigo-200"
+                >
+                  <Upload className="h-4 w-4" />
+                  Upload Products CSV
+                </Button>
+                <input 
+                  type="file" 
+                  ref={fileInputRef} 
+                  className="hidden" 
+                  accept=".csv"
+                  title="import-csv"
+                  onChange={handleImportCSV} 
+                />
               </div>
             </div>
           </>
@@ -1274,57 +1500,6 @@ export default function AnalyticsDashboard() {
           <ChartSkeleton />
         </>
       ) : data ? (
-  return (
-    <div className="flex-1 space-y-6 p-4 md:p-8 pt-6">
-      <div className="flex flex-col space-y-2 md:flex-row md:items-center md:justify-between space-x-2">
-        <h2 className="text-3xl font-bold tracking-tight">
-          Analytics Dashboard
-        </h2>
-        <div className="flex items-center space-x-2">
-          <Popover>
-            <PopoverTrigger asChild>
-              <Button
-                variant="outline"
-                className="justify-start text-left font-normal w-[240px]"
-              >
-                <CalendarIcon className="mr-2 h-4 w-4" />
-                {date?.from ? (
-                  date.to ? (
-                    <>
-                      {format(date.from, "LLL dd, y")} -{" "}
-                      {format(date.to, "LLL dd, y")}
-                    </>
-                  ) : (
-                    format(date.from, "LLL dd, y")
-                  )
-                ) : (
-                  <span>Pick a date range</span>
-                )}
-              </Button>
-            </PopoverTrigger>
-            <PopoverContent className="w-auto p-0" align="end">
-              <Calendar
-                initialFocus
-                mode="range"
-                defaultMonth={date?.from}
-                selected={date}
-                onSelect={setDate}
-                numberOfMonths={2}
-              />
-            </PopoverContent>
-          </Popover>
-          <Button>
-            <Download className="mr-2 h-4 w-4" />
-            Export
-          </Button>
-        </div>
-      </div>
-
-      {isLoading && !data ? (
-        <div className="flex items-center justify-center h-64">
-          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary"></div>
-        </div>
-      ) : (
         <>
           <KpiSection data={data?.kpis} isLoading={isLoading} />
 
@@ -3687,6 +3862,13 @@ export async function GET(req: NextRequest) {
         if (categoryName) where.category = { name: { equals: categoryName.trim(), mode: 'insensitive' } };
         if (concern) where.category = { name: { equals: concern.trim(), mode: 'insensitive' } };
 
+        if (searchParams.get("requireImages") === "true") {
+          where.images = { isEmpty: false };
+        }
+        if (searchParams.get("requirePrice") === "true") {
+          where.price = { gt: 0 };
+        }
+
         const include: any = {};
         if (includeParams) {
           includeParams.forEach(inc => { if (inc !== 'reviews') include[inc] = true; });
@@ -3701,13 +3883,23 @@ export async function GET(req: NextRequest) {
           include.category = true;
         }
 
-        return NextResponse.json(await prisma.product.findMany({
+        const query = {
           where,
           include: Object.keys(include).length > 0 ? include : undefined,
-          take: Math.min(limit, 100), // Cap product fetch to 100
+          take: Math.min(limit, 5000), // Cap product fetch to 5000
           skip: offset,
-          orderBy: { createdAt: 'desc' }
-        }));
+          orderBy: { createdAt: 'desc' as const }
+        };
+
+        if (searchParams.get("pagination") === "true") {
+          const [data, total] = await Promise.all([
+            prisma.product.findMany(query),
+            prisma.product.count({ where })
+          ]);
+          return NextResponse.json({ data, total });
+        }
+
+        return NextResponse.json(await prisma.product.findMany(query));
       }
 
       if (model === "category") {
@@ -8085,7 +8277,7 @@ const Description = () => {
         const simRes = await fetch(simUrl);
         const allProds = await simRes.json();
         const filtered = allProds
-          .filter((p: any) => p.id !== id)
+          .filter((p: any) => p.id !== id && p.price > 0 && p.images && p.images.length > 0)
           .sort(() => 0.5 - Math.random())
           .slice(0, 10);
         setSimilarProducts(filtered);
@@ -8594,7 +8786,7 @@ const Sheet = () => {
   const [editingCell, setEditingCell] = useState<{ rowId: string, field: string } | null>(null)
   const [focusedCell, setFocusedCell] = useState<{ rowId: string, field: string } | null>(null)
   const [columnOrderByTab, setColumnOrderByTab] = useState<Record<string, string[]>>({
-    products: ["name", "category", "brand", "vendor", "price", "stock", "numberPcs", "form", "bulkName", "bulkQty", "bulkPrice", "scarce", "requiresPrescription"],
+    products: ["name", "category", "brand", "vendor", "price", "stock", "numberPcs", "form", "image", "bulkName", "bulkQty", "bulkPrice", "scarce", "requiresPrescription"],
     categories: ["name", "products"],
     brands: ["name", "order", "products"],
     vendors: ["name", "address", "products"],
@@ -8612,6 +8804,7 @@ const Sheet = () => {
     stock: 100,
     numberPcs: 120,
     form: 100,
+    image: 100,
     scarce: 80,
     requiresPrescription: 90,
     bulkName: 140,
@@ -9137,6 +9330,46 @@ const Sheet = () => {
     );
   }
 
+  const downloadAllDatabaseObjects = async () => {
+    try {
+      setLoading(true);
+      const allData: Record<string, any[]> = {};
+      
+      // Define all tabs to export
+      const tabs = ['products', 'categories', 'brands', 'vendors', 'ingredients', 'stocks', 'bulkprices', 'productvendors'];
+      
+      // Fetch data from all tabs
+      for (const tab of tabs) {
+        try {
+          const model = tabToModel[tab as keyof typeof tabToModel];
+          const res = await axios.get(`/api/sheet?model=${model}&limit=2000&details=true`);
+          allData[tab] = res.data.data || [];
+        } catch (err) {
+          console.error(`Failed to fetch ${tab}:`, err);
+          allData[tab] = [];
+        }
+      }
+      
+      // Create JSON file with all data
+      const jsonData = JSON.stringify(allData, null, 2);
+      const blob = new Blob([jsonData], { type: 'application/json;charset=utf-8;' });
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.href = url;
+      link.setAttribute('download', `all-database-objects_${new Date().toISOString()}.json`);
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      
+      toast.success("All database objects downloaded successfully!");
+    } catch (err) {
+      toast.error("Failed to download all database objects");
+      console.error(err);
+    } finally {
+      setLoading(false);
+    }
+  }
+
   const exportToCSV = async (scope: 'page' | 'all') => {
     let data: any[] = [];
     if (scope === 'all') {
@@ -9170,8 +9403,21 @@ const Sheet = () => {
           value = row.category?.name || '';
         } else if (field === 'brand') {
           value = row.brand?.name || '';
+          // Ensure empty string if brand is null/undefined or if somehow contains just the field name
+          if (!value || value === 'brand' || (typeof value === 'string' && !value.trim())) {
+            value = '';
+          }
         } else if (field === 'stock') {
           value = row.stock?.reduce((acc: number, s: any) => acc + s.addedQuantity, 0) || 0;
+        } else if (field === 'image') {
+          // Create Excel IMAGE formula for direct image display
+          const imageUrl = row.image || '';
+          if (imageUrl && imageUrl.trim()) {
+            // Use Excel IMAGE function: =IMAGE(url, [alt_text], [width], [height])
+            value = `=IMAGE("${imageUrl}","Product Image",80,60)`;
+          } else {
+            value = '';
+          }
         } else if (field === 'bulkName') {
           value = row.bulkPrices?.[0]?.name || '';
         } else if (field === 'bulkQty') {
@@ -9204,34 +9450,71 @@ const Sheet = () => {
     Papa.parse(file, {
       header: true,
       skipEmptyLines: true,
-      complete: (results) => {
-        const rows = results.data;
-        const newChanges = { ...pendingChanges };
-        let count = 0;
+      complete: async (results) => {
+        const rows = results.data as any[];
+        let successCount = 0;
+        let errorCount = 0;
+        let stagedCount = 0;
 
-        rows.forEach((row: any) => {
-          const id = row.id || row.ID || row._id;
-          if (!id) return;
+        // Get the current table model
+        const model = tabToModel[activeTab];
+        const activeDbFields = columnOrderByTab[activeTab] || [];
 
-          Object.entries(row).forEach(([label, value]) => {
-            if (label.toLowerCase() === 'id') return;
-            
-            // Try to find the field key from label, restricted to current tab's columns to avoid conflicts
-            const activeDbFields = columnOrderByTab[activeTab] || [];
-            const field = Object.keys(columnLabelByField).find(k => columnLabelByField[k] === label && activeDbFields.includes(k)) || label;
-            
-            newChanges[`${tabToModel[activeTab]}-${id}-${field}`] = {
-              id,
-              model: tabToModel[activeTab],
-              field,
-              value: value === "true" ? true : value === "false" ? false : value
-            };
-            count++;
-          });
-        });
+        for (const row of rows) {
+          try {
+            const id = row.id || row.ID || row._id;
+            if (!id) continue;
 
-        setPendingChanges(newChanges);
-        toast.success(`Staged ${count} changes from CSV. Click Save to commit.`);
+            const updateData: Record<string, any> = {};
+            let hasChanges = false;
+
+            Object.entries(row).forEach(([label, value]: [string, any]) => {
+              if (label.toLowerCase() === 'id' || !value) return;
+              
+              // Skip image formulas - they're display-only
+              if (label === 'Product Image' || (typeof value === 'string' && value.startsWith('=IMAGE'))) {
+                return;
+              }
+
+              // Map label to field name
+              const field = Object.keys(columnLabelByField).find(k => columnLabelByField[k] === label && activeDbFields.includes(k)) || label;
+              
+              // Process value
+              let processedValue = value;
+              if (value === "true") processedValue = true;
+              else if (value === "false") processedValue = false;
+              else if (!isNaN(value) && value !== "") processedValue = parseFloat(value);
+
+              if (processedValue !== "") {
+                updateData[field] = processedValue;
+                hasChanges = true;
+              }
+            });
+
+            // If there are changes, update the record directly in database
+            if (hasChanges) {
+              try {
+                await axios.put(`/api/dbhandler?model=${model}&id=${id}`, updateData);
+                successCount++;
+              } catch (err) {
+                console.error(`Failed to update ${model} ${id}:`, err);
+                errorCount++;
+              }
+            }
+          } catch (err) {
+            console.error("Error processing row:", err);
+            errorCount++;
+          }
+        }
+
+        // Show results
+        if (successCount > 0) {
+          toast.success(`Imported ${successCount} records successfully${errorCount > 0 ? ` (${errorCount} failed)` : ''}`);
+          loadData(); // Refresh the data
+        } else if (errorCount > 0) {
+          toast.error(`Failed to import. Errors: ${errorCount}`);
+        }
+
         if (fileInputRef.current) fileInputRef.current.value = '';
       },
       error: (err) => {
@@ -9308,6 +9591,7 @@ const Sheet = () => {
     stock: "In Stock",
     numberPcs: "Pack Size",
     form: "Form",
+    image: "Product Image",
     scarce: "Scarce",
     requiresPrescription: "Rx Req",
     bulkPrices: "Bulk",
@@ -10031,35 +10315,22 @@ const Sheet = () => {
             <TabsTrigger value="bulkprices" className="rounded-lg data-[state=active]:bg-indigo-600 data-[state=active]:text-white gap-2 text-xs font-bold px-5">
               <DollarSign size={14} /> Bulk Pricing
             </TabsTrigger>
-            <DropdownMenu>
-              <DropdownMenuTrigger asChild>
-                <Button variant="outline" size="sm" className="h-9 gap-2 border-2 text-[11px] font-bold uppercase tracking-wider">
-                  <Database size={14} /> 
-                  Data Ops
-                  <ChevronDown size={14} />
-                </Button>
-              </DropdownMenuTrigger>
-              <DropdownMenuContent className="text-[11px] font-bold uppercase tracking-wider p-2 w-56">
-                <div className="px-2 py-1.5 text-xs text-slate-400 font-black">Export Data</div>
-                <DropdownMenuItem onClick={() => exportToCSV('page')} className="gap-2 cursor-pointer">
-                  📄 Current Page CSV
-                </DropdownMenuItem>
-                <DropdownMenuItem onClick={() => exportToCSV('all')} className="gap-2 cursor-pointer">
-                  🌐 Full Database CSV
-                </DropdownMenuItem>
-                <div className="h-px bg-slate-100 my-2" />
-                <div className="px-2 py-1.5 text-xs text-slate-400 font-black">Import Data</div>
-                <DropdownMenuItem onClick={() => fileInputRef.current?.click()} className="gap-2 cursor-pointer bg-indigo-50 text-indigo-700 hover:bg-indigo-100">
-                  📥 Upload CSV File
-                </DropdownMenuItem>
-              </DropdownMenuContent>
-            </DropdownMenu>
+            <Button 
+              size="sm" 
+              onClick={downloadAllDatabaseObjects}
+              disabled={loading}
+              className="h-9 gap-2 border-2 bg-indigo-600 hover:bg-indigo-700 text-white text-[11px] font-bold uppercase tracking-wider shadow-lg shadow-indigo-200"
+            >
+              <Database size={14} /> 
+              {loading ? <Loader2 size={14} className="animate-spin" /> : "Download All DB Objects"}
+            </Button>
 
             <input 
               type="file" 
               ref={fileInputRef} 
               className="hidden" 
-              accept=".csv" 
+              accept=".csv"
+              title="import-csv"
               onChange={handleImportCSV} 
             />
           </TabsList>
@@ -17053,14 +17324,14 @@ const CommonMedications = () => {
   const fetchData = useCallback(async () => {
     try {
       const [prodRes, featRes] = await Promise.all([
-        fetch("/api/dbhandler?model=product&include=category&minimal=true&limit=15"),
-        fetch("/api/dbhandler?model=featuredProduct&minimal=true&limit=15"),
+        fetch("/api/dbhandler?model=product&include=category&minimal=true&limit=50"),
+        fetch("/api/dbhandler?model=featuredProduct&minimal=true&limit=50"),
       ]);
       const prodData = await prodRes.json();
       const featData = await featRes.json();
 
-      // Common Medications — first 15 products
-      setPharmacyProducts(prodData.slice(0, 15));
+      // Common Medications — first 15 products with images and price > 0
+      setPharmacyProducts(prodData.filter((p: any) => p.price > 0 && p.images && p.images.length > 0).slice(0, 15));
 
       // Build featuredIds and featuredMap for toggling
       const ids = new Set<string>();
@@ -18178,14 +18449,15 @@ const FeaturedProducts = () => {
         oralCarePromise
       ]);
 
-      setBrandProducts(brandResults.flat());
+      setBrandProducts(brandResults.flat().filter((p: any) => p.price > 0 && p.images && p.images.length > 0));
       
       // Still need some client-side filtering for complex logic if API isn't built for it, 
       // but now it's on a much smaller dataset (limit=50 default from API)
       const oral = allProdData.filter((p: any) => 
-         p.category?.name?.toLowerCase().includes("dental") || 
+         (p.category?.name?.toLowerCase().includes("dental") || 
          p.category?.name?.toLowerCase().includes("oral") ||
-         p.name.toLowerCase().includes("toothpaste")
+         p.name.toLowerCase().includes("toothpaste")) &&
+         p.price > 0 && p.images && p.images.length > 0
       ).slice(0, 15);
       setOralCare(oral);
 
@@ -18985,14 +19257,13 @@ export function Footer({ className }: { className?: string }) {
         className={`container mx-auto max-w-7xl px-4 py-12 sm:px-6 lg:px-8 `}
       >
         <div className="space-y-4 mb-10">
-          <Link className="flex items-center gap-2" href="/">
+          <Link className="flex items-center gap-0" href="/">
             <span
               className={`
-                bg-gradient-to-r from-primary to-primary/70 bg-clip-text
-                text-xl font-bold tracking-tight text-transparent
+                text-left text-2xl font-black text-primary tracking-tighter italic
               `}
             >
-              {SEO_CONFIG.name}
+              health<span className="text-accent">clique</span>
             </span>
           </Link>
           <p className="text-sm text-muted-foreground max-w-sm font-medium">
@@ -19239,7 +19510,7 @@ export const GlobalSearch = ({ placeholder = "Search for medications, brands or 
       return;
     }
 
-    let filtered = allProducts;
+    let filtered = allProducts.filter((p: any) => p.price > 0 && p.images && p.images.length > 0);
     
     if (value.length >= 2) {
       filtered = filtered.filter((p: any) =>
@@ -23445,48 +23716,60 @@ const Stocks = () => {
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [currentPage, setCurrentPage] = useState(1);
+  const [totalProducts, setTotalProducts] = useState(0);
   const [cardOrientation, setCardOrientation] = useState<"horizontal" | "vertical">("horizontal");
   const [showOrientationPopup, setShowOrientationPopup] = useState(false);
+
+  // Reset pagination when filters change
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [categoryFilter, brandFilter, concernFilter, isFeatured, isDiscounted]);
 
   const fetchProducts = useCallback(async () => {
     setLoading(true);
     try {
       let url = '/api/dbhandler?model=product&include=category,brand,stock';
       
-      // If we have multiple brands or categories, the API might not support it directly, 
-      // but we can fetch more and filter client-side if needed, OR we can stick to what works.
-      // For now, let's keep it simple: if brandFilter is "Emzor,Pfizer", we'll just use the first one 
-      // OR better, we'll just use the filter as is if the API supports it.
       if (brandFilter) url += `&brand=${encodeURIComponent(brandFilter)}`;
       if (categoryFilter) url += `&categoryName=${encodeURIComponent(categoryFilter)}`;
       if (concernFilter) url += `&concern=${encodeURIComponent(concernFilter)}`;
 
-      const res = await axios.get(url);
-      let data = res.data;
-
-      if (isFeatured) {
-        // If we want actual "FeaturedProduct" model entries
-        const featRes = await axios.get('/api/dbhandler?model=featuredProduct&minimal=true');
-        const featIds = new Set(featRes.data.map((f: any) => f.productId));
-        data = data.filter((p: any) => featIds.has(p.id));
+      if (!isAdmin) {
+         url += `&requireImages=true&requirePrice=true`;
       }
 
-      if (isDiscounted) {
-        // Fetch from heavily-discounted API
-        const discRes = await axios.get('/api/heavily-discounted?admin=false');
-        const discIds = new Set(discRes.data.map((d: any) => d.productId));
-        data = data.filter((p: any) => discIds.has(p.id));
-      }
+      if (isFeatured || isDiscounted) {
+        url += `&limit=5000`;
+        const res = await axios.get(url);
+        let data = res.data.data || res.data; // Handle potential format change just in case
 
-      setProducts(data);
-      setCurrentPage(1); // Reset pagination on filter change
+        if (isFeatured) {
+          const featRes = await axios.get('/api/dbhandler?model=featuredProduct&minimal=true');
+          const featIds = new Set(featRes.data.map((f: any) => f.productId));
+          data = data.filter((p: any) => featIds.has(p.id));
+        }
+
+        if (isDiscounted) {
+          const discRes = await axios.get('/api/heavily-discounted?admin=false');
+          const discIds = new Set(discRes.data.map((d: any) => d.productId));
+          data = data.filter((p: any) => discIds.has(p.id));
+        }
+
+        setProducts(data);
+        setTotalProducts(data.length);
+      } else {
+        url += `&pagination=true&limit=${ITEMS_PER_PAGE}&offset=${(currentPage - 1) * ITEMS_PER_PAGE}`;
+        const res = await axios.get(url);
+        setProducts(res.data.data);
+        setTotalProducts(res.data.total);
+      }
     } catch (err) {
       console.error("Failed to fetch products", err);
       setError("Failed to load products. Please try again later.");
     } finally {
       setLoading(false);
     }
-  }, [categoryFilter, brandFilter, concernFilter]);
+  }, [categoryFilter, brandFilter, concernFilter, isFeatured, isDiscounted, isAdmin, currentPage]);
 
   useEffect(() => {
     fetchProducts();
@@ -23525,10 +23808,11 @@ const Stocks = () => {
   };
 
   // Pagination Logic
-  const totalPages = Math.ceil(products.length / ITEMS_PER_PAGE);
-  const indexOfLastItem = currentPage * ITEMS_PER_PAGE;
-  const indexOfFirstItem = indexOfLastItem - ITEMS_PER_PAGE;
-  const currentItems = products.slice(indexOfFirstItem, indexOfLastItem);
+  const visibleProducts = products; // Already filtered by backend if not admin
+  const totalPages = Math.ceil(totalProducts / ITEMS_PER_PAGE);
+  const currentItems = isFeatured || isDiscounted 
+    ? visibleProducts.slice((currentPage - 1) * ITEMS_PER_PAGE, currentPage * ITEMS_PER_PAGE)
+    : visibleProducts;
 
   const paginate = (pageNumber: number) => {
     setCurrentPage(pageNumber);
@@ -41053,6 +41337,230 @@ export { auth as proxy } from "@/auth";
 
 
 ================================================================================
+LOCATION: scratch\inspect_excel.js
+================================================================================
+
+const XLSX = require('xlsx');
+
+function getFirstRows(filename, limit = 5) {
+    const workbook = XLSX.readFile(filename);
+    const sheetName = workbook.SheetNames[0];
+    const worksheet = workbook.Sheets[sheetName];
+    const json = XLSX.utils.sheet_to_json(worksheet, { header: 1 });
+    return json.slice(0, limit);
+}
+
+console.log('Rows for products_all:');
+console.log(getFirstRows('products_all_2026-04-08T12_35_49.902Z.xlsx'));
+
+console.log('\nRows for Pharma-line pricelist:');
+console.log(getFirstRows('Pharma-line pricelist.xlsx', 15));
+
+
+
+================================================================================
+LOCATION: scratch\migrate_prices.js
+================================================================================
+
+const { PrismaClient } = require('@prisma/client');
+const XLSX = require('xlsx');
+
+const prisma = new PrismaClient();
+
+function getTokens(str) {
+    if (!str) return [];
+    return str.toLowerCase()
+        .replace(/[^a-z0-9\s]/g, ' ')
+        .split(/\s+/)
+        .filter(t => t.length > 1);
+}
+
+function scoreMatch(tokens1, tokens2) {
+    if (tokens1.length === 0 || tokens2.length === 0) return 0;
+    let matches = 0;
+    for (const t1 of tokens1) {
+        if (tokens2.includes(t1)) {
+            matches++;
+        } else {
+             for(const t2 of tokens2) {
+                 if(t1.length >= 3 && t2.length >= 3 && (t1.startsWith(t2) || t2.startsWith(t1))) {
+                     matches += 0.5;
+                     break;
+                 }
+             }
+        }
+    }
+    return matches / Math.max(tokens1.length, tokens2.length);
+}
+
+// Utility to process items in chunks
+async function processInChunks(items, chunkSize, processItemFn) {
+    for (let i = 0; i < items.length; i += chunkSize) {
+        const chunk = items.slice(i, i + chunkSize);
+        await Promise.all(chunk.map(processItemFn));
+    }
+}
+
+async function main() {
+    console.log('Starting migration...');
+    const updatedProductIds = new Set();
+    const batchSize = 50; // concurrency
+
+    console.log('Ensuring vendors and categories...');
+    let pharmaVendor = await prisma.vendor.findUnique({ where: { name: 'pharma-line' } });
+    if (!pharmaVendor) pharmaVendor = await prisma.vendor.create({ data: { name: 'pharma-line' } });
+
+    let uncategorized = await prisma.category.findUnique({ where: { name: 'uncategorized' } });
+    if (!uncategorized) uncategorized = await prisma.category.create({ data: { name: 'uncategorized' } });
+
+    // Pre-cache all vendors
+    console.log('Caching vendors...');
+    const allVendors = await prisma.vendor.findMany();
+    const vendorCache = new Map(allVendors.map(v => [v.name, v.id]));
+
+    // Extract all unique vendors from data1 and create them sequentially
+    const productsAllFile = 'products_all_2026-04-08T12_35_49.902Z.xlsx';
+    console.log(`Reading ${productsAllFile}...`);
+    const workbook1 = XLSX.readFile(productsAllFile);
+    const data1 = XLSX.utils.sheet_to_json(workbook1.Sheets[workbook1.SheetNames[0]]);
+    
+    console.log('Pre-creating missing vendors from file...');
+    const uniqueVendors = new Set();
+    for (const row of data1) {
+        const vendorName = row['Vendor. '];
+        if (vendorName && vendorName !== 'N/A') {
+            uniqueVendors.add(vendorName);
+        }
+    }
+    
+    for (const vendorName of uniqueVendors) {
+        if (!vendorCache.has(vendorName)) {
+            const vendor = await prisma.vendor.create({ data: { name: vendorName } });
+            vendorCache.set(vendorName, vendor.id);
+        }
+    }
+
+    // Pre-fetch products
+    console.log('Fetching existing products...');
+    const allExistingProducts = await prisma.product.findMany({ select: { id: true, name: true } });
+    const existingProductIds = new Set(allExistingProducts.map(p => p.id));
+    
+    const productsWithTokens = allExistingProducts.map(p => ({
+        id: p.id,
+        name: p.name,
+        tokens: getTokens(p.name)
+    }));
+
+    let processed1 = 0;
+    await processInChunks(data1, batchSize, async (row) => {
+        const id = row['id'];
+        if (!id || !existingProductIds.has(id)) return;
+        
+        let costPrice = row['Cost Price'];
+        costPrice = (costPrice === 'N/A' || !costPrice) ? 0 : parseFloat(costPrice) || 0;
+        
+        const vendorName = row['Vendor. '];
+        const vendorId = vendorName && vendorName !== 'N/A' ? vendorCache.get(vendorName) : null;
+
+        try {
+            await prisma.product.update({ where: { id }, data: { price: costPrice } });
+            if (vendorId) {
+                await prisma.productVendor.upsert({
+                    where: { productId_vendorId: { productId: id, vendorId: vendorId } },
+                    update: { costPrice },
+                    create: { productId: id, vendorId, costPrice, isDefault: true }
+                });
+            }
+            updatedProductIds.add(id);
+            processed1++;
+            if (processed1 % 500 === 0) console.log(`Processed ${processed1} from file 1...`);
+        } catch (e) {
+            console.error(`Error updating product ${id}: ${e.message}`);
+        }
+    });
+    console.log(`Completed file 1. Updated ${processed1} products.`);
+
+    // 2. Process Pharma-line pricelist
+    const pharmaLineFile = 'Pharma-line pricelist.xlsx';
+    console.log(`Reading ${pharmaLineFile}...`);
+    const workbook2 = XLSX.readFile(pharmaLineFile);
+    const data2 = XLSX.utils.sheet_to_json(workbook2.Sheets[workbook2.SheetNames[0]], { header: 1 }).slice(5);
+    
+    let pharmaProcessed = 0;
+    let newProductsCount = 0;
+    let matchedProductsCount = 0;
+
+    console.log(`Found ${data2.length} rows in Pharma-line. Processing...`);
+
+    // Not using concurrent chunks here easily because we might create same product twice, 
+    // but we can just use sequential or chunks if we don't care about rare duplicates
+    for (const row of data2) {
+        if (!row || row.length < 3) continue;
+        const rawName = row[1];
+        if (!rawName || typeof rawName !== 'string' || rawName.trim() === 'ARTICLES') continue;
+        
+        let price = parseFloat(row[2]) || 0;
+        const rowTokens = getTokens(rawName);
+        let bestMatch = null, bestScore = 0;
+
+        for (const p of productsWithTokens) {
+            const score = scoreMatch(rowTokens, p.tokens);
+            if (score > bestScore) { bestScore = score; bestMatch = p; }
+        }
+
+        let matchedId = (bestScore >= 0.5 && bestMatch) ? bestMatch.id : null;
+
+        if (matchedId) {
+            await prisma.product.update({ where: { id: matchedId }, data: { price } });
+            await prisma.productVendor.upsert({
+                where: { productId_vendorId: { productId: matchedId, vendorId: pharmaVendor.id } },
+                update: { costPrice: price },
+                create: { productId: matchedId, vendorId: pharmaVendor.id, costPrice: price, isDefault: true }
+            });
+            updatedProductIds.add(matchedId);
+            matchedProductsCount++;
+        } else {
+            const newProduct = await prisma.product.create({
+                data: {
+                    name: rawName.trim(), price, categoryId: uncategorized.id,
+                    vendors: { create: { vendorId: pharmaVendor.id, costPrice: price, isDefault: true } }
+                }
+            });
+            updatedProductIds.add(newProduct.id);
+            productsWithTokens.push({ id: newProduct.id, name: newProduct.name, tokens: getTokens(newProduct.name) });
+            newProductsCount++;
+        }
+        pharmaProcessed++;
+        if (pharmaProcessed % 500 === 0) console.log(`Processed ${pharmaProcessed} from Pharma-line...`);
+    }
+    console.log(`Completed Pharma-line. Matched: ${matchedProductsCount}, Created: ${newProductsCount}`);
+
+    // 3. Reset remaining products
+    console.log(`Resetting un-updated products...`);
+    const unupdatedIds = [...existingProductIds].filter(id => !updatedProductIds.has(id));
+    console.log(`Found ${unupdatedIds.length} products to reset.`);
+    
+    let resetCount = 0;
+    await processInChunks(unupdatedIds, batchSize, async (pid) => {
+        try {
+            await prisma.product.update({ where: { id: pid }, data: { price: 0 } });
+            await prisma.productVendor.updateMany({ where: { productId: pid }, data: { costPrice: 0 } });
+            resetCount++;
+            if (resetCount % 1000 === 0) console.log(`Reset ${resetCount} products...`);
+        } catch(e) { /* ignore missing */ }
+    });
+    
+    console.log(`Reset ${resetCount} total products to 0.`);
+    console.log('Migration complete.');
+}
+
+main()
+    .catch(e => { console.error('Fatal error:', e); process.exit(1); })
+    .finally(async () => { await prisma.$disconnect(); });
+
+
+
+================================================================================
 LOCATION: scripts\check-users.ts
 ================================================================================
 
@@ -47115,5 +47623,5 @@ export const normalizeDateTime = (dateTime?: string): string => {
 
 
 ================================================================================
-TOTAL FILES CONSOLIDATED: 384
+TOTAL FILES CONSOLIDATED: 386
 ================================================================================

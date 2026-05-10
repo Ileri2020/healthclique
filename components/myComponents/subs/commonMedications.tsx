@@ -44,14 +44,14 @@ const CommonMedications = () => {
   const fetchData = useCallback(async () => {
     try {
       const [prodRes, featRes] = await Promise.all([
-        fetch("/api/dbhandler?model=product&include=category&minimal=true&limit=15"),
-        fetch("/api/dbhandler?model=featuredProduct&minimal=true&limit=15"),
+        fetch("/api/dbhandler?model=product&include=category&minimal=true&limit=50"),
+        fetch("/api/dbhandler?model=featuredProduct&minimal=true&limit=50"),
       ]);
       const prodData = await prodRes.json();
       const featData = await featRes.json();
 
-      // Common Medications — first 15 products
-      setPharmacyProducts(prodData.slice(0, 15));
+      // Common Medications — first 15 products with images and price > 0
+      setPharmacyProducts(prodData.filter((p: any) => p.price > 0 && p.images && p.images.length > 0).slice(0, 15));
 
       // Build featuredIds and featuredMap for toggling
       const ids = new Set<string>();
