@@ -29,20 +29,20 @@ export const GlobalSearch = ({ placeholder = "Search for medications, brands or 
 
   useEffect(() => {
     // Pre-fetch all products for quick local filtering
-    axios.get(`/api/dbhandler?model=product&include=category`).then(res => {
+    axios.get(`/api/dbhandler?model=product&include=category,brand,stock,activeIngredients`).then(res => {
       setAllProducts(res.data);
     }).catch(console.error);
   }, []);
 
   const uniqueCategories = Array.from(new Set(allProducts.map(p => p.category?.name || "Uncategorized")));
-  const uniqueBrands = Array.from(new Set(allProducts.map(p => p.brand).filter(Boolean)));
-
+  const uniqueBrands = Array.from(new Set(allProducts.map((p: any) => p.brand?.name).filter(Boolean)));
 
   const handleSearch = (value: string, cat = filterCategory, br = filterBrand, pr = filterPrice) => {
+    const query = value.trim().toLowerCase();
     setSearchValue(value);
     
-    // Always open if we type or if we choose a filter
-    if (value.length < 2 && cat === "All" && br === "All" && pr === "All") {
+    // Always open search when typing or choosing a filter
+    if (query.length < 2 && cat === "All" && br === "All" && pr === "All") {
       setSearchResults([]);
       setIsSearchOpen(false);
       return;
@@ -50,12 +50,22 @@ export const GlobalSearch = ({ placeholder = "Search for medications, brands or 
 
     let filtered = allProducts.filter((p: any) => p.price > 0 && p.images && p.images.length > 0);
     
-    if (value.length >= 2) {
-      filtered = filtered.filter((p: any) =>
-        p.name?.toLowerCase().includes(value.toLowerCase()) ||
-        p.description?.toLowerCase().includes(value.toLowerCase()) ||
-        p.activeIngredients?.some((ing: string) => ing.toLowerCase().includes(value.toLowerCase()))
-      );
+    if (query.length >= 2) {
+      filtered = filtered.filter((p: any) => {
+        const name = p.name?.toLowerCase() || "";
+        const description = p.description?.toLowerCase() || "";
+        const brandName = typeof p.brand === "string" ? p.brand.toLowerCase() : p.brand?.name?.toLowerCase() || "";
+        const ingredients = Array.isArray(p.activeIngredients)
+          ? p.activeIngredients.map((ing: any) => typeof ing === "string" ? ing.toLowerCase() : ing?.name?.toLowerCase() || "")
+          : [];
+
+        return (
+          name.includes(query) ||
+          description.includes(query) ||
+          brandName.includes(query) ||
+          ingredients.some((ing: string) => ing.includes(query))
+        );
+      });
     }
 
     if (cat !== "All") {
@@ -63,7 +73,10 @@ export const GlobalSearch = ({ placeholder = "Search for medications, brands or 
     }
     
     if (br !== "All") {
-      filtered = filtered.filter((p: any) => p.brand === br);
+      filtered = filtered.filter((p: any) => {
+        const brandName = typeof p.brand === "string" ? p.brand : p.brand?.name;
+        return brandName === br;
+      });
     }
 
     if (pr !== "All") {
@@ -96,16 +109,22 @@ export const GlobalSearch = ({ placeholder = "Search for medications, brands or 
   return (
     <div className={`relative w-full ${className}`} ref={searchRef}>
       <div className="relative group">
-        <Search className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-muted-foreground group-focus-within:text-primary transition-colors" />
+        <Search className="pointer-events-none absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-muted-foreground group-focus-within:text-primary transition-colors" />
         <Input
           type="text"
           placeholder={placeholder}
+          autoComplete="off"
+          inputMode="search"
           className="h-12 pl-12 pr-4 text-base border-2 border-muted hover:border-primary/50 focus:border-primary transition-all rounded-xl shadow-sm"
           value={searchValue}
           onChange={(e) => handleSearch(e.target.value)}
-          onFocus={() => {
-            setIsSearchOpen(true);
-            handleSearch(searchValue);
+          onFocus={() => setIsSearchOpen(true)}
+          onKeyDown={(e) => {
+            if (e.key === "Enter") {
+              e.preventDefault();
+              handleSearch(searchValue);
+              setIsSearchOpen(true);
+            }
           }}
         />
       </div>
@@ -159,35 +178,39 @@ export const GlobalSearch = ({ placeholder = "Search for medications, brands or 
               <div className="p-2 border-b bg-muted/30 text-xs font-semibold uppercase tracking-wider text-muted-foreground">
                 Matching Products
               </div>
-          <div className="max-h-[300px] overflow-y-auto">
-            {searchResults.map((product: any) => (
-              <Link 
-                key={product.id} 
-                href={`/products/${product.id}`}
-                onClick={() => setIsSearchOpen(false)}
-                className="flex items-center gap-4 p-3 hover:bg-accent/50 transition-colors group"
-              >
-                <div className="w-10 h-10 rounded bg-muted flex items-center justify-center overflow-hidden">
-                  {product.images?.[0] ? (
-                    <img src={product.images[0]} alt={product.name} className="object-cover w-full h-full" />
-                  ) : (
-                    <HeartPulse className="w-5 h-5 text-muted-foreground" />
-                  )}
-                </div>
-                <div className="flex-1">
-                  <div className="text-sm font-semibold group-hover:text-primary transition-colors">{product.name}</div>
-                  <div className="text-xs text-muted-foreground">₦{getProductPrice(product, user?.role).toLocaleString()}</div>
-                </div>
-              </Link>
-            ))}
-          </div>
+              <div className="max-h-[300px] overflow-y-auto">
+                {searchResults.map((product: any) => (
+                  <Link 
+                    key={product.id} 
+                    href={`/products/${product.id}`}
+                    onClick={() => setIsSearchOpen(false)}
+                    className="flex items-center gap-4 p-3 hover:bg-accent/50 transition-colors group"
+                  >
+                    <div className="w-10 h-10 rounded bg-muted flex items-center justify-center overflow-hidden">
+                      {product.images?.[0] ? (
+                        <img src={product.images[0]} alt={product.name} className="object-cover w-full h-full" />
+                      ) : (
+                        <HeartPulse className="w-5 h-5 text-muted-foreground" />
+                      )}
+                    </div>
+                    <div className="flex-1">
+                      <div className="text-sm font-semibold group-hover:text-primary transition-colors">{product.name}</div>
+                      <div className="text-xs text-muted-foreground">₦{getProductPrice(product, user?.role).toLocaleString()}</div>
+                    </div>
+                  </Link>
+                ))}
+              </div>
               <Link href="/store" onClick={() => setIsSearchOpen(false)} className="block p-3 text-center text-sm font-medium text-primary hover:bg-primary/5 border-t">
                 View all results
               </Link>
             </>
           ) : (
             <div className="p-8 text-center text-muted-foreground text-sm">
-              No products found matching your search.
+              {searchValue.trim().length < 2 ? (
+                <>Type at least 2 characters to start searching.</>
+              ) : (
+                <>No products found matching your search.</>
+              )}
             </div>
           )}
         </div>
