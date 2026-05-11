@@ -143,7 +143,7 @@ const Advert = () => {
           fade ? "opacity-100" : "opacity-0"
         }`}
       >
-        {adverts.length > 0 ? adverts[currentIndex].text : "Welcome to Health Clique!"}
+        {adverts.length > 0 ? adverts[currentIndex].text : "Welcome to HealthClique!"}
       </div>
       {isAdmin && (
         <button

@@ -14,10 +14,10 @@ export const sendOrderNotification = async (to: string, orderDetails: any) => {
     try {
         console.log('Sending order notification email to:', to);
         const isUnconfirmed = orderDetails.status === 'unconfirmed';
-        const subject = isUnconfirmed ? '[HEALTH CLIQUE] Action Required: Confirm Bank Transfer' : '[HEALTH CLIQUE] New Order Notification';
+        const subject = isUnconfirmed ? '[HEALTHCLIQUE] Action Required: Confirm Bank Transfer' : '[HEALTHCLIQUE] New Order Notification';
         
         const mailOptions = {
-            from: `"Health Clique" <${email}>`,
+            from: `"HealthClique" <${email}>`,
             to,
             subject,
             html: `
@@ -26,7 +26,7 @@ export const sendOrderNotification = async (to: string, orderDetails: any) => {
                 <h1 style="margin: 0; font-size: 24px;">${subject}</h1>
             </div>
             <div style="padding: 30px;">
-                <p style="font-size: 16px; color: #374151;">${isUnconfirmed ? 'A bank transfer checkout has been submitted and is awaiting confirmation.' : 'A new order has been successfully placed on Health Clique.'}</p>
+                <p style="font-size: 16px; color: #374151;">${isUnconfirmed ? 'A bank transfer checkout has been submitted and is awaiting confirmation.' : 'A new order has been successfully placed on HealthClique.'}</p>
                 
                 <div style="background: #f9fafb; padding: 20px; border-radius: 8px; margin: 25px 0;">
                     <h3 style="margin-top: 0; color: #111827; font-size: 18px;">Transaction Summary</h3>
@@ -43,7 +43,7 @@ export const sendOrderNotification = async (to: string, orderDetails: any) => {
                 </p>
             </div>
             <div style="background: #f3f4f6; padding: 15px; text-align: center; font-size: 12px; color: #9ca3af;">
-                © 2026 Health Clique Pharmacy. All rights reserved.
+                © 2026 HealthClique Pharmacy. All rights reserved.
             </div>
         </div>
       `,
@@ -82,9 +82,9 @@ export const sendPaymentConfirmationEmail = async (to: string, data: {
         `;}).join('');
 
         const mailOptions = {
-            from: `"Health Clique" <${email}>`,
+            from: `"HealthClique" <${email}>`,
             to,
-            subject: `Health Clique: Order Confirmation - #${data.orderId.slice(-6).toUpperCase()}`,
+            subject: `HealthClique: Order Confirmation - #${data.orderId.slice(-6).toUpperCase()}`,
             html: `
                 <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; border: 1px solid #e5e7eb; border-radius: 12px; overflow: hidden;">
                     <div style="background: #10b981; padding: 25px; text-align: center; color: white;">
@@ -136,8 +136,8 @@ export const sendPaymentConfirmationEmail = async (to: string, data: {
                         </div>
                     </div>
                     <div style="background: #f3f4f6; padding: 20px; text-align: center; font-size: 12px; color: #9ca3af; border-top: 1px solid #e5e7eb;">
-                        Health Clique Pharmacy & Healthcare Services<br>
-                        © 2026 Health Clique. All rights reserved.
+                        HealthClique Pharmacy & Healthcare Services<br>
+                        © 2026 HealthClique. All rights reserved.
                     </div>
                 </div>
             `,
@@ -179,7 +179,7 @@ export const sendAdminCustomEmail = async (to: string, data: {
                     <div style="max-width: 600px; margin: 0 auto; background: #ffffff; border-radius: 16px; overflow: hidden; box-shadow: 0 10px 25px rgba(0,0,0,0.05);">
                         
                         <div style="background: #10b981; padding: 32px; text-align: center;">
-                            <h1 style="color: #ffffff; margin: 0; font-size: 24px; font-weight: 800; letter-spacing: -0.025em;">HEALTH CLIQUE</h1>
+                            <h1 style="color: #ffffff; margin: 0; font-size: 24px; font-weight: 800; letter-spacing: -0.025em;">HEALTHCLIQUE</h1>
                             <p style="color: rgba(255,255,255,0.9); margin-top: 4px; font-size: 14px; font-weight: 500;">Status Update Notification</p>
                         </div>
 
@@ -226,7 +226,7 @@ export const sendAdminCustomEmail = async (to: string, data: {
                                 <p style="font-size: 12px; color: #9ca3af; margin-bottom: 8px;">
                                     This is a system-generated message. Please do not reply directly to this email.
                                 </p>
-                                <p style="font-size: 14px; font-weight: 800; color: #10b981;">© 2026 HEALTH CLIQUE PHARMA LTD</p>
+                                <p style="font-size: 14px; font-weight: 800; color: #10b981;">© 2026 HEALTHCLIQUE PHARMA LTD</p>
                             </div>
                         </div>
                     </div>

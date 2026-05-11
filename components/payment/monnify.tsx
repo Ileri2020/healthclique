@@ -39,7 +39,7 @@ const MonnifyPaymentButton = React.forwardRef<HTMLButtonElement, MonnifyPaymentB
     apiKey: process.env.NEXT_PUBLIC_MONNIFY_API_KEY as string,
     contractCode: process.env.NEXT_PUBLIC_MONNIFY_CONTRACT_CODE as string,
     isTestMode: process.env.NEXT_PUBLIC_MONNIFY_IS_TEST_MODE === 'true',
-    paymentDescription: 'Health Clique cart payment',
+    paymentDescription: 'HealthClique cart payment',
   }), [amount, currency, reference, name, email, phoneNumber]);
 
   const initializePayment = useMonnifyPayment(config);

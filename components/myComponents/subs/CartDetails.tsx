@@ -147,7 +147,7 @@ export function CartDetails({ cartId, onPaymentSuccess }: CartDetailsProps) {
             }
 
             // 5. Send message to user
-            const messageContent = `[HEALTH CLIQUE PHARMACY] Your order (ID: ${cart.id.slice(-6)}) has been updated by a pharmacist. Replaced "${replacingItem.product.name}" with "${newProduct.name}". ${diff > 0 && isLocked ? `A surplus of ₦${formatPrice(diff)} has been credited to your Health Wallet.` : diff < 0 ? `Please note the balance difference of ₦${formatPrice(Math.abs(diff))} added to your total.` : `Total price adjusted.`}`;
+            const messageContent = `[HEALTHCLIQUE PHARMACY] Your order (ID: ${cart.id.slice(-6)}) has been updated by a pharmacist. Replaced "${replacingItem.product.name}" with "${newProduct.name}". ${diff > 0 && isLocked ? `A surplus of ₦${formatPrice(diff)} has been credited to your Health Wallet.` : diff < 0 ? `Please note the balance difference of ₦${formatPrice(Math.abs(diff))} added to your total.` : `Total price adjusted.`}`;
             
             await axios.post(`/api/dbhandler?model=message`, {
                 content: messageContent,
@@ -263,7 +263,7 @@ export function CartDetails({ cartId, onPaymentSuccess }: CartDetailsProps) {
     }
 
     const calculateDeliveryFee = (address?: Address | null): number => {
-        return 3000; // Flat fee for Health Clique for now
+        return 3000; // Flat fee for HealthClique for now
     };
 
     const selectedAddress = user?.addresses?.find((a: Address) => a.id === selectedAddressId);

@@ -269,7 +269,7 @@ const TermsPage = () => {
 
           <section className="text-center py-10">
             <p className="text-xs text-muted-foreground italic">
-              Health Clique reserves the right to withdraw credit facilities from any institution or wholesaler without prior notice if terms are violated.
+              HealthClique reserves the right to withdraw credit facilities from any institution or wholesaler without prior notice if terms are violated.
             </p>
           </section>
         </div>

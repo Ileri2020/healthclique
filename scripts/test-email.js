@@ -28,13 +28,13 @@ async function testEmail() {
 
         console.log(`Sending test email to ${testRecipient}...`);
         const info = await transporter.sendMail({
-            from: `"Health Clique Test" <${user}>`,
+            from: `"HealthClique Test" <${user}>`,
             to: testRecipient,
-            subject: "Health Clique Email Test Successful ✅",
+            subject: "HealthClique Email Test Successful ✅",
             html: `
                 <div style="font-family: sans-serif; padding: 20px; border: 1px solid #eee; border-radius: 10px;">
                     <h1 style="color: #10b981;">Email System Operational</h1>
-                    <p>This is a test email from <strong>Health Clique</strong> backend.</p>
+                    <p>This is a test email from <strong>HealthClique</strong> backend.</p>
                     <hr/>
                     <p style="font-size: 12px; color: #666;">Timestamp: ${new Date().toLocaleString()}</p>
                 </div>

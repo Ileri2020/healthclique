@@ -144,7 +144,7 @@ const EditUser = () => {
       <DrawerContent className="max-w-3xl mx-auto py-6">
         <DrawerHeader>
           <DrawerTitle className="text-center text-lg">
-            Edit Profile — <span className="text-primary">Health Clique</span>
+            Edit Profile — <span className="text-primary">HealthClique</span>
           </DrawerTitle>
         </DrawerHeader>
 

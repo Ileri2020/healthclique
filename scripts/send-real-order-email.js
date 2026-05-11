@@ -47,13 +47,13 @@ async function testRealCustomerEmail() {
         console.log('Sending real notification simulation...');
         
         const mailOptions = {
-            from: `"Health Clique Support" <${userEmail}>`,
+            from: `"HealthClique Support" <${userEmail}>`,
             to: order.user.email,
             subject: `Update on Order #${order.id.slice(-6).toUpperCase()}`,
             html: `
                 <div style="font-family: Arial; padding: 20px;">
                     <h2>Hello ${order.user.name},</h2>
-                    <p>This is a manual test notification regarding your order at Health Clique.</p>
+                    <p>This is a manual test notification regarding your order at HealthClique.</p>
                     <p><strong>Total Paid:</strong> ₦${order.total.toLocaleString()}</p>
                     <p><strong>Items:</strong></p>
                     <ul>

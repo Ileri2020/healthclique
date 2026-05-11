@@ -26,7 +26,7 @@ export const ManualTransfer = React.forwardRef<HTMLButtonElement, { tx_ref: stri
   const accountInfo = {
     bankName: process.env.NEXT_PUBLIC_BANK_NAME || "Moniepoint MFB",
     accountNumber: process.env.NEXT_PUBLIC_BANK_ACCOUNT_NUMBER || "8065933700",
-    accountName: process.env.NEXT_PUBLIC_BANK_ACCOUNT_NAME || "Health Clique Limited",
+    accountName: process.env.NEXT_PUBLIC_BANK_ACCOUNT_NAME || "HealthClique Limited",
   };
 
   const copyToClipboard = (text: string) => {

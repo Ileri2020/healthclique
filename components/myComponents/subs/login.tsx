@@ -131,7 +131,7 @@ export const LoginForm = ({ onSignupClick }: { onSignupClick?: () => void }) => 
           {verificationStep === 'login' && 'Login to '}
           {verificationStep === 'verify' && 'Verify Your Email — '}
           {verificationStep === 'setPassword' && 'Set Your Password — '}
-          <span className='text-primary'>Health Clique</span>
+          <span className='text-primary'>HealthClique</span>
         </DrawerTitle>
         <DrawerDescription>
           {verificationStep === 'verify' && 'We need to verify your email address'}

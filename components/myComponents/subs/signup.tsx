@@ -75,7 +75,7 @@ export const SignupForm = ({ onLoginClick }: { onLoginClick?: () => void }) => {
     <div className='flex flex-col justify-center items-center py-5 max-w-5xl mx-auto w-full'>
       <DrawerHeader>
         <DrawerTitle className='w-full text-center'>
-          Create an account with <span className='text-primary'>Health Clique</span>
+          Create an account with <span className='text-primary'>HealthClique</span>
         </DrawerTitle>
         <DrawerDescription></DrawerDescription>
       </DrawerHeader>

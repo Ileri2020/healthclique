@@ -110,7 +110,7 @@ export const SnapPrescription = ({
 
       if (!parsed.products?.length) throw new Error("No products identified.");
 
-      setStatus("Finding your drugs and products in Health Clique store...");
+      setStatus("Finding your drugs and products in HealthClique store...");
       const {
         data: { results: searchResults },
       } = await axios.post("/api/products/search-batch", {

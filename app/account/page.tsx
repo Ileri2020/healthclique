@@ -416,7 +416,7 @@ const Account = () => {
             <div className="flex items-center justify-between">
               <div className="flex items-center gap-2">
                 <Shield className="h-5 w-5 text-indigo-300" />
-                <span className="text-xs font-bold uppercase tracking-widest text-indigo-100">Health Clique Wallet</span>
+                <span className="text-xs font-bold uppercase tracking-widest text-indigo-100">HealthClique Wallet</span>
               </div>
               <CheckCircle className="h-6 w-6 text-indigo-300" />
             </div>

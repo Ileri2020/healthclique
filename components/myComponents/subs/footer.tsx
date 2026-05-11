@@ -92,7 +92,7 @@ export function Footer({ className }: { className?: string }) {
           <Link className="flex items-center gap-0" href="/">
             <span
               className={`
-                text-left text-2xl font-black text-primary tracking-tighter italic
+                text-left text-2xl font-black text-primary tracking-tighter
               `}
             >
               health<span className="text-accent">clique</span>
