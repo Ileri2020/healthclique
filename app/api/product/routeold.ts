@@ -1,7 +1,7 @@
 "use server";
 
 import { NextRequest, NextResponse } from "next/server";
-import { PrismaClient } from "@prisma/client";
+import { prisma } from "@/lib/prisma";
 import cloudinary from "cloudinary";
 
 cloudinary.v2.config({
@@ -10,7 +10,6 @@ cloudinary.v2.config({
   api_secret: process.env.CLOUDINARY_API_SECRET,
 });
 
-const prisma = new PrismaClient();
 
 // Centralized model mapping
 const modelMap: Record<string, any> = {

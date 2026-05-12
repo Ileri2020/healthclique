@@ -5,7 +5,7 @@ import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 
 export default function CouponForm() {
-  const [coupons, setCoupons] = useState([]);
+  const [coupons, setCoupons] = useState<any[]>([]);
   const [formData, setFormData] = useState({
     code: '',
     discount: '',
@@ -13,7 +13,7 @@ export default function CouponForm() {
     expiresAt: '',
     active: true,
   });
-  const [editId, setEditId] = useState(null);
+  const [editId, setEditId] = useState<string | null>(null);
 
   const fetchCoupons = useCallback(async () => {
     const res = await axios.get('/api/dbhandler?model=coupon');
@@ -78,8 +78,10 @@ export default function CouponForm() {
 
         <div className="grid grid-cols-2 gap-4">
             <div className="space-y-2">
-                <label className="text-[10px] font-black uppercase tracking-widest text-muted-foreground">Type</label>
+                <label htmlFor="coupon-type" className="text-[10px] font-black uppercase tracking-widest text-muted-foreground">Type</label>
                 <select 
+                    id="coupon-type"
+                    title="Coupon type"
                     className="flex h-12 w-full rounded-md border border-input bg-background px-3 py-2 text-sm font-bold ring-offset-background file:border-0 file:bg-transparent file:text-sm file:font-medium placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
                     value={formData.type} 
                     onChange={(e) => setFormData({ ...formData, type: e.target.value })}

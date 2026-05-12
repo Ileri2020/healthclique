@@ -35,7 +35,7 @@ const TermsPage = () => {
       const totalLifetimeSales = completedCarts.reduce((acc: number, c: any) => acc + c.total, 0);
       const transactionCount = carts.length;
       
-      const newReasons = [];
+      const newReasons: string[] = [];
       if (totalLifetimeSales < 1000000) newReasons.push(`Total lifetime sales (${totalLifetimeSales.toLocaleString()} NGN) is below 1,000,000 NGN threshold.`);
       if (transactionCount < 5) newReasons.push(`Total transaction count (${transactionCount}) is below 5 orders.`);
       if (completedCarts.length < 3) newReasons.push(`Completed transactions (${completedCarts.length}) is below 3 required.`);

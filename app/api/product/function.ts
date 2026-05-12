@@ -1,7 +1,6 @@
+import { prisma } from "@/lib/prisma";
 
-import { PrismaClient } from '@prisma/client';
 
-const prisma = new PrismaClient();
 
 const modelMap = { 
   //ministries: prisma.ministry,
@@ -29,7 +28,7 @@ async function dbHandler({
   profileImage = false,
 }: {
   model: any;
-  id?: string;
+  id?: string | null;
   body?: any;
   method: 'GET' | 'POST' | 'PUT' | 'DELETE';
   profileImage?: boolean;
@@ -140,8 +139,7 @@ export default dbHandler;
 
 
 
-// import { PrismaClient } from '@prisma/client';
-
+// 
 // const prisma = new PrismaClient();
 
 // const modelMap = {

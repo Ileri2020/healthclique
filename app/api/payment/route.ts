@@ -1,10 +1,9 @@
 import { NextRequest, NextResponse } from "next/server";
+import { prisma } from "@/lib/prisma";
 import crypto from "crypto";
-import { PrismaClient } from "@prisma/client";
 import axios from "axios";
 import { sendOrderNotification, sendPaymentConfirmationEmail } from "@/lib/nodemailer";
 
-const prisma = new PrismaClient();
 
 function generateTxRef() {
   return `HC-${Date.now()}-${crypto.randomBytes(4).toString("hex")}`;

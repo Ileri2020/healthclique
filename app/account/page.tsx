@@ -72,9 +72,22 @@ const Account = () => {
   }, []);
 
   useEffect(() => {
+    // Only fetch affiliate status for authenticated users
+    if (!user || user.email === "nil") {
+      setLoadingAffiliateData(false);
+      return;
+    }
+
     fetch("/api/affiliate")
-      .then((res) => res.json())
+      .then((res) => {
+        if (!res.ok) {
+          setLoadingAffiliateData(false);
+          return;
+        }
+        return res.json();
+      })
       .then((data) => {
+        if (!data) return;
         setIsAffiliate(data.isAffiliate);
         setAffiliateData(data.affiliate);
         setLoadingAffiliateData(false);
@@ -85,7 +98,7 @@ const Account = () => {
       .catch(() => {
         setLoadingAffiliateData(false);
       });
-  }, []);
+  }, [user?.email]);
 
   useEffect(() => {
     if (!isAffiliate) return;
@@ -686,7 +699,7 @@ const Account = () => {
               </div>
 
               {/* Additional addresses */}
-              {user.addresses && user.addresses.length > 1 && user.addresses.slice(1).map((addr, i) => (
+              {user.addresses && user.addresses.length > 1 && user.addresses.slice(1).map((addr: any, i: number) => (
                 <div key={addr.id || i} className="flex items-start gap-4 px-5 py-4">
                   <div className="w-9 h-9 rounded-full bg-muted flex items-center justify-center flex-shrink-0 mt-0.5">
                     <Building className="h-4 w-4 text-muted-foreground" />

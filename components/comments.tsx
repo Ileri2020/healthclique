@@ -15,7 +15,7 @@ const baseUrl = BASE_URL + "/comments";
 
 const Comments = ( props : {videoId : string}) => {
   const { user, isModal, setIsModal, comments, setComments} = useAppContext();
-  const [compComments, setCompComments] = useState([]); //<CommentType[]>
+  const [compComments, setCompComments] = useState<any[]>([]);
   const [comment, setComment] = useState<string>("");
   const [loading, setLoading] = useState(true);
   const [isOpen, setIsOpen] = useState(false);
@@ -58,8 +58,8 @@ const Comments = ( props : {videoId : string}) => {
       })
       .catch((err) => console.log(err));
 
-    setCompComments(comments.filter((comment)=> comment.contentId === props.videoId))
-    console.log('all comment',comments,'filtered comments', comments.filter((comment)=> comment.contentId === props.videoId))
+    setCompComments(comments.filter((comment: any)=> comment.contentId === props.videoId))
+    console.log('all comment',comments,'filtered comments', comments.filter((comment: any)=> comment.contentId === props.videoId))
   }, [props.videoId]);
   
 

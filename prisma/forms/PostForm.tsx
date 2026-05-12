@@ -4,15 +4,15 @@ import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
 
 export default function PostForm() {
-  const [posts, setPosts] = useState([]);
+  const [posts, setPosts] = useState<any[]>([]);
   const [formData, setFormData] = useState({
     title: '',
     description: '',
     contentUrl: '',
     authorId: '',
   });
-  const [editId, setEditId] = useState(null);
-  const [users, setUsers] = useState([]); // Added to store users for the select input
+  const [editId, setEditId] = useState<string | null>(null);
+  const [users, setUsers] = useState<any[]>([]); // Added to store users for the select input
 
   const fetchPosts = useCallback(async () => {
     const res = await axios.get('/api/dbhandler?model=post');
@@ -64,7 +64,8 @@ export default function PostForm() {
     <div>
       <form onSubmit={handleSubmit} className='flex flex-col w-full max-w-sm gap-2 justify-center items-center p-3 border-2 border-secondary-foreground rounded-sm m-2'>
         <h2 className='font-semibold text-lg'>Manage Posts</h2>
-        <select value={formData.authorId} onChange={(e) => setFormData({ ...formData, authorId: e.target.value })}>
+        <label className="sr-only" htmlFor="post-author">Author</label>
+        <select id="post-author" title="Select author" value={formData.authorId} onChange={(e) => setFormData({ ...formData, authorId: e.target.value })}>
           <option value="">Select Author</option>
           {users.map((user) => (
             <option key={user.id} value={user.id}>

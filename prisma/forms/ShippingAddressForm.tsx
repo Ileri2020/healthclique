@@ -5,7 +5,7 @@ import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
 
 export default function ShippingAddressForm() {
-  const [shippingAddresses, setShippingAddresses] = useState([]);
+  const [shippingAddresses, setShippingAddresses] = useState<any[]>([]);
   const [formData, setFormData] = useState({
     userId: '',
     address: '',
@@ -15,8 +15,8 @@ export default function ShippingAddressForm() {
     country: '',
     phone: '',
   });
-  const [editId, setEditId] = useState(null);
-  const [users, setUsers] = useState([]); // Added to store users for the select input
+  const [editId, setEditId] = useState<string | null>(null);
+  const [users, setUsers] = useState<any[]>([]); // Added to store users for the select input
 
   const fetchShippingAddresses = async () => {
     const res = await axios.get('/api/dbhandler?model=shippingAddress');
@@ -71,7 +71,8 @@ export default function ShippingAddressForm() {
     <div>
       <form onSubmit={handleSubmit} className='flex flex-col w-full max-w-sm gap-2 justify-center items-center p-3 border-2 border-secondary-foreground rounded-sm m-2'>
         <h2 className='font-semibold text-lg'>Manage Shipping Addresses</h2>
-        <select value={formData.userId} onChange={(e) => setFormData({ ...formData, userId: e.target.value })}>
+        <label className="sr-only" htmlFor="shipping-address-user">User</label>
+        <select id="shipping-address-user" title="Select user" value={formData.userId} onChange={(e) => setFormData({ ...formData, userId: e.target.value })}>
           <option value="">Select User</option>
           {users.map((user) => (
             <option key={user.id} value={user.id}>

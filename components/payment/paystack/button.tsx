@@ -1,7 +1,7 @@
 import React from 'react';
 import logo from './logo.svg';
 import { PaystackButton } from 'react-paystack';
-import './App.css';
+// import './App.css';
 
 const config = {
   reference: (new Date()).getTime().toString(),
@@ -12,7 +12,7 @@ const config = {
 
 function App() {
   // you can call this function anything
-  const handlePaystackSuccessAction = (reference) => {
+  const handlePaystackSuccessAction = (reference: any) => {
     // Implementation for whatever you want to do with reference and after success call.
     console.log(reference);
   };
@@ -26,7 +26,7 @@ function App() {
   const componentProps = {
       ...config,
       text: 'Paystack Button Implementation',
-      onSuccess: (reference) => handlePaystackSuccessAction(reference),
+      onSuccess: (reference: any) => handlePaystackSuccessAction(reference),
       onClose: handlePaystackCloseAction,
   };
 

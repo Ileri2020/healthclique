@@ -41,9 +41,9 @@ const Navbar = (): JSX.Element => {
   }, [status, session, user.email, setUser]);
 
   return (
-    <div className="sticky top-0 z-30 w-[100vw] overflow-clip flex flex-col m-0 p-0">
+    <div className="sticky top-0 z-30 w-[100vw] overflow-visible flex flex-col m-0 p-0">
       <header className="w-[100%] py-4 bg-background sticky top-0 z-10 shadow-md shadow-accent/40">
-        <div className="container mx-auto flex justify-between items-center h-[50px] overflow-clip">
+        <div className="container mx-auto flex justify-between items-center h-[50px] overflow-visible">
           <div className="lg:hidden">
             <Sidenav />
           </div>

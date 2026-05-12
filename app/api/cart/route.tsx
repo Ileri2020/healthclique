@@ -1,9 +1,8 @@
 "use server"
-import { PrismaClient } from '@prisma/client';
 import { NextRequest } from 'next/server';
+import { prisma } from "@/lib/prisma";
 import bcrypt from 'bcrypt';
 
-const prisma = new PrismaClient();
 
 
 
@@ -75,13 +74,18 @@ export async function POST(req: NextRequest) {
   // const body = searchParams.get('body') || null;
 
   // Parse JSON body
-  let body = null;
-  const {userId, cartItems}=body
+  let body: { userId?: string; cartItems?: Array<{ productId: string; quantity: number }> } | null = null;
   try {
     body = await req.json(); // This reads the JSON payload
   } catch (err) {
     return new Response('Invalid JSON', { status: 400 });
   }
+
+  if (!body || typeof body.userId !== 'string' || !Array.isArray(body.cartItems)) {
+    return new Response('Invalid request body', { status: 400 });
+  }
+
+  const { userId, cartItems } = body;
 
   const { method } = req; 
   console.log("in cart db handler", method, body)
@@ -142,11 +146,15 @@ export async function PUT(req: NextRequest) {
     // const body = searchParams.get('body') || null;
   
     // Parse JSON body
-    let body = null;
+    let body: { id?: string; [key: string]: any } | null = null;
     try {
       body = await req.json(); // This reads the JSON payload
     } catch (err) {
       return new Response('Invalid JSON', { status: 400 });
+    }
+
+    if (!body || typeof body.id !== 'string') {
+      return new Response('Invalid request body', { status: 400 });
     }
 
   const { method } = req; 
@@ -157,10 +165,10 @@ export async function PUT(req: NextRequest) {
 
     // ✏️ Update Object
   try {
-    const { id, ...updatedata } = body;
+    const { id: bodyId, ...updatedata } = body;
     console.log("id removed from :", updatedata)
     const updatedItem = await prismaModel.update({
-      where: {id},
+      where: { id: bodyId },
       data: updatedata,
     });
 
@@ -186,9 +194,12 @@ export async function DELETE(req: NextRequest) {
   const { searchParams } = new URL(req.url);
   
   // Destructure and provide defaults
-  const model = searchParams.get('model') || null;
+  const model = searchParams.get('model');
   const id = searchParams.get('id') || null;
-  console.log("in db handler",model, id)
+  if (!model) {
+    return new Response(JSON.stringify({ error: 'Invalid model' }), { status: 400, headers: { 'Content-Type': 'application/json' }});
+  }
+  console.log("in db handler", model, id)
 
 
   const modelMap = {

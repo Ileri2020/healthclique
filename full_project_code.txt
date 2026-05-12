@@ -1,6 +1,6 @@
 ================================================================================
 LOIS SPICE PROJECT - SOURCE CODE CONSOLIDATION
-Generated: 2026-05-10 21:15:00
+Generated: 2026-05-11 20:58:03
 ================================================================================
 
 
@@ -575,9 +575,22 @@ const Account = () => {
   }, []);
 
   useEffect(() => {
+    // Only fetch affiliate status for authenticated users
+    if (!user || user.email === "nil") {
+      setLoadingAffiliateData(false);
+      return;
+    }
+
     fetch("/api/affiliate")
-      .then((res) => res.json())
+      .then((res) => {
+        if (!res.ok) {
+          setLoadingAffiliateData(false);
+          return;
+        }
+        return res.json();
+      })
       .then((data) => {
+        if (!data) return;
         setIsAffiliate(data.isAffiliate);
         setAffiliateData(data.affiliate);
         setLoadingAffiliateData(false);
@@ -588,7 +601,7 @@ const Account = () => {
       .catch(() => {
         setLoadingAffiliateData(false);
       });
-  }, []);
+  }, [user?.email]);
 
   useEffect(() => {
     if (!isAffiliate) return;
@@ -919,7 +932,7 @@ const Account = () => {
             <div className="flex items-center justify-between">
               <div className="flex items-center gap-2">
                 <Shield className="h-5 w-5 text-indigo-300" />
-                <span className="text-xs font-bold uppercase tracking-widest text-indigo-100">Health Clique Wallet</span>
+                <span className="text-xs font-bold uppercase tracking-widest text-indigo-100">HealthClique Wallet</span>
               </div>
               <CheckCircle className="h-6 w-6 text-indigo-300" />
             </div>
@@ -2261,10 +2274,9 @@ LOCATION: app\api\admin\send-email\route.ts
 ================================================================================
 
 import { NextRequest, NextResponse } from "next/server";
-import { PrismaClient } from "@prisma/client";
+import { prisma } from "@/lib/prisma";
 import { sendAdminCustomEmail } from "@/lib/nodemailer";
 
-const prisma = new PrismaClient();
 
 export async function POST(req: NextRequest) {
   try {
@@ -2316,10 +2328,9 @@ LOCATION: app\api\advertexts\route.ts
 ================================================================================
 
 import { NextRequest, NextResponse } from "next/server";
-import { PrismaClient } from "@prisma/client";
+import { prisma } from "@/lib/prisma";
 import { usersession } from "@/session";
 
-const prisma = new PrismaClient();
 
 export async function GET() {
   try {
@@ -2615,10 +2626,9 @@ LOCATION: app\api\affiliate\route.ts
 ================================================================================
 
 import { NextRequest, NextResponse } from "next/server";
-import { PrismaClient } from "@prisma/client";
+import { prisma } from "@/lib/prisma";
 import { auth } from "@/auth";
 
-const prisma = new PrismaClient();
 
 export async function POST(req: NextRequest) {
   try {
@@ -2710,9 +2720,8 @@ export async function GET(req: NextRequest) {
 LOCATION: app\api\analytics\route.ts
 ================================================================================
 
-import { PrismaClient } from "@prisma/client";
-const prisma = new PrismaClient();
 import { NextResponse } from "next/server";
+import { prisma } from "@/lib/prisma";
 
 export async function GET(req: Request) {
   const { searchParams } = new URL(req.url);
@@ -2963,11 +2972,10 @@ LOCATION: app\api\auth\login\route.ts
 ================================================================================
 
 "use server"
-import { PrismaClient } from '@prisma/client';
 import { NextRequest } from 'next/server';
+import { prisma } from "@/lib/prisma";
 import bcrypt from 'bcrypt';
 
-const prisma = new PrismaClient();
 
 
 
@@ -3045,10 +3053,9 @@ export const { GET, POST } = handlers;
 LOCATION: app\api\cart\function.ts
 ================================================================================
 
+import { prisma } from "@/lib/prisma";
 
-import { PrismaClient } from '@prisma/client';
 
-const prisma = new PrismaClient();
 
 const modelMap = {
   //ministries: prisma.ministry,
@@ -3161,8 +3168,7 @@ export default dbHandler;
 
 
 
-// import { PrismaClient } from '@prisma/client';
-
+// 
 // const prisma = new PrismaClient();
 
 // const modelMap = {
@@ -3251,11 +3257,10 @@ LOCATION: app\api\cart\route.tsx
 ================================================================================
 
 "use server"
-import { PrismaClient } from '@prisma/client';
 import { NextRequest } from 'next/server';
+import { prisma } from "@/lib/prisma";
 import bcrypt from 'bcrypt';
 
-const prisma = new PrismaClient();
 
 
 
@@ -3526,10 +3531,9 @@ export async function DELETE(req: NextRequest) {
 LOCATION: app\api\dbhandler\function.ts
 ================================================================================
 
+import { prisma } from "@/lib/prisma";
 
-import { PrismaClient } from '@prisma/client';
 
-const prisma = new PrismaClient();
 
 const modelMap = {
   //ministries: prisma.ministry,
@@ -3642,8 +3646,7 @@ export default dbHandler;
 
 
 
-// import { PrismaClient } from '@prisma/client';
-
+// 
 // const prisma = new PrismaClient();
 
 // const modelMap = {
@@ -4525,10 +4528,9 @@ export async function POST(req , res) {
 LOCATION: app\api\heavily-discounted\route.ts
 ================================================================================
 
-import { PrismaClient } from "@prisma/client";
 import { NextResponse } from "next/server";
+import { prisma } from "@/lib/prisma";
 
-const prisma = new PrismaClient();
 
 export async function GET(req: Request) {
   const { searchParams } = new URL(req.url);
@@ -4662,9 +4664,8 @@ LOCATION: app\api\migrate-prices\route.ts
 ================================================================================
 
 import { NextResponse } from 'next/server';
-import { PrismaClient } from '@prisma/client';
+import { prisma } from "@/lib/prisma";
 
-const prisma = new PrismaClient();
 
 
 export async function GET() {
@@ -4719,12 +4720,11 @@ LOCATION: app\api\payment\route.ts
 ================================================================================
 
 import { NextRequest, NextResponse } from "next/server";
+import { prisma } from "@/lib/prisma";
 import crypto from "crypto";
-import { PrismaClient } from "@prisma/client";
 import axios from "axios";
 import { sendOrderNotification, sendPaymentConfirmationEmail } from "@/lib/nodemailer";
 
-const prisma = new PrismaClient();
 
 function generateTxRef() {
   return `HC-${Date.now()}-${crypto.randomBytes(4).toString("hex")}`;
@@ -5039,10 +5039,9 @@ export async function POST(req: NextRequest) {
 LOCATION: app\api\product\function.ts
 ================================================================================
 
+import { prisma } from "@/lib/prisma";
 
-import { PrismaClient } from '@prisma/client';
 
-const prisma = new PrismaClient();
 
 const modelMap = { 
   //ministries: prisma.ministry,
@@ -5181,8 +5180,7 @@ export default dbHandler;
 
 
 
-// import { PrismaClient } from '@prisma/client';
-
+// 
 // const prisma = new PrismaClient();
 
 // const modelMap = {
@@ -5520,7 +5518,7 @@ LOCATION: app\api\product\routeold.ts
 "use server";
 
 import { NextRequest, NextResponse } from "next/server";
-import { PrismaClient } from "@prisma/client";
+import { prisma } from "@/lib/prisma";
 import cloudinary from "cloudinary";
 
 cloudinary.v2.config({
@@ -5529,7 +5527,6 @@ cloudinary.v2.config({
   api_secret: process.env.CLOUDINARY_API_SECRET,
 });
 
-const prisma = new PrismaClient();
 
 // Centralized model mapping
 const modelMap: Record<string, any> = {
@@ -5699,9 +5696,8 @@ LOCATION: app\api\products\search-batch\route.ts
 ================================================================================
 
 import { NextRequest, NextResponse } from "next/server";
-import { PrismaClient } from "@prisma/client";
+import { prisma } from "@/lib/prisma";
 
-const prisma = new PrismaClient();
 
 export async function POST(req: NextRequest) {
   try {
@@ -6186,10 +6182,9 @@ LOCATION: app\api\sheet\search\route.ts
 "use server";
 
 import { NextRequest, NextResponse } from "next/server";
-import { PrismaClient } from "@prisma/client";
+import { prisma } from "@/lib/prisma";
 import { auth } from "@/auth";
 
-const prisma = new PrismaClient();
 
 // Unified Model Map for the entire Sheet System
 const modelMap: Record<string, any> = {
@@ -6278,14 +6273,14 @@ function getIncludesForModel(model: string) {
 }
 
 
+
 ================================================================================
 LOCATION: app\api\stock\route.ts
 ================================================================================
 
-import { PrismaClient } from "@prisma/client";
 import { NextResponse } from "next/server";
+import { prisma } from "@/lib/prisma";
 
-const prisma = new PrismaClient();
 
 // -----------------------------------------
 // GET → fetch stock metrics for ALL products
@@ -6415,9 +6410,16 @@ LOCATION: app\api\visit\route.ts
 ================================================================================
 
 import { NextRequest, NextResponse } from "next/server";
-import { PrismaClient } from "@prisma/client";
+import { prisma } from "@/lib/prisma";
 
-const prisma = new PrismaClient();
+/** Rejects after `ms` milliseconds — used to fail-fast when DB is unreachable */
+const withTimeout = <T>(promise: Promise<T>, ms: number): Promise<T> =>
+  Promise.race([
+    promise,
+    new Promise<T>((_, reject) =>
+      setTimeout(() => reject(new Error(`DB timeout after ${ms}ms`)), ms)
+    ),
+  ]);
 
 // POST /api/visit - Record a page visit (called from browser, works for all users including unauthenticated)
 export async function POST(req: NextRequest) {
@@ -6435,25 +6437,28 @@ export async function POST(req: NextRequest) {
     const today = new Date();
     today.setHours(0, 0, 0, 0);
 
-    const existing = await prisma.visit.findFirst({
-      where: {
-        path,
-        browserId,
-        createdAt: {
-          gte: today,
-        },
-      },
-    });
+    const existing = await withTimeout(
+      prisma.visit.findFirst({
+        where: { path, browserId, createdAt: { gte: today } },
+      }),
+      5000
+    );
 
     if (!existing) {
-      await prisma.visit.create({
-        data: { path, userAgent, ip, browserId },
-      });
+      await withTimeout(
+        prisma.visit.create({
+          data: { path, userAgent, ip, browserId },
+        }),
+        5000
+      );
     }
 
     return NextResponse.json({ ok: true });
-  } catch (err) {
-    console.error("Visit tracking error:", err);
+  } catch (err: any) {
+    // Only log unexpected errors — timeout when offline is expected
+    if (!err?.message?.includes('DB timeout')) {
+      console.error("Visit tracking error:", err);
+    }
     // Return success anyway — we never want tracking to break the user experience
     return NextResponse.json({ ok: true });
   }
@@ -11523,7 +11528,7 @@ const TermsPage = () => {
 
           <section className="text-center py-10">
             <p className="text-xs text-muted-foreground italic">
-              Health Clique reserves the right to withdraw credit facilities from any institution or wholesaler without prior notice if terms are violated.
+              HealthClique reserves the right to withdraw credit facilities from any institution or wholesaler without prior notice if terms are violated.
             </p>
           </section>
         </div>
@@ -14645,7 +14650,7 @@ const Advert = () => {
           fade ? "opacity-100" : "opacity-0"
         }`}
       >
-        {adverts.length > 0 ? adverts[currentIndex].text : "Welcome to Health Clique!"}
+        {adverts.length > 0 ? adverts[currentIndex].text : "Welcome to HealthClique!"}
       </div>
       {isAdmin && (
         <button
@@ -15969,7 +15974,7 @@ export function CartDetails({ cartId, onPaymentSuccess }: CartDetailsProps) {
             }
 
             // 5. Send message to user
-            const messageContent = `[HEALTH CLIQUE PHARMACY] Your order (ID: ${cart.id.slice(-6)}) has been updated by a pharmacist. Replaced "${replacingItem.product.name}" with "${newProduct.name}". ${diff > 0 && isLocked ? `A surplus of ₦${formatPrice(diff)} has been credited to your Health Wallet.` : diff < 0 ? `Please note the balance difference of ₦${formatPrice(Math.abs(diff))} added to your total.` : `Total price adjusted.`}`;
+            const messageContent = `[HEALTHCLIQUE PHARMACY] Your order (ID: ${cart.id.slice(-6)}) has been updated by a pharmacist. Replaced "${replacingItem.product.name}" with "${newProduct.name}". ${diff > 0 && isLocked ? `A surplus of ₦${formatPrice(diff)} has been credited to your Health Wallet.` : diff < 0 ? `Please note the balance difference of ₦${formatPrice(Math.abs(diff))} added to your total.` : `Total price adjusted.`}`;
             
             await axios.post(`/api/dbhandler?model=message`, {
                 content: messageContent,
@@ -16085,7 +16090,7 @@ export function CartDetails({ cartId, onPaymentSuccess }: CartDetailsProps) {
     }
 
     const calculateDeliveryFee = (address?: Address | null): number => {
-        return 3000; // Flat fee for Health Clique for now
+        return 3000; // Flat fee for HealthClique for now
     };
 
     const selectedAddress = user?.addresses?.find((a: Address) => a.id === selectedAddressId);
@@ -19260,7 +19265,7 @@ export function Footer({ className }: { className?: string }) {
           <Link className="flex items-center gap-0" href="/">
             <span
               className={`
-                text-left text-2xl font-black text-primary tracking-tighter italic
+                text-left text-2xl font-black text-primary tracking-tighter
               `}
             >
               health<span className="text-accent">clique</span>
@@ -19462,7 +19467,7 @@ LOCATION: components\myComponents\subs\GlobalSearch.tsx
 
 "use client";
 
-import React, { useState, useRef, useEffect } from "react";
+import React, { useState, useRef, useEffect, useCallback, useMemo } from "react";
 import { Search, HeartPulse } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import Link from "next/link";
@@ -19480,6 +19485,7 @@ export const GlobalSearch = ({ placeholder = "Search for medications, brands or 
   const [searchResults, setSearchResults] = useState([]);
   const [allProducts, setAllProducts] = useState<any[]>([]);
   const [isSearchOpen, setIsSearchOpen] = useState(false);
+  const [isLoading, setIsLoading] = useState(false);
   
   // Filters
   const [filterCategory, setFilterCategory] = useState("All");
@@ -19488,23 +19494,34 @@ export const GlobalSearch = ({ placeholder = "Search for medications, brands or 
 
   const { user } = useAppContext();
   const searchRef = useRef<HTMLDivElement>(null);
+  const debounceTimerRef = useRef<NodeJS.Timeout | null>(null);
 
+  // Fetch products once on mount
   useEffect(() => {
-    // Pre-fetch all products for quick local filtering
-    axios.get(`/api/dbhandler?model=product&include=category`).then(res => {
-      setAllProducts(res.data);
-    }).catch(console.error);
+    setIsLoading(true);
+    axios.get(`/api/dbhandler?model=product&include=category,brand,stock,activeIngredients`)
+      .then(res => {
+        setAllProducts(res.data);
+      })
+      .catch(console.error)
+      .finally(() => setIsLoading(false));
   }, []);
 
-  const uniqueCategories = Array.from(new Set(allProducts.map(p => p.category?.name || "Uncategorized")));
-  const uniqueBrands = Array.from(new Set(allProducts.map(p => p.brand).filter(Boolean)));
+  // Memoize unique categories and brands to prevent unnecessary recalculations
+  const uniqueCategories = useMemo(() => {
+    return Array.from(new Set(allProducts.map(p => p.category?.name || "Uncategorized")));
+  }, [allProducts]);
 
+  const uniqueBrands = useMemo(() => {
+    return Array.from(new Set(allProducts.map((p: any) => p.brand?.name).filter(Boolean)));
+  }, [allProducts]);
 
-  const handleSearch = (value: string, cat = filterCategory, br = filterBrand, pr = filterPrice) => {
+  const handleSearch = useCallback((value: string, cat = filterCategory, br = filterBrand, pr = filterPrice) => {
+    const query = value.trim().toLowerCase();
     setSearchValue(value);
     
-    // Always open if we type or if we choose a filter
-    if (value.length < 2 && cat === "All" && br === "All" && pr === "All") {
+    // Always open search when typing or choosing a filter
+    if (query.length < 2 && cat === "All" && br === "All" && pr === "All") {
       setSearchResults([]);
       setIsSearchOpen(false);
       return;
@@ -19512,12 +19529,22 @@ export const GlobalSearch = ({ placeholder = "Search for medications, brands or 
 
     let filtered = allProducts.filter((p: any) => p.price > 0 && p.images && p.images.length > 0);
     
-    if (value.length >= 2) {
-      filtered = filtered.filter((p: any) =>
-        p.name?.toLowerCase().includes(value.toLowerCase()) ||
-        p.description?.toLowerCase().includes(value.toLowerCase()) ||
-        p.activeIngredients?.some((ing: string) => ing.toLowerCase().includes(value.toLowerCase()))
-      );
+    if (query.length >= 2) {
+      filtered = filtered.filter((p: any) => {
+        const name = p.name?.toLowerCase() || "";
+        const description = p.description?.toLowerCase() || "";
+        const brandName = typeof p.brand === "string" ? p.brand.toLowerCase() : p.brand?.name?.toLowerCase() || "";
+        const ingredients = Array.isArray(p.activeIngredients)
+          ? p.activeIngredients.map((ing: any) => typeof ing === "string" ? ing.toLowerCase() : ing?.name?.toLowerCase() || "")
+          : [];
+
+        return (
+          name.includes(query) ||
+          description.includes(query) ||
+          brandName.includes(query) ||
+          ingredients.some((ing: string) => ing.includes(query))
+        );
+      });
     }
 
     if (cat !== "All") {
@@ -19525,7 +19552,10 @@ export const GlobalSearch = ({ placeholder = "Search for medications, brands or 
     }
     
     if (br !== "All") {
-      filtered = filtered.filter((p: any) => p.brand === br);
+      filtered = filtered.filter((p: any) => {
+        const brandName = typeof p.brand === "string" ? p.brand : p.brand?.name;
+        return brandName === br;
+      });
     }
 
     if (pr !== "All") {
@@ -19540,7 +19570,7 @@ export const GlobalSearch = ({ placeholder = "Search for medications, brands or 
 
     setSearchResults(filtered.slice(0, 8));
     setIsSearchOpen(true);
-  };
+  }, [allProducts, user?.role, filterCategory, filterBrand, filterPrice]);
 
   // Close search results when clicking outside
   useEffect(() => {
@@ -19555,19 +19585,45 @@ export const GlobalSearch = ({ placeholder = "Search for medications, brands or 
     };
   }, []);
 
+  // Debounced input handler
+  const handleInputChange = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
+    const value = e.target.value;
+    setSearchValue(value);
+
+    // Clear previous debounce timer
+    if (debounceTimerRef.current) {
+      clearTimeout(debounceTimerRef.current);
+    }
+
+    // Set new debounce timer
+    debounceTimerRef.current = setTimeout(() => {
+      handleSearch(value, filterCategory, filterBrand, filterPrice);
+    }, 300);
+  }, [handleSearch, filterCategory, filterBrand, filterPrice]);
+
   return (
     <div className={`relative w-full ${className}`} ref={searchRef}>
       <div className="relative group">
-        <Search className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-muted-foreground group-focus-within:text-primary transition-colors" />
+        <Search className="pointer-events-none absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-muted-foreground group-focus-within:text-primary transition-colors" />
         <Input
           type="text"
           placeholder={placeholder}
+          autoComplete="off"
+          inputMode="search"
           className="h-12 pl-12 pr-4 text-base border-2 border-muted hover:border-primary/50 focus:border-primary transition-all rounded-xl shadow-sm"
           value={searchValue}
-          onChange={(e) => handleSearch(e.target.value)}
-          onFocus={() => {
-            setIsSearchOpen(true);
-            handleSearch(searchValue);
+          onChange={handleInputChange}
+          onFocus={() => searchValue.length >= 2 && setIsSearchOpen(true)}
+          onKeyDown={(e) => {
+            if (e.key === "Enter") {
+              e.preventDefault();
+              // Clear pending debounce and search immediately
+              if (debounceTimerRef.current) {
+                clearTimeout(debounceTimerRef.current);
+              }
+              handleSearch(searchValue, filterCategory, filterBrand, filterPrice);
+              setIsSearchOpen(true);
+            }
           }}
         />
       </div>
@@ -19621,35 +19677,39 @@ export const GlobalSearch = ({ placeholder = "Search for medications, brands or 
               <div className="p-2 border-b bg-muted/30 text-xs font-semibold uppercase tracking-wider text-muted-foreground">
                 Matching Products
               </div>
-          <div className="max-h-[300px] overflow-y-auto">
-            {searchResults.map((product: any) => (
-              <Link 
-                key={product.id} 
-                href={`/products/${product.id}`}
-                onClick={() => setIsSearchOpen(false)}
-                className="flex items-center gap-4 p-3 hover:bg-accent/50 transition-colors group"
-              >
-                <div className="w-10 h-10 rounded bg-muted flex items-center justify-center overflow-hidden">
-                  {product.images?.[0] ? (
-                    <img src={product.images[0]} alt={product.name} className="object-cover w-full h-full" />
-                  ) : (
-                    <HeartPulse className="w-5 h-5 text-muted-foreground" />
-                  )}
-                </div>
-                <div className="flex-1">
-                  <div className="text-sm font-semibold group-hover:text-primary transition-colors">{product.name}</div>
-                  <div className="text-xs text-muted-foreground">₦{getProductPrice(product, user?.role).toLocaleString()}</div>
-                </div>
-              </Link>
-            ))}
-          </div>
+              <div className="max-h-[300px] overflow-y-auto">
+                {searchResults.map((product: any) => (
+                  <Link 
+                    key={product.id} 
+                    href={`/products/${product.id}`}
+                    onClick={() => setIsSearchOpen(false)}
+                    className="flex items-center gap-4 p-3 hover:bg-accent/50 transition-colors group"
+                  >
+                    <div className="w-10 h-10 rounded bg-muted flex items-center justify-center overflow-hidden">
+                      {product.images?.[0] ? (
+                        <img src={product.images[0]} alt={product.name} className="object-cover w-full h-full" />
+                      ) : (
+                        <HeartPulse className="w-5 h-5 text-muted-foreground" />
+                      )}
+                    </div>
+                    <div className="flex-1">
+                      <div className="text-sm font-semibold group-hover:text-primary transition-colors">{product.name}</div>
+                      <div className="text-xs text-muted-foreground">₦{getProductPrice(product, user?.role).toLocaleString()}</div>
+                    </div>
+                  </Link>
+                ))}
+              </div>
               <Link href="/store" onClick={() => setIsSearchOpen(false)} className="block p-3 text-center text-sm font-medium text-primary hover:bg-primary/5 border-t">
                 View all results
               </Link>
             </>
           ) : (
             <div className="p-8 text-center text-muted-foreground text-sm">
-              No products found matching your search.
+              {searchValue.trim().length < 2 ? (
+                <>Type at least 2 characters to start searching.</>
+              ) : (
+                <>No products found matching your search.</>
+              )}
             </div>
           )}
         </div>
@@ -20341,7 +20401,7 @@ export const LoginForm = ({ onSignupClick }: { onSignupClick?: () => void }) => 
           {verificationStep === 'login' && 'Login to '}
           {verificationStep === 'verify' && 'Verify Your Email — '}
           {verificationStep === 'setPassword' && 'Set Your Password — '}
-          <span className='text-primary'>Health Clique</span>
+          <span className='text-primary'>HealthClique</span>
         </DrawerTitle>
         <DrawerDescription>
           {verificationStep === 'verify' && 'We need to verify your email address'}
@@ -22699,7 +22759,7 @@ export const SignupForm = ({ onLoginClick }: { onLoginClick?: () => void }) => {
     <div className='flex flex-col justify-center items-center py-5 max-w-5xl mx-auto w-full'>
       <DrawerHeader>
         <DrawerTitle className='w-full text-center'>
-          Create an account with <span className='text-primary'>Health Clique</span>
+          Create an account with <span className='text-primary'>HealthClique</span>
         </DrawerTitle>
         <DrawerDescription></DrawerDescription>
       </DrawerHeader>
@@ -23077,7 +23137,7 @@ export const SnapPrescription = ({
 
       if (!parsed.products?.length) throw new Error("No products identified.");
 
-      setStatus("Finding your drugs and products in Health Clique store...");
+      setStatus("Finding your drugs and products in HealthClique store...");
       const {
         data: { results: searchResults },
       } = await axios.post("/api/products/search-batch", {
@@ -24747,7 +24807,7 @@ const EditUser = () => {
       <DrawerContent className="max-w-3xl mx-auto py-6">
         <DrawerHeader>
           <DrawerTitle className="text-center text-lg">
-            Edit Profile — <span className="text-primary">Health Clique</span>
+            Edit Profile — <span className="text-primary">HealthClique</span>
           </DrawerTitle>
         </DrawerHeader>
 
@@ -27664,7 +27724,7 @@ export const ManualTransfer = React.forwardRef<HTMLButtonElement, { tx_ref: stri
   const accountInfo = {
     bankName: process.env.NEXT_PUBLIC_BANK_NAME || "Moniepoint MFB",
     accountNumber: process.env.NEXT_PUBLIC_BANK_ACCOUNT_NUMBER || "8065933700",
-    accountName: process.env.NEXT_PUBLIC_BANK_ACCOUNT_NAME || "Health Clique Limited",
+    accountName: process.env.NEXT_PUBLIC_BANK_ACCOUNT_NAME || "HealthClique Limited",
   };
 
   const copyToClipboard = (text: string) => {
@@ -27819,7 +27879,7 @@ const MonnifyPaymentButton = React.forwardRef<HTMLButtonElement, MonnifyPaymentB
     apiKey: process.env.NEXT_PUBLIC_MONNIFY_API_KEY as string,
     contractCode: process.env.NEXT_PUBLIC_MONNIFY_CONTRACT_CODE as string,
     isTestMode: process.env.NEXT_PUBLIC_MONNIFY_IS_TEST_MODE === 'true',
-    paymentDescription: 'Health Clique cart payment',
+    paymentDescription: 'HealthClique cart payment',
   }), [amount, currency, reference, name, email, phoneNumber]);
 
   const initializePayment = useMonnifyPayment(config);
@@ -36139,10 +36199,10 @@ export const sendOrderNotification = async (to: string, orderDetails: any) => {
     try {
         console.log('Sending order notification email to:', to);
         const isUnconfirmed = orderDetails.status === 'unconfirmed';
-        const subject = isUnconfirmed ? '[HEALTH CLIQUE] Action Required: Confirm Bank Transfer' : '[HEALTH CLIQUE] New Order Notification';
+        const subject = isUnconfirmed ? '[HEALTHCLIQUE] Action Required: Confirm Bank Transfer' : '[HEALTHCLIQUE] New Order Notification';
         
         const mailOptions = {
-            from: `"Health Clique" <${email}>`,
+            from: `"HealthClique" <${email}>`,
             to,
             subject,
             html: `
@@ -36151,7 +36211,7 @@ export const sendOrderNotification = async (to: string, orderDetails: any) => {
                 <h1 style="margin: 0; font-size: 24px;">${subject}</h1>
             </div>
             <div style="padding: 30px;">
-                <p style="font-size: 16px; color: #374151;">${isUnconfirmed ? 'A bank transfer checkout has been submitted and is awaiting confirmation.' : 'A new order has been successfully placed on Health Clique.'}</p>
+                <p style="font-size: 16px; color: #374151;">${isUnconfirmed ? 'A bank transfer checkout has been submitted and is awaiting confirmation.' : 'A new order has been successfully placed on HealthClique.'}</p>
                 
                 <div style="background: #f9fafb; padding: 20px; border-radius: 8px; margin: 25px 0;">
                     <h3 style="margin-top: 0; color: #111827; font-size: 18px;">Transaction Summary</h3>
@@ -36168,7 +36228,7 @@ export const sendOrderNotification = async (to: string, orderDetails: any) => {
                 </p>
             </div>
             <div style="background: #f3f4f6; padding: 15px; text-align: center; font-size: 12px; color: #9ca3af;">
-                © 2026 Health Clique Pharmacy. All rights reserved.
+                © 2026 HealthClique Pharmacy. All rights reserved.
             </div>
         </div>
       `,
@@ -36207,9 +36267,9 @@ export const sendPaymentConfirmationEmail = async (to: string, data: {
         `;}).join('');
 
         const mailOptions = {
-            from: `"Health Clique" <${email}>`,
+            from: `"HealthClique" <${email}>`,
             to,
-            subject: `Health Clique: Order Confirmation - #${data.orderId.slice(-6).toUpperCase()}`,
+            subject: `HealthClique: Order Confirmation - #${data.orderId.slice(-6).toUpperCase()}`,
             html: `
                 <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; border: 1px solid #e5e7eb; border-radius: 12px; overflow: hidden;">
                     <div style="background: #10b981; padding: 25px; text-align: center; color: white;">
@@ -36261,8 +36321,8 @@ export const sendPaymentConfirmationEmail = async (to: string, data: {
                         </div>
                     </div>
                     <div style="background: #f3f4f6; padding: 20px; text-align: center; font-size: 12px; color: #9ca3af; border-top: 1px solid #e5e7eb;">
-                        Health Clique Pharmacy & Healthcare Services<br>
-                        © 2026 Health Clique. All rights reserved.
+                        HealthClique Pharmacy & Healthcare Services<br>
+                        © 2026 HealthClique. All rights reserved.
                     </div>
                 </div>
             `,
@@ -36304,7 +36364,7 @@ export const sendAdminCustomEmail = async (to: string, data: {
                     <div style="max-width: 600px; margin: 0 auto; background: #ffffff; border-radius: 16px; overflow: hidden; box-shadow: 0 10px 25px rgba(0,0,0,0.05);">
                         
                         <div style="background: #10b981; padding: 32px; text-align: center;">
-                            <h1 style="color: #ffffff; margin: 0; font-size: 24px; font-weight: 800; letter-spacing: -0.025em;">HEALTH CLIQUE</h1>
+                            <h1 style="color: #ffffff; margin: 0; font-size: 24px; font-weight: 800; letter-spacing: -0.025em;">HEALTHCLIQUE</h1>
                             <p style="color: rgba(255,255,255,0.9); margin-top: 4px; font-size: 14px; font-weight: 500;">Status Update Notification</p>
                         </div>
 
@@ -36351,7 +36411,7 @@ export const sendAdminCustomEmail = async (to: string, data: {
                                 <p style="font-size: 12px; color: #9ca3af; margin-bottom: 8px;">
                                     This is a system-generated message. Please do not reply directly to this email.
                                 </p>
-                                <p style="font-size: 14px; font-weight: 800; color: #10b981;">© 2026 HEALTH CLIQUE PHARMA LTD</p>
+                                <p style="font-size: 14px; font-weight: 800; color: #10b981;">© 2026 HEALTHCLIQUE PHARMA LTD</p>
                             </div>
                         </div>
                     </div>
@@ -36600,6 +36660,7 @@ LOCATION: next.config.ts
 ================================================================================
 
 import type { NextConfig } from "next";
+import path from "path";
 
 const nextConfig: NextConfig = {
   images: {
@@ -36609,10 +36670,15 @@ const nextConfig: NextConfig = {
         hostname: "res.cloudinary.com",
       },
       {
-         protocol: "https",
-         hostname: "images.unsplash.com",
-      }
+        protocol: "https",
+        hostname: "images.unsplash.com",
+      },
     ],
+  },
+  // Explicitly set Turbopack root to suppress the "multiple lockfiles" warning
+  // caused by the parent commerce/package-lock.json being detected
+  turbopack: {
+    root: path.resolve(__dirname),
   },
 };
 
@@ -41561,6 +41627,147 @@ main()
 
 
 ================================================================================
+LOCATION: scripts\add-product.ts
+================================================================================
+
+import { PrismaClient } from '@prisma/client';
+import { v2 as cloudinaryV2 } from 'cloudinary';
+import * as fs from 'fs';
+
+const prisma = new PrismaClient();
+
+cloudinaryV2.config({
+  cloud_name: process.env.CLOUDINARY_CLOUD_NAME,
+  api_key: process.env.CLOUDINARY_API_KEY,
+  api_secret: process.env.CLOUDINARY_API_SECRET,
+});
+
+async function uploadToCloudinary(imagePath: string): Promise<string> {
+  console.log(`📤 Uploading image from: ${imagePath}`);
+
+  if (!fs.existsSync(imagePath)) {
+    throw new Error(`Image file not found: ${imagePath}`);
+  }
+
+  try {
+    const result = await cloudinaryV2.uploader.upload(imagePath, {
+      resource_type: 'auto',
+    });
+    console.log(`✅ Image uploaded successfully: ${result.secure_url}`);
+    return result.secure_url;
+  } catch (error) {
+    console.error('Error uploading to Cloudinary:', error);
+    throw error;
+  }
+}
+
+async function addProduct() {
+  try {
+    console.log('🚀 Starting product addition...\n');
+
+    // 1. Create/Get Category
+    console.log('📦 Creating/fetching category: Antibiotic');
+    const category = await prisma.category.upsert({
+      where: { name: 'Antibiotic' },
+      update: {},
+      create: {
+        name: 'Antibiotic',
+        description: 'Antibiotic medications',
+      },
+    });
+    console.log(`✅ Category ready: ${category.id}\n`);
+
+    // 2. Create/Get Brand
+    console.log('🏭 Creating/fetching brand: Sandoz');
+    const brand = await prisma.brand.upsert({
+      where: { name: 'Sandoz' },
+      update: {},
+      create: {
+        name: 'Sandoz',
+      },
+    });
+    console.log(`✅ Brand ready: ${brand.id}\n`);
+
+    // 3. Use local image URL
+    console.log('📤 Using local image: /amoksiklav.jpg\n');
+    const imageUrl = '/amoksiklav.jpg';
+
+    // 4. Create Product
+    console.log('📝 Creating product: Amoksiklav 457/5mL');
+    const product = await prisma.product.create({
+      data: {
+        name: 'Amoksiklav 457/5mL',
+        description: 'Amoxycillin + Clavulanic Acid - Antibiotic combination',
+        categoryId: category.id,
+        brandId: brand.id,
+        price: 8500, // Display price (cost is 7700, adding margin)
+        images: [imageUrl],
+        scarce: false,
+        regulatoryClassification: 'Prescription Medicine',
+        requiresPrescription: true,
+        weight: '5mL',
+        form: 'suspension',
+      },
+    });
+    console.log(`✅ Product created: ${product.id}\n`);
+
+    // 5. Create Vendor entry for cost price
+    console.log('🤝 Setting up vendor/cost information');
+    
+    const vendor = await prisma.vendor.upsert({
+      where: { name: 'Sandoz Direct' },
+      update: {},
+      create: {
+        name: 'Sandoz Direct',
+        address: 'Manufacturer',
+      },
+    });
+
+    // Create ProductVendor with cost price
+    const productVendor = await prisma.productVendor.upsert({
+      where: {
+        productId_vendorId: {
+          productId: product.id,
+          vendorId: vendor.id,
+        },
+      },
+      update: {
+        costPrice: 7700,
+        isDefault: true,
+      },
+      create: {
+        productId: product.id,
+        vendorId: vendor.id,
+        costPrice: 7700,
+        isDefault: true,
+      },
+    });
+    console.log(`✅ Vendor/Cost information set: Cost Price = ₦7,700\n`);
+
+    console.log('🎉 Product added successfully!\n');
+    console.log('📊 Product Summary:');
+    console.log(`   Name: ${product.name}`);
+    console.log(`   Brand: Sandoz`);
+    console.log(`   Category: Antibiotic`);
+    console.log(`   Display Price: ₦${product.price.toLocaleString()}`);
+    console.log(`   Cost Price: ₦7,700`);
+    console.log(`   Margin: ₦${(product.price - 7700).toLocaleString()}`);
+    console.log(`   Image: ${imageUrl}`);
+    console.log(`   Product ID: ${product.id}\n`);
+    console.log('💡 Note: Image is stored locally. You can upload to Cloudinary later for CDN hosting.');
+  } catch (error) {
+    console.error('❌ Error:', error);
+    process.exit(1);
+  } finally {
+    await prisma.$disconnect();
+  }
+}
+
+addProduct();
+
+
+
+================================================================================
 LOCATION: scripts\check-users.ts
 ================================================================================
 
@@ -41850,6 +42057,34 @@ async function main() {
 }
 
 main().catch(e => console.error(e)).finally(() => prisma.$disconnect());
+
+
+
+================================================================================
+LOCATION: scripts\fix-price.ts
+================================================================================
+
+import { PrismaClient } from '@prisma/client';
+
+const prisma = new PrismaClient();
+
+(async () => {
+  try {
+    const updated = await prisma.product.update({
+      where: { id: '6a023f344298cee377cfede9' },
+      data: { price: 7700 }
+    });
+
+    console.log('✅ Product updated!');
+    console.log('Cost Price (product.price): ₦' + updated.price.toLocaleString());
+    console.log('\nDynamic Display Prices:');
+    console.log('- Customer: ₦' + Math.ceil((updated.price * 1.35) / 5) * 5);
+    console.log('- Professional: ₦' + Math.ceil((updated.price * 1.2) / 5) * 5);
+    console.log('- Wholesaler/Admin/Staff: ₦' + Math.ceil((updated.price * 1.1) / 5) * 5);
+  } finally {
+    await prisma.$disconnect();
+  }
+})();
 
 
 
@@ -42378,13 +42613,13 @@ async function testRealCustomerEmail() {
         console.log('Sending real notification simulation...');
         
         const mailOptions = {
-            from: `"Health Clique Support" <${userEmail}>`,
+            from: `"HealthClique Support" <${userEmail}>`,
             to: order.user.email,
             subject: `Update on Order #${order.id.slice(-6).toUpperCase()}`,
             html: `
                 <div style="font-family: Arial; padding: 20px;">
                     <h2>Hello ${order.user.name},</h2>
-                    <p>This is a manual test notification regarding your order at Health Clique.</p>
+                    <p>This is a manual test notification regarding your order at HealthClique.</p>
                     <p><strong>Total Paid:</strong> ₦${order.total.toLocaleString()}</p>
                     <p><strong>Items:</strong></p>
                     <ul>
@@ -42470,13 +42705,13 @@ async function testEmail() {
 
         console.log(`Sending test email to ${testRecipient}...`);
         const info = await transporter.sendMail({
-            from: `"Health Clique Test" <${user}>`,
+            from: `"HealthClique Test" <${user}>`,
             to: testRecipient,
-            subject: "Health Clique Email Test Successful ✅",
+            subject: "HealthClique Email Test Successful ✅",
             html: `
                 <div style="font-family: sans-serif; padding: 20px; border: 1px solid #eee; border-radius: 10px;">
                     <h1 style="color: #10b981;">Email System Operational</h1>
-                    <p>This is a test email from <strong>Health Clique</strong> backend.</p>
+                    <p>This is a test email from <strong>HealthClique</strong> backend.</p>
                     <hr/>
                     <p style="font-size: 12px; color: #666;">Timestamp: ${new Date().toLocaleString()}</p>
                 </div>
@@ -47623,5 +47858,5 @@ export const normalizeDateTime = (dateTime?: string): string => {
 
 
 ================================================================================
-TOTAL FILES CONSOLIDATED: 386
+TOTAL FILES CONSOLIDATED: 388
 ================================================================================

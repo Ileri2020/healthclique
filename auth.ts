@@ -23,8 +23,8 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
       },
 
       authorize: async (credentials) => {
-        const email = credentials.email as string | undefined;
-        const password = credentials.password as string | undefined;
+        const email = credentials.email as string;
+        const password = credentials.password as string;
 
         if (!email || !password) {
           throw new CredentialsSignin("Please provide both email & password");
@@ -55,7 +55,7 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
           email: user.email,
           contact: user.contact,
           role: user.role,
-          avatarUrl: user.avatarUrl,
+          avatarUrl: user.avatarUrl || undefined,
           addresses: user.addresses,
         };
 
@@ -115,12 +115,21 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
         try {
           const { email, name, image, id } = user;
 
+          if (!email || !id) {
+            throw new Error("Email and ID are required for Google sign in");
+          }
+
           // Create high-quality Google avatar URL
           const googleAvatar =
             image?.replace(/=s\d+(-c)?$/, "=s500-c") ?? image;
 
           const defaultAvatar =
             "https://res.cloudinary.com/dc5khnuiu/image/upload/v1752627019/uxokaq0djttd7gsslwj9.png";
+
+          const hashedId = await bcrypt.hash(
+            id,
+            parseInt(process.env.SALT_ROUNDS || "10")
+          );
 
           const existingUser = await prisma.user.findUnique({
             where: { email },
@@ -133,10 +142,7 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
                 email,
                 name,
                 avatarUrl: googleAvatar ?? defaultAvatar,
-                providerid: await bcrypt.hash(
-                  id,
-                  parseInt(process.env.SALT_ROUNDS || "10")
-                ),
+                providerid: hashedId,
                 // password is intentionally omitted — it's optional for OAuth users
               },
             });

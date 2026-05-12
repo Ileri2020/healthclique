@@ -24,6 +24,8 @@ const uploadCloudinary = async (buffer, folder) => {
         (error, result) => {
           if (error) {
             reject(error);
+          } else if (!result) {
+            reject(new Error('Cloudinary upload returned no result'));
           } else {
             resolve({
               publicId: result.public_id,

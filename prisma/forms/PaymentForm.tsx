@@ -4,14 +4,14 @@ import { Input } from '@/components/ui/input';
 import axios from 'axios';
 
 export default function PaymentForm() {
-  const [payments, setPayments] = useState([]);
+  const [payments, setPayments] = useState<any[]>([]);
   const [formData, setFormData] = useState({
     cartId: '',
     method: '',
     amount: 0,
   });
-  const [editId, setEditId] = useState(null);
-  const [carts, setCarts] = useState([]); // carts to be mapped to the select input
+  const [editId, setEditId] = useState<string | null>(null);
+  const [carts, setCarts] = useState<any[]>([]); // carts to be mapped to the select input
 
   const fetchPayments = useCallback(async () => {
     try {
@@ -82,8 +82,8 @@ export default function PaymentForm() {
     <div>
       <form onSubmit={handleSubmit} className='flex flex-col w-full max-w-sm gap-2 justify-center items-center p-3 border-2 border-secondary-foreground rounded-sm m-2'>
         <h2 className='font-semibold text-lg'>Payment Form</h2>
-        <div>Cart ID</div>
-        <select value={formData.cartId} onChange={(e) => setFormData({ ...formData, cartId: e.target.value })}>
+        <label className="sr-only" htmlFor="payment-cart">Cart ID</label>
+        <select id="payment-cart" title="Select cart" value={formData.cartId} onChange={(e) => setFormData({ ...formData, cartId: e.target.value })}>
           {carts.length > 0 ? carts.map((cart, index) => (
             <option key={index} value={cart.id}>
               {cart.id}

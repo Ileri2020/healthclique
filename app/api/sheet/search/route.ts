@@ -1,10 +1,9 @@
 "use server";
 
 import { NextRequest, NextResponse } from "next/server";
-import { PrismaClient } from "@prisma/client";
+import { prisma } from "@/lib/prisma";
 import { auth } from "@/auth";
 
-const prisma = new PrismaClient();
 
 // Unified Model Map for the entire Sheet System
 const modelMap: Record<string, any> = {

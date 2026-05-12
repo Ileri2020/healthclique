@@ -1,9 +1,8 @@
 "use server"
-import { PrismaClient } from '@prisma/client';
 import { NextRequest } from 'next/server';
+import { prisma } from "@/lib/prisma";
 import bcrypt from 'bcrypt';
 
-const prisma = new PrismaClient();
 
 
 
@@ -21,14 +20,16 @@ export async function POST(req: NextRequest) {
   // const body = searchParams.get('body') || null;
 
   // Parse JSON body
-  let body = null;
+  let body: { email?: string; password?: string } | null = null;
   try {
     body = await req.json(); // This reads the JSON payload
   } catch (err) {
     return new Response('Invalid JSON', { status: 400 });
   }
 
-  // const email = body.email
+  if (!body || typeof body.email !== 'string' || typeof body.password !== 'string') {
+    return new Response('Invalid request body', { status: 400 });
+  }
 
   const { method } = req; 
   console.log("in db handler",model, id, method, body)

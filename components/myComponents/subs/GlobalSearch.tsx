@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useRef, useEffect } from "react";
+import React, { useState, useRef, useEffect, useCallback, useMemo } from "react";
 import { Search, HeartPulse } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import Link from "next/link";
@@ -15,9 +15,10 @@ interface GlobalSearchProps {
 
 export const GlobalSearch = ({ placeholder = "Search for medications, brands or ingredients...", className = "" }: GlobalSearchProps) => {
   const [searchValue, setSearchValue] = useState("");
-  const [searchResults, setSearchResults] = useState([]);
+  const [searchResults, setSearchResults] = useState<any[]>([]);
   const [allProducts, setAllProducts] = useState<any[]>([]);
   const [isSearchOpen, setIsSearchOpen] = useState(false);
+  const [isLoading, setIsLoading] = useState(false);
   
   // Filters
   const [filterCategory, setFilterCategory] = useState("All");
@@ -26,72 +27,80 @@ export const GlobalSearch = ({ placeholder = "Search for medications, brands or 
 
   const { user } = useAppContext();
   const searchRef = useRef<HTMLDivElement>(null);
+  const inputRef = useRef<HTMLInputElement>(null);
+  const debounceTimerRef = useRef<NodeJS.Timeout | null>(null);
 
+  // Fetch products once on mount
   useEffect(() => {
-    // Pre-fetch all products for quick local filtering
-    axios.get(`/api/dbhandler?model=product&include=category,brand,stock,activeIngredients`).then(res => {
-      setAllProducts(res.data);
-    }).catch(console.error);
+    setIsLoading(true);
+    axios.get(`/api/dbhandler?model=product&include=category,brand,stock,activeIngredients`)
+      .then(res => {
+        setAllProducts(res.data);
+      })
+      .catch(console.error)
+      .finally(() => setIsLoading(false));
   }, []);
 
-  const uniqueCategories = Array.from(new Set(allProducts.map(p => p.category?.name || "Uncategorized")));
-  const uniqueBrands = Array.from(new Set(allProducts.map((p: any) => p.brand?.name).filter(Boolean)));
+  // Memoize unique categories and brands to prevent unnecessary recalculations
+  const uniqueCategories = useMemo(() => {
+    return Array.from(new Set(allProducts.map(p => p.category?.name || "Uncategorized")));
+  }, [allProducts]);
 
-  const handleSearch = (value: string, cat = filterCategory, br = filterBrand, pr = filterPrice) => {
-    const query = value.trim().toLowerCase();
+  const uniqueBrands = useMemo(() => {
+    return Array.from(new Set(allProducts.map((p: any) => p.brand?.name).filter(Boolean)));
+  }, [allProducts]);
+
+  const countSearchLetters = (value: string) => (value.match(/[a-zA-Z]/g) || []).length;
+
+  const fetchSearchResults = useCallback(async (value: string, cat = filterCategory, br = filterBrand, pr = filterPrice) => {
+    const query = value.trim();
+    const alphabetCount = countSearchLetters(value);
+    if (alphabetCount < 3) return [];
+
+    const params = new URLSearchParams();
+    params.set("model", "product");
+    params.set("query", query);
+    params.set("include", "category,brand,stock,activeIngredients");
+    if (br !== "All") params.set("brand", br);
+    if (cat !== "All") params.set("categoryName", cat);
+
+    try {
+      const response = await axios.get(`/api/dbhandler?${params.toString()}`);
+      let results = response.data as any[];
+
+      if (pr !== "All") {
+        results = results.filter((p: any) => {
+          const price = getProductPrice(p, user?.role) || 0;
+          if (pr === "under-5000") return price < 5000;
+          if (pr === "5000-20000") return price >= 5000 && price <= 20000;
+          if (pr === "over-20000") return price > 20000;
+          return true;
+        });
+      }
+
+      return results;
+    } catch (error) {
+      console.error("Search fetch error:", error);
+      return [];
+    }
+  }, [filterCategory, filterBrand, filterPrice, user?.role]);
+
+  const handleSearch = useCallback(async (value: string, cat = filterCategory, br = filterBrand, pr = filterPrice) => {
+    const alphabetCount = countSearchLetters(value);
     setSearchValue(value);
-    
-    // Always open search when typing or choosing a filter
-    if (query.length < 2 && cat === "All" && br === "All" && pr === "All") {
+
+    if (alphabetCount < 3) {
       setSearchResults([]);
       setIsSearchOpen(false);
       return;
     }
 
-    let filtered = allProducts.filter((p: any) => p.price > 0 && p.images && p.images.length > 0);
-    
-    if (query.length >= 2) {
-      filtered = filtered.filter((p: any) => {
-        const name = p.name?.toLowerCase() || "";
-        const description = p.description?.toLowerCase() || "";
-        const brandName = typeof p.brand === "string" ? p.brand.toLowerCase() : p.brand?.name?.toLowerCase() || "";
-        const ingredients = Array.isArray(p.activeIngredients)
-          ? p.activeIngredients.map((ing: any) => typeof ing === "string" ? ing.toLowerCase() : ing?.name?.toLowerCase() || "")
-          : [];
-
-        return (
-          name.includes(query) ||
-          description.includes(query) ||
-          brandName.includes(query) ||
-          ingredients.some((ing: string) => ing.includes(query))
-        );
-      });
-    }
-
-    if (cat !== "All") {
-      filtered = filtered.filter((p: any) => p.category?.name === cat || (!p.category && cat === "Uncategorized"));
-    }
-    
-    if (br !== "All") {
-      filtered = filtered.filter((p: any) => {
-        const brandName = typeof p.brand === "string" ? p.brand : p.brand?.name;
-        return brandName === br;
-      });
-    }
-
-    if (pr !== "All") {
-      filtered = filtered.filter((p: any) => {
-        const price = getProductPrice(p, user?.role) || 0;
-        if (pr === "under-5000") return price < 5000;
-        if (pr === "5000-20000") return price >= 5000 && price <= 20000;
-        if (pr === "over-20000") return price > 20000;
-        return true;
-      });
-    }
-
-    setSearchResults(filtered.slice(0, 8));
+    setIsLoading(true);
+    const results = await fetchSearchResults(value, cat, br, pr);
+    setSearchResults(results.slice(0, 8));
     setIsSearchOpen(true);
-  };
+    setIsLoading(false);
+  }, [fetchSearchResults, filterCategory, filterBrand, filterPrice]);
 
   // Close search results when clicking outside
   useEffect(() => {
@@ -106,27 +115,60 @@ export const GlobalSearch = ({ placeholder = "Search for medications, brands or 
     };
   }, []);
 
+  const handleInputChange = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
+    const value = e.target.value;
+    setSearchValue(value);
+
+    if (debounceTimerRef.current) {
+      clearTimeout(debounceTimerRef.current);
+    }
+
+    debounceTimerRef.current = setTimeout(() => {
+      handleSearch(value, filterCategory, filterBrand, filterPrice);
+    }, 300);
+  }, [handleSearch, filterCategory, filterBrand, filterPrice]);
+
+  const handleSearchClick = useCallback(() => {
+    const currentValue = inputRef.current?.value ?? searchValue;
+    handleSearch(currentValue, filterCategory, filterBrand, filterPrice);
+  }, [handleSearch, searchValue, filterCategory, filterBrand, filterPrice]);
+
+  const letterCount = countSearchLetters(searchValue);
+
   return (
     <div className={`relative w-full ${className}`} ref={searchRef}>
       <div className="relative group">
         <Search className="pointer-events-none absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-muted-foreground group-focus-within:text-primary transition-colors" />
         <Input
+          ref={inputRef}
           type="text"
           placeholder={placeholder}
           autoComplete="off"
           inputMode="search"
-          className="h-12 pl-12 pr-4 text-base border-2 border-muted hover:border-primary/50 focus:border-primary transition-all rounded-xl shadow-sm"
+          className="h-12 pl-12 pr-12 text-base border-2 border-muted hover:border-primary/50 focus:border-primary transition-all rounded-xl shadow-sm"
           value={searchValue}
-          onChange={(e) => handleSearch(e.target.value)}
-          onFocus={() => setIsSearchOpen(true)}
+          onChange={handleInputChange}
+          onFocus={() => searchResults.length > 0 && setIsSearchOpen(true)}
           onKeyDown={(e) => {
             if (e.key === "Enter") {
               e.preventDefault();
-              handleSearch(searchValue);
+              if (debounceTimerRef.current) {
+                clearTimeout(debounceTimerRef.current);
+              }
+              handleSearch(searchValue, filterCategory, filterBrand, filterPrice);
               setIsSearchOpen(true);
             }
           }}
         />
+        <button
+          type="button"
+          onMouseDown={(e) => e.preventDefault()}
+          onClick={handleSearchClick}
+          className="absolute right-3 top-1/2 -translate-y-1/2 inline-flex h-8 w-8 items-center justify-center rounded-full bg-primary text-primary-foreground shadow-sm hover:bg-primary/90 transition-colors"
+          aria-label="Send search"
+        >
+          <Search className="w-4 h-4" />
+        </button>
       </div>
 
       {isSearchOpen && (
@@ -135,6 +177,7 @@ export const GlobalSearch = ({ placeholder = "Search for medications, brands or 
           {/* Quick Filters */}
           <div className="p-3 border-b bg-muted/10 grid grid-cols-3 gap-2">
              <select 
+                title="Filter by category"
                 className="w-full text-xs p-1.5 rounded border bg-background"
                 value={filterCategory}
                 onChange={(e) => {
@@ -147,6 +190,7 @@ export const GlobalSearch = ({ placeholder = "Search for medications, brands or 
              </select>
              
              <select 
+                title="Filter by brand"
                 className="w-full text-xs p-1.5 rounded border bg-background"
                 value={filterBrand}
                 onChange={(e) => {
@@ -159,6 +203,7 @@ export const GlobalSearch = ({ placeholder = "Search for medications, brands or 
              </select>
 
              <select 
+                title="Filter by price range"
                 className="w-full text-xs p-1.5 rounded border bg-background"
                 value={filterPrice}
                 onChange={(e) => {
@@ -206,8 +251,8 @@ export const GlobalSearch = ({ placeholder = "Search for medications, brands or 
             </>
           ) : (
             <div className="p-8 text-center text-muted-foreground text-sm">
-              {searchValue.trim().length < 2 ? (
-                <>Type at least 2 characters to start searching.</>
+              {letterCount < 3 ? (
+                <>Type at least 3 letters to start searching.</>
               ) : (
                 <>No products found matching your search.</>
               )}

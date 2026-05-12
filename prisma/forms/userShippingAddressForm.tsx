@@ -65,8 +65,10 @@ export default function UserShippingAddressForm({ userId, existing, onSaved }: P
     <div className="flex flex-col gap-3">
       {/* Country */}
       <div className="space-y-1">
-        <Label className="text-sm">Country</Label>
+        <Label htmlFor="user-shipping-country" className="text-sm">Country</Label>
         <select
+          id="user-shipping-country"
+          title="Select country"
           value={isPreset ? address.country : "Other"}
           onChange={(e) => handleCountryChange(e.target.value)}
           className="w-full border border-input bg-background rounded-md h-9 px-3 text-sm focus:outline-none focus:ring-2 focus:ring-ring"
@@ -90,9 +92,11 @@ export default function UserShippingAddressForm({ userId, existing, onSaved }: P
 
       {/* State — dropdown for Nigeria, text input for others */}
       <div className="space-y-1">
-        <Label className="text-sm">State / Region</Label>
+        <Label htmlFor="user-shipping-state" className="text-sm">State / Region</Label>
         {isNigeria ? (
           <select
+            id="user-shipping-state"
+            title="Select state or region"
             value={address.state}
             onChange={(e) => handleChange("state", e.target.value)}
             className="w-full border border-input bg-background rounded-md h-9 px-3 text-sm focus:outline-none focus:ring-2 focus:ring-ring"

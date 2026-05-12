@@ -9,8 +9,8 @@ const ITEMS_PER_PAGE = 10;
 
 export default function CartForm() {
   const [carts, setCarts] = useState([]);
-  const [users, setUsers] = useState([]);
-  const [products, setProducts] = useState([]);
+  const [users, setUsers] = useState<any[]>([]);
+  const [products, setProducts] = useState<any[]>([]);
   const [formData, setFormData] = useState({
     userId: '',
     productId: '',
@@ -46,7 +46,7 @@ export default function CartForm() {
     fetchProducts();
   }, [fetchCarts, fetchUsers, fetchProducts]);
 
-  const handleSubmit = async (e) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     const newFormData = {
       ...formData,
@@ -62,12 +62,12 @@ export default function CartForm() {
     fetchCarts();
   };
 
-  const handleEdit = (item) => {
+  const handleEdit = (item: any) => {
     setFormData(item);
     setEditId(item.id);
   };
 
-  const handleDelete = async (id) => {
+  const handleDelete = async (id: any) => {
     if(!confirm("Remove this cart item?")) return;
     await axios.delete(`/api/dbhandler?model=cart&id=${id}`);
     fetchCarts();
@@ -114,8 +114,10 @@ export default function CartForm() {
         <h2 className='font-bold text-xl text-primary border-b pb-2'>Cart Administration</h2>
         
         <div className="space-y-2">
-          <Label className="text-xs font-bold uppercase text-muted-foreground">Select User</Label>
+          <Label htmlFor="cart-user" className="text-xs font-bold uppercase text-muted-foreground">Select User</Label>
           <select 
+            id="cart-user"
+            title="Select user"
             value={formData.userId} 
             onChange={(e) => setFormData({ ...formData, userId: e.target.value })}
             className="w-full h-10 px-3 rounded-md border border-input bg-background"

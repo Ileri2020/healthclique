@@ -139,7 +139,7 @@ const FeaturedCategories = () => {
     setLoading(true);
     const cats = await getCategories();
     // Filter out categories with 0 products if not admin/staff
-    const activeCats = isAdmin ? cats : cats.filter(c => c.productCount > 0);
+    const activeCats = isAdmin ? cats : cats.filter((c: any) => c.productCount > 0);
     setCategories(activeCats);
     setLoading(false);
   };

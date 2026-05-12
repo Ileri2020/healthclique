@@ -1,7 +1,7 @@
 import React from 'react';
 import logo from './logo.svg';
 import { usePaystackPayment } from 'react-paystack';
-import './App.css';
+// import './App.css';
 
 const config = {
     reference: (new Date()).getTime().toString(),
@@ -11,7 +11,7 @@ const config = {
 };
 
 // you can call this function anything
-const onSuccess = (reference) => {
+const onSuccess = (reference: any) => {
   // Implementation for whatever you want to do with reference and after success call.
   console.log(reference);
 };

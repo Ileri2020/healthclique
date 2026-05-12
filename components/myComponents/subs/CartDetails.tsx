@@ -112,7 +112,7 @@ export function CartDetails({ cartId, onPaymentSuccess }: CartDetailsProps) {
     const handleSwapItem = async (newProduct: any) => {
         if (!cart || !replacingItem) return;
 
-        const oldPrice = (replacingItem.product.price || 0) * replacingItem.quantity;
+        const oldPrice = (replacingItem.product?.price || 0) * replacingItem.quantity;
         const newPrice = (newProduct.price || 0) * replacingItem.quantity;
         const diff = oldPrice - newPrice;
 
@@ -147,7 +147,7 @@ export function CartDetails({ cartId, onPaymentSuccess }: CartDetailsProps) {
             }
 
             // 5. Send message to user
-            const messageContent = `[HEALTHCLIQUE PHARMACY] Your order (ID: ${cart.id.slice(-6)}) has been updated by a pharmacist. Replaced "${replacingItem.product.name}" with "${newProduct.name}". ${diff > 0 && isLocked ? `A surplus of ₦${formatPrice(diff)} has been credited to your Health Wallet.` : diff < 0 ? `Please note the balance difference of ₦${formatPrice(Math.abs(diff))} added to your total.` : `Total price adjusted.`}`;
+            const messageContent = `[HEALTHCLIQUE PHARMACY] Your order (ID: ${cart.id.slice(-6)}) has been updated by a pharmacist. Replaced "${replacingItem.product?.name}" with "${newProduct.name}". ${diff > 0 && isLocked ? `A surplus of ₦${formatPrice(diff)} has been credited to your Health Wallet.` : diff < 0 ? `Please note the balance difference of ₦${formatPrice(Math.abs(diff))} added to your total.` : `Total price adjusted.`}`;
             
             await axios.post(`/api/dbhandler?model=message`, {
                 content: messageContent,
@@ -582,7 +582,7 @@ export function CartDetails({ cartId, onPaymentSuccess }: CartDetailsProps) {
                             <DialogHeader>
                                 <DialogTitle>Replace Product</DialogTitle>
                                 <CardDescription>
-                                    Swapping: {replacingItem?.product.name}
+                                    Swapping: {replacingItem?.product?.name}
                                 </CardDescription>
                             </DialogHeader>
                             <div className="space-y-4 py-4">

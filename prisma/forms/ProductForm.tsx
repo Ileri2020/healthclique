@@ -42,10 +42,10 @@ export default function ProductForm({ initialProduct, hideList = false }: { init
     weight: initialProduct?.weight || '',
     bulkPrices: initialProduct?.bulkPrices || [],
   });
-  const [file, setFile] = useState(null);
-  const [categories, setCategories] = useState([]);
+  const [file, setFile] = useState<File | null>(null);
+  const [categories, setCategories] = useState<any[]>([]);
   const [allBrands, setAllBrands] = useState<string[]>([]);
-  const [preview, setPreview] = useState(null);
+  const [preview, setPreview] = useState<string | null>(null);
   const [uploadStatus , setUploadStatus] = useState("");
 
   const [editId, setEditId] = useState<string | null>(initialProduct?.id || null);

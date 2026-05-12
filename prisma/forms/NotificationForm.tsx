@@ -4,13 +4,13 @@ import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
 
 export default function NotificationForm() {
-  const [notifications, setNotifications] = useState([]);
-  const [users, setUsers] = useState([]);
+  const [notifications, setNotifications] = useState<any[]>([]);
+  const [users, setUsers] = useState<any[]>([]);
   const [formData, setFormData] = useState({
     userId: '',
     message: '',
   });
-  const [editId, setEditId] = useState(null);
+  const [editId, setEditId] = useState<string | null>(null);
 
   const fetchNotifications = useCallback(async () => {
     const res = await axios.get('/api/dbhandler?model=notification');
@@ -60,7 +60,8 @@ export default function NotificationForm() {
     <div>
       <form onSubmit={handleSubmit} className='flex flex-col w-full max-w-sm gap-2 justify-center items-center p-3 border-2 border-secondary-foreground rounded-sm m-2'>
         <h2 className='font-semibold text-lg'>Manage Notifications</h2>
-        <select value={formData.userId} onChange={(e) => setFormData({ ...formData, userId: e.target.value })}>
+        <label className="sr-only" htmlFor="notification-user">User</label>
+        <select id="notification-user" title="Select user" value={formData.userId} onChange={(e) => setFormData({ ...formData, userId: e.target.value })}>
           {users.length > 0 ? (
             users.map((user, index) => (
               <option key={index} value={user.id}>

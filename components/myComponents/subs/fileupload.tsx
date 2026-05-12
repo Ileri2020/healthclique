@@ -54,10 +54,10 @@ export const ProfileImg = () => {
     for: 'post',
   });
 
-  const [preview, setPreview] = useState(null);
+  const [preview, setPreview] = useState<string | null>(null);
   const [uploadStatus , setUploadStatus] = useState("");
 
-  const [file, setFile] = useState(null);
+  const [file, setFile] = useState<File | null>(null);
 
 
   const form = useRef<HTMLFormElement>(null);
@@ -70,6 +70,7 @@ export const ProfileImg = () => {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (!file) return;
     const pformData = new FormData();
     pformData.append("file", file);
     pformData.append("description", formData.description)

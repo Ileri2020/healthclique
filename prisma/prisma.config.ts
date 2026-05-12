@@ -1,8 +1,7 @@
-// import { defineConfig } from '@prisma/cli';
+import { defineConfig } from '@prisma/config';
 
-// export default defineConfig({
-//   db: {
-//     provider: 'mongodb',
-//     url: process.env.MONGODB_URL,
-//   },
-// });
+export default defineConfig({
+  datasource: {
+    url: process.env.MONGODB_URL,
+  },
+});

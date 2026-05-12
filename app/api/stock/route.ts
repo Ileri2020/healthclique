@@ -1,7 +1,6 @@
-import { PrismaClient } from "@prisma/client";
 import { NextResponse } from "next/server";
+import { prisma } from "@/lib/prisma";
 
-const prisma = new PrismaClient();
 
 // -----------------------------------------
 // GET → fetch stock metrics for ALL products
@@ -15,13 +14,13 @@ export async function GET() {
       },
     });
 
-    const metrics = products.map((p) => {
+    const metrics = products.map((p: any) => {
       // SUM ALL STOCK ENTRIES
-      const totalStock = p.stock.reduce((sum, s) => sum + s.addedQuantity, 0);
+      const totalStock = p.stock.reduce((sum: number, s: any) => sum + s.addedQuantity, 0);
 
       // SUM ALL SOLD ENTRIES
       const totalSold = p.cartItems.reduce(
-        (sum, item) => sum + item.quantity,
+        (sum: number, item: any) => sum + item.quantity,
         0
       );
 

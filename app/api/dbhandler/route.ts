@@ -130,6 +130,17 @@ export async function GET(req: NextRequest) {
         if (categoryName) where.category = { name: { equals: categoryName.trim(), mode: 'insensitive' } };
         if (concern) where.category = { name: { equals: concern.trim(), mode: 'insensitive' } };
 
+        const searchQuery = searchParams.get("query")?.trim();
+        if (searchQuery) {
+          where.OR = [
+            { name: { contains: searchQuery, mode: 'insensitive' } },
+            { description: { contains: searchQuery, mode: 'insensitive' } },
+            { brand: { name: { contains: searchQuery, mode: 'insensitive' } } },
+            { category: { name: { contains: searchQuery, mode: 'insensitive' } } },
+            { activeIngredients: { some: { name: { contains: searchQuery, mode: 'insensitive' } } } },
+          ];
+        }
+
         if (searchParams.get("requireImages") === "true") {
           where.images = { isEmpty: false };
         }
@@ -298,7 +309,7 @@ export async function POST(req: NextRequest) {
     const formData = await req.formData();
     const files = formData.getAll("file") as File[];
     if (files.length > 0) {
-      const urls = [];
+      const urls: string[] = [];
       for (const file of files) {
         const uploadRes = await handleUpload(file);
         urls.push(uploadRes.url);

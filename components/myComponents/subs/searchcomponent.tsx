@@ -8,23 +8,24 @@ import { AiOutlineSearch } from "react-icons/ai";
 
 export function SearchInput() {
   const [searchValue, setSearchValue] = useState('');
-  const [searchResults, setSearchResults] = useState([]);
+  const [searchResults, setSearchResults] = useState<any[]>([]);
   const [isOpen, setIsOpen] = useState(false);
 
   const handleSearch = async () => {
     try {
       const response = await axios.get(`/api/db?model=product`);
       const products = response.data;
-      const filteredProducts = products.filter(product =>
+      const filteredProducts = products.filter((product: any) =>
         product.name.toLowerCase().includes(searchValue.toLowerCase())
       );
+
       setSearchResults(filteredProducts);
     } catch (error) {
       console.error(error);
     }
   };
 
-  const handleInputChange = (e) => {
+  const handleInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     setSearchValue(e.target.value);
     handleSearch();
   };

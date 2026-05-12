@@ -161,7 +161,7 @@ export async function POST(req: NextRequest) {
                     }) : null;
 
                     const ingredientList = ingredients ? ingredients.split(";").map((i: string) => i.trim()).filter(Boolean) : [];
-                    const ingredientIds = [];
+                    const ingredientIds: string[] = [];
                     for (const ingName of ingredientList) {
                         const ing = await prisma.activeIngredient.upsert({
                             where: { name: ingName },

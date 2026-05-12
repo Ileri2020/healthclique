@@ -88,6 +88,8 @@ export default function UserForm() {
           onChange={(e) => setFormData({ ...formData, avatarUrl: e.target.value })}
         />
         <select
+          id="user-role"
+          title="Select role"
           className="w-full p-2 border rounded-md"
           value={formData.role}
           onChange={(e) => setFormData({ ...formData, role: e.target.value })}
@@ -100,6 +102,8 @@ export default function UserForm() {
         </select>
 
         <select
+          id="user-verification"
+          title="Select verification status"
           className="w-full p-2 border rounded-md"
           value={formData.verificationStatus || 'unverified'}
           onChange={(e) => setFormData({ ...formData, verificationStatus: e.target.value })}

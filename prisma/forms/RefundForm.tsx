@@ -5,14 +5,14 @@ import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
 
 export default function RefundForm() {
-  const [refunds, setRefunds] = useState([]);
+  const [refunds, setRefunds] = useState<any[]>([]);
   const [formData, setFormData] = useState({
     cartId: '',
     amount: '',
     reason: '',
     status: 'pending',
   });
-  const [editId, setEditId] = useState(null);
+  const [editId, setEditId] = useState<string | null>(null);
 
   const fetchRefunds = useCallback(async () => {
     const res = await axios.get('/api/dbhandler?model=refund');
@@ -61,7 +61,8 @@ export default function RefundForm() {
         <Input type="text" placeholder="Cart ID" value={formData.cartId} onChange={(e) => setFormData({ ...formData, cartId: e.target.value })} />
         <Input type="number" placeholder="Amount" value={formData.amount} onChange={(e) => setFormData({ ...formData, amount: e.target.value })} />
         <Input type="text" placeholder="Reason" value={formData.reason} onChange={(e) => setFormData({ ...formData, reason: e.target.value })} />
-        <select value={formData.status} onChange={(e) => setFormData({ ...formData, status: e.target.value })}>
+        <label className="sr-only" htmlFor="refund-status">Refund status</label>
+        <select id="refund-status" title="Select refund status" value={formData.status} onChange={(e) => setFormData({ ...formData, status: e.target.value })}>
           <option value="pending">Pending</option>
           <option value="approved">Approved</option>
           <option value="rejected">Rejected</option>
