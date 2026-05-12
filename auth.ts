@@ -78,6 +78,12 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
       if (Array.isArray(token?.addresses)) {
         session.user.addresses = token.addresses;
       }
+      if (token?.isAffiliate !== undefined) {
+        session.user.isAffiliate = token.isAffiliate as boolean;
+      }
+      if (token?.affiliate) {
+        session.user.affiliate = token.affiliate;
+      }
       return session;
     },
 
@@ -94,6 +100,14 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
             token.role = dbUser.role ?? "customer";
             token.avatarUrl = dbUser.avatarUrl;
             token.addresses = await prisma.shippingAddress.findMany({ where: { userId: dbUser.id } });
+            
+            // Add affiliate status
+            const affiliate = await prisma.affiliate.findUnique({
+              where: { userId: dbUser.id },
+              select: { id: true, affiliateId: true, name: true, earnings: true }
+            });
+            token.isAffiliate = !!affiliate;
+            token.affiliate = affiliate;
           }
         }
       }
@@ -105,6 +119,14 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
         token.role = u.role;
         token.avatarUrl = u.avatarUrl;
         token.addresses = u.addresses;
+        
+        // Add affiliate status
+        const affiliate = await prisma.affiliate.findUnique({
+          where: { userId: u.id },
+          select: { id: true, affiliateId: true, name: true, earnings: true }
+        });
+        token.isAffiliate = !!affiliate;
+        token.affiliate = affiliate;
       }
 
       return token;

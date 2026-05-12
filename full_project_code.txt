@@ -1,6 +1,6 @@
 ================================================================================
 LOIS SPICE PROJECT - SOURCE CODE CONSOLIDATION
-Generated: 2026-05-12 15:07:55
+Generated: 2026-05-12 16:12:20
 ================================================================================
 
 
@@ -575,32 +575,19 @@ const Account = () => {
   }, []);
 
   useEffect(() => {
-    // Only fetch affiliate status for authenticated users
+    // Check affiliate status from session data
     if (!user || user.email === "nil") {
       setLoadingAffiliateData(false);
       return;
     }
 
-    fetch("/api/affiliate")
-      .then((res) => {
-        if (!res.ok) {
-          setLoadingAffiliateData(false);
-          return;
-        }
-        return res.json();
-      })
-      .then((data) => {
-        if (!data) return;
-        setIsAffiliate(data.isAffiliate);
-        setAffiliateData(data.affiliate);
-        setLoadingAffiliateData(false);
-        if (!data.isAffiliate) {
-          setShowAffiliateLinkDialog(true);
-        }
-      })
-      .catch(() => {
-        setLoadingAffiliateData(false);
-      });
+    // Use affiliate status from session instead of API call
+    setIsAffiliate(user.isAffiliate || false);
+    setAffiliateData(user.affiliate || null);
+    setLoadingAffiliateData(false);
+    if (!user.isAffiliate) {
+      setShowAffiliateLinkDialog(true);
+    }
   }, [user?.email]);
 
   useEffect(() => {
@@ -2697,8 +2684,13 @@ export async function POST(req: NextRequest) {
 export async function GET(req: NextRequest) {
   try {
     const session = await auth();
+    
+    // Allow unauthenticated requests - just return false for isAffiliate
     if (!session?.user?.id) {
-      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+      return NextResponse.json({
+        isAffiliate: false,
+        affiliate: null
+      });
     }
 
     const affiliate = await prisma.affiliate.findUnique({
@@ -4231,12 +4223,21 @@ export async function PUT(req: NextRequest) {
         updatedData.brand = { disconnect: true };
       }
     }
-    if (updatedData.category !== undefined) {
-      if (updatedData.category) {
-        updatedData.category = { connectOrCreate: { where: { name: updatedData.category }, create: { name: updatedData.category } } };
+    if (updatedData.category !== undefined || updatedData.categoryId !== undefined) {
+      const categoryValue = updatedData.category || updatedData.categoryId;
+      if (categoryValue) {
+        // If it's already an ID (ObjectId), connect directly
+        if (typeof categoryValue === 'string' && categoryValue.match(/^[0-9a-fA-F]{24}$/)) {
+          updatedData.category = { connect: { id: categoryValue } };
+        } else {
+          // Otherwise treat as name and connectOrCreate
+          updatedData.category = { connectOrCreate: { where: { name: categoryValue }, create: { name: categoryValue } } };
+        }
       } else {
         updatedData.category = { disconnect: true };
       }
+      // Remove categoryId to avoid conflicts
+      delete updatedData.categoryId;
     }
     if (Array.isArray(updatedData.activeIngredients)) {
       updatedData.activeIngredients = { set: [], connectOrCreate: updatedData.activeIngredients.map((name: string) => ({ where: { name }, create: { name } })) };
@@ -11650,6 +11651,12 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
       if (Array.isArray(token?.addresses)) {
         session.user.addresses = token.addresses;
       }
+      if (token?.isAffiliate !== undefined) {
+        session.user.isAffiliate = token.isAffiliate as boolean;
+      }
+      if (token?.affiliate) {
+        session.user.affiliate = token.affiliate;
+      }
       return session;
     },
 
@@ -11666,6 +11673,14 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
             token.role = dbUser.role ?? "customer";
             token.avatarUrl = dbUser.avatarUrl;
             token.addresses = await prisma.shippingAddress.findMany({ where: { userId: dbUser.id } });
+            
+            // Add affiliate status
+            const affiliate = await prisma.affiliate.findUnique({
+              where: { userId: dbUser.id },
+              select: { id: true, affiliateId: true, name: true, earnings: true }
+            });
+            token.isAffiliate = !!affiliate;
+            token.affiliate = affiliate;
           }
         }
       }
@@ -11677,6 +11692,14 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
         token.role = u.role;
         token.avatarUrl = u.avatarUrl;
         token.addresses = u.addresses;
+        
+        // Add affiliate status
+        const affiliate = await prisma.affiliate.findUnique({
+          where: { userId: u.id },
+          select: { id: true, affiliateId: true, name: true, earnings: true }
+        });
+        token.isAffiliate = !!affiliate;
+        token.affiliate = affiliate;
       }
 
       return token;
@@ -21985,8 +22008,6 @@ export function ProductCard({
   const [isHovered, setIsHovered] = React.useState(false);
   const [isAddingToCart, setIsAddingToCart] = React.useState(false);
   const [isInWishlist, setIsInWishlist] = React.useState(false);
-  const [isAffiliate, setIsAffiliate] = React.useState(false);
-  const [affiliateData, setAffiliateData] = React.useState<any>(null);
 
   React.useEffect(() => {
     if (product?.id) {
@@ -21998,17 +22019,6 @@ export function ProductCard({
         .catch(() => { });
     }
   }, [product?.id]);
-
-  React.useEffect(() => {
-    // Check if user is an affiliate
-    fetch("/api/affiliate")
-      .then((res) => res.json())
-      .then((data) => {
-        setIsAffiliate(data.isAffiliate);
-        setAffiliateData(data.affiliate);
-      })
-      .catch(() => {});
-  }, []);
 
   const handleAddToCart = (e: React.MouseEvent) => {
     e.preventDefault();
@@ -22041,10 +22051,15 @@ export function ProductCard({
   const handleCopyAffiliateLink = async (e: React.MouseEvent) => {
     e.preventDefault();
     e.stopPropagation();
-    if (!affiliateData) return;
+
+    // Check affiliate status from session data in user context
+    if (!user?.isAffiliate || !user?.affiliate) {
+      toast.error("You must be an affiliate to generate affiliate links");
+      return;
+    }
 
     const baseUrl = process.env.NEXT_PUBLIC_ORIGIN_URL || window.location.origin;
-    const affiliateLink = `${baseUrl}/product/${product.id}?affiliate=${affiliateData.affiliateId}`;
+    const affiliateLink = `${baseUrl}/product/${product.id}?affiliate=${user.affiliate.affiliateId}`;
     try {
       await navigator.clipboard.writeText(affiliateLink);
       toast.success("Affiliate link copied to clipboard!");

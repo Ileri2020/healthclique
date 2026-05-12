@@ -72,32 +72,19 @@ const Account = () => {
   }, []);
 
   useEffect(() => {
-    // Only fetch affiliate status for authenticated users
+    // Check affiliate status from session data
     if (!user || user.email === "nil") {
       setLoadingAffiliateData(false);
       return;
     }
 
-    fetch("/api/affiliate")
-      .then((res) => {
-        if (!res.ok) {
-          setLoadingAffiliateData(false);
-          return;
-        }
-        return res.json();
-      })
-      .then((data) => {
-        if (!data) return;
-        setIsAffiliate(data.isAffiliate);
-        setAffiliateData(data.affiliate);
-        setLoadingAffiliateData(false);
-        if (!data.isAffiliate) {
-          setShowAffiliateLinkDialog(true);
-        }
-      })
-      .catch(() => {
-        setLoadingAffiliateData(false);
-      });
+    // Use affiliate status from session instead of API call
+    setIsAffiliate(user.isAffiliate || false);
+    setAffiliateData(user.affiliate || null);
+    setLoadingAffiliateData(false);
+    if (!user.isAffiliate) {
+      setShowAffiliateLinkDialog(true);
+    }
   }, [user?.email]);
 
   useEffect(() => {
@@ -790,6 +777,8 @@ const Account = () => {
             <AffiliateDialog
               onSuccess={async () => {
                 try {
+                  // Since user just became an affiliate, we need to refresh session data
+                  // For now, we'll make a minimal API call to get updated affiliate data
                   const res = await fetch("/api/affiliate");
                   const data = await res.json();
                   setIsAffiliate(data.isAffiliate);

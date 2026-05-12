@@ -59,8 +59,6 @@ export function ProductCard({
   const [isHovered, setIsHovered] = React.useState(false);
   const [isAddingToCart, setIsAddingToCart] = React.useState(false);
   const [isInWishlist, setIsInWishlist] = React.useState(false);
-  const [isAffiliate, setIsAffiliate] = React.useState(false);
-  const [affiliateData, setAffiliateData] = React.useState<any>(null);
 
   React.useEffect(() => {
     if (product?.id) {
@@ -105,25 +103,14 @@ export function ProductCard({
     e.preventDefault();
     e.stopPropagation();
 
-    // If we don't have affiliate data, fetch it first
-    if (!affiliateData) {
-      try {
-        const response = await fetch("/api/affiliate");
-        const data = await response.json();
-        if (data.isAffiliate && data.affiliate) {
-          setAffiliateData(data.affiliate);
-        } else {
-          toast.error("You must be an affiliate to generate affiliate links");
-          return;
-        }
-      } catch (error) {
-        toast.error("Failed to check affiliate status");
-        return;
-      }
+    // Check affiliate status from session data in user context
+    if (!user?.isAffiliate || !user?.affiliate) {
+      toast.error("You must be an affiliate to generate affiliate links");
+      return;
     }
 
     const baseUrl = process.env.NEXT_PUBLIC_ORIGIN_URL || window.location.origin;
-    const affiliateLink = `${baseUrl}/product/${product.id}?affiliate=${affiliateData.affiliateId}`;
+    const affiliateLink = `${baseUrl}/product/${product.id}?affiliate=${user.affiliate.affiliateId}`;
     try {
       await navigator.clipboard.writeText(affiliateLink);
       toast.success("Affiliate link copied to clipboard!");
