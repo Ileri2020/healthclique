@@ -482,12 +482,21 @@ export async function PUT(req: NextRequest) {
         updatedData.brand = { disconnect: true };
       }
     }
-    if (updatedData.category !== undefined) {
-      if (updatedData.category) {
-        updatedData.category = { connectOrCreate: { where: { name: updatedData.category }, create: { name: updatedData.category } } };
+    if (updatedData.category !== undefined || updatedData.categoryId !== undefined) {
+      const categoryValue = updatedData.category || updatedData.categoryId;
+      if (categoryValue) {
+        // If it's already an ID (ObjectId), connect directly
+        if (typeof categoryValue === 'string' && categoryValue.match(/^[0-9a-fA-F]{24}$/)) {
+          updatedData.category = { connect: { id: categoryValue } };
+        } else {
+          // Otherwise treat as name and connectOrCreate
+          updatedData.category = { connectOrCreate: { where: { name: categoryValue }, create: { name: categoryValue } } };
+        }
       } else {
         updatedData.category = { disconnect: true };
       }
+      // Remove categoryId to avoid conflicts
+      delete updatedData.categoryId;
     }
     if (Array.isArray(updatedData.activeIngredients)) {
       updatedData.activeIngredients = { set: [], connectOrCreate: updatedData.activeIngredients.map((name: string) => ({ where: { name }, create: { name } })) };

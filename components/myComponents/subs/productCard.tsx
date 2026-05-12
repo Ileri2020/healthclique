@@ -104,7 +104,23 @@ export function ProductCard({
   const handleCopyAffiliateLink = async (e: React.MouseEvent) => {
     e.preventDefault();
     e.stopPropagation();
-    if (!affiliateData) return;
+
+    // If we don't have affiliate data, fetch it first
+    if (!affiliateData) {
+      try {
+        const response = await fetch("/api/affiliate");
+        const data = await response.json();
+        if (data.isAffiliate && data.affiliate) {
+          setAffiliateData(data.affiliate);
+        } else {
+          toast.error("You must be an affiliate to generate affiliate links");
+          return;
+        }
+      } catch (error) {
+        toast.error("Failed to check affiliate status");
+        return;
+      }
+    }
 
     const baseUrl = process.env.NEXT_PUBLIC_ORIGIN_URL || window.location.origin;
     const affiliateLink = `${baseUrl}/product/${product.id}?affiliate=${affiliateData.affiliateId}`;
@@ -416,16 +432,14 @@ export function ProductCard({
                         </>
                       )}
                     </Button>
-                    {affiliateData && (
-                      <Button
-                        variant="outline"
-                        className="gap-2"
-                        onClick={handleCopyAffiliateLink}
-                        title="Copy affiliate link"
-                      >
-                        <LinkIcon className="h-4 w-4" />
-                      </Button>
-                    )}
+                    <Button
+                      variant="outline"
+                      className="gap-2"
+                      onClick={handleCopyAffiliateLink}
+                      title="Copy affiliate link"
+                    >
+                      <LinkIcon className="h-4 w-4" />
+                    </Button>
                   </div>
                 ) : (
                   <Button
