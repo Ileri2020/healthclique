@@ -64,6 +64,11 @@ export default function ProductForm({ initialProduct, hideList = false }: { init
   
   // Category search state
   const [categorySearch, setCategorySearch] = useState("");
+  
+  // Brand search state
+  const [brandSearch, setBrandSearch] = useState("");
+  const [newBrandInput, setNewBrandInput] = useState("");
+  const [newCategoryInput, setNewCategoryInput] = useState("");
 
   const nameSuggestions = useMemo(() => {
     if (formData.name.length < 2) return [];
@@ -409,19 +414,65 @@ export default function ProductForm({ initialProduct, hideList = false }: { init
           />
         </div>
 
-        <div className="w-full space-y-1">
-          <Label htmlFor="product-brand">Brand</Label>
-          <Input
-            id="product-brand"
-            placeholder="Brand / Company name"
-            list="brand-options"
-            value={formData.brand}
-            onChange={(e) => setFormData({ ...formData, brand: e.target.value })}
-            className="border-primary/20 focus:border-primary"
-          />
-          <datalist id="brand-options">
-            {allBrands.map((b) => <option key={b} value={b} />)}
-          </datalist>
+        <div className="w-full space-y-1 text-center flex flex-col items-center">
+          <Label htmlFor="product-brand" className='mb-2'>Brand</Label>
+          <div className="w-full space-y-2">
+            <Input
+              placeholder="Search brands..."
+              value={brandSearch}
+              onChange={(e) => setBrandSearch(e.target.value)}
+              className="border-primary/20 focus:border-primary h-8 text-xs"
+            />
+            <Select 
+              value={formData.brand} 
+              onValueChange={(value) => {
+                if (value === "__create_new__") return;
+                setFormData({ ...formData, brand: value });
+                setBrandSearch("");
+              }}
+            >
+              <SelectTrigger id="product-brand" className="w-full border-primary/20">
+                <SelectValue placeholder="Select a brand" />
+              </SelectTrigger>
+              <SelectContent className="max-h-48 overflow-y-auto">
+                {allBrands
+                  .filter((brand) => 
+                    brand.toLowerCase().includes(brandSearch.toLowerCase())
+                  )
+                  .map((brand) => (
+                    <SelectItem key={brand} value={brand}>
+                      {brand}
+                    </SelectItem>
+                  ))}
+                <SelectItem value="__create_new__" className="border-t pt-2 mt-2">
+                  <span className="text-primary font-semibold">+ Create New Brand</span>
+                </SelectItem>
+              </SelectContent>
+            </Select>
+            {formData.brand === "__create_new__" && (
+              <div className="flex gap-2 w-full">
+                <Input
+                  placeholder="Brand name"
+                  value={newBrandInput}
+                  onChange={(e) => setNewBrandInput(e.target.value)}
+                  className="border-primary/20 focus:border-primary h-8 text-xs flex-1"
+                />
+                <Button
+                  type="button"
+                  size="sm"
+                  onClick={() => {
+                    if (newBrandInput.trim()) {
+                      setFormData({ ...formData, brand: newBrandInput.trim() });
+                      setAllBrands([...new Set([...allBrands, newBrandInput.trim()])]);
+                      setNewBrandInput("");
+                    }
+                  }}
+                >
+                  Add
+                </Button>
+              </div>
+            )}
+          </div>
         </div>
 
         <div className="w-full space-y-2">
