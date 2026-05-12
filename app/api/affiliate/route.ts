@@ -70,8 +70,13 @@ export async function POST(req: NextRequest) {
 export async function GET(req: NextRequest) {
   try {
     const session = await auth();
+    
+    // Allow unauthenticated requests - just return false for isAffiliate
     if (!session?.user?.id) {
-      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+      return NextResponse.json({
+        isAffiliate: false,
+        affiliate: null
+      });
     }
 
     const affiliate = await prisma.affiliate.findUnique({

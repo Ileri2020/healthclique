@@ -73,17 +73,6 @@ export function ProductCard({
     }
   }, [product?.id]);
 
-  React.useEffect(() => {
-    // Check if user is an affiliate
-    fetch("/api/affiliate")
-      .then((res) => res.json())
-      .then((data) => {
-        setIsAffiliate(data.isAffiliate);
-        setAffiliateData(data.affiliate);
-      })
-      .catch(() => {});
-  }, []);
-
   const handleAddToCart = (e: React.MouseEvent) => {
     e.preventDefault();
     e.stopPropagation();
@@ -427,14 +416,16 @@ export function ProductCard({
                         </>
                       )}
                     </Button>
-                    <Button
-                      variant="outline"
-                      className="gap-2"
-                      onClick={handleCopyAffiliateLink}
-                      title="Copy affiliate link"
-                    >
-                      <LinkIcon className="h-4 w-4" />
-                    </Button>
+                    {affiliateData && (
+                      <Button
+                        variant="outline"
+                        className="gap-2"
+                        onClick={handleCopyAffiliateLink}
+                        title="Copy affiliate link"
+                      >
+                        <LinkIcon className="h-4 w-4" />
+                      </Button>
+                    )}
                   </div>
                 ) : (
                   <Button

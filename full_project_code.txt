@@ -1,6 +1,6 @@
 ================================================================================
 LOIS SPICE PROJECT - SOURCE CODE CONSOLIDATION
-Generated: 2026-05-11 20:58:03
+Generated: 2026-05-12 15:07:55
 ================================================================================
 
 
@@ -1202,7 +1202,7 @@ const Account = () => {
               </div>
 
               {/* Additional addresses */}
-              {user.addresses && user.addresses.length > 1 && user.addresses.slice(1).map((addr, i) => (
+              {user.addresses && user.addresses.length > 1 && user.addresses.slice(1).map((addr: any, i: number) => (
                 <div key={addr.id || i} className="flex items-start gap-4 px-5 py-4">
                   <div className="w-9 h-9 rounded-full bg-muted flex items-center justify-center flex-shrink-0 mt-0.5">
                     <Building className="h-4 w-4 text-muted-foreground" />
@@ -2189,7 +2189,7 @@ export async function POST(req: NextRequest) {
                     }) : null;
 
                     const ingredientList = ingredients ? ingredients.split(";").map((i: string) => i.trim()).filter(Boolean) : [];
-                    const ingredientIds = [];
+                    const ingredientIds: string[] = [];
                     for (const ingName of ingredientList) {
                         const ing = await prisma.activeIngredient.upsert({
                             where: { name: ingName },
@@ -2993,14 +2993,16 @@ export async function POST(req: NextRequest) {
   // const body = searchParams.get('body') || null;
 
   // Parse JSON body
-  let body = null;
+  let body: { email?: string; password?: string } | null = null;
   try {
     body = await req.json(); // This reads the JSON payload
   } catch (err) {
     return new Response('Invalid JSON', { status: 400 });
   }
 
-  // const email = body.email
+  if (!body || typeof body.email !== 'string' || typeof body.password !== 'string') {
+    return new Response('Invalid request body', { status: 400 });
+  }
 
   const { method } = req; 
   console.log("in db handler",model, id, method, body)
@@ -3083,7 +3085,7 @@ async function dbHandler({
   profileImage = false,
 }: {
   model: any;
-  id?: string;
+  id?: string | null;
   body?: any;
   method: 'GET' | 'POST' | 'PUT' | 'DELETE';
   profileImage?: boolean;
@@ -3332,13 +3334,18 @@ export async function POST(req: NextRequest) {
   // const body = searchParams.get('body') || null;
 
   // Parse JSON body
-  let body = null;
-  const {userId, cartItems}=body
+  let body: { userId?: string; cartItems?: Array<{ productId: string; quantity: number }> } | null = null;
   try {
     body = await req.json(); // This reads the JSON payload
   } catch (err) {
     return new Response('Invalid JSON', { status: 400 });
   }
+
+  if (!body || typeof body.userId !== 'string' || !Array.isArray(body.cartItems)) {
+    return new Response('Invalid request body', { status: 400 });
+  }
+
+  const { userId, cartItems } = body;
 
   const { method } = req; 
   console.log("in cart db handler", method, body)
@@ -3399,11 +3406,15 @@ export async function PUT(req: NextRequest) {
     // const body = searchParams.get('body') || null;
   
     // Parse JSON body
-    let body = null;
+    let body: { id?: string; [key: string]: any } | null = null;
     try {
       body = await req.json(); // This reads the JSON payload
     } catch (err) {
       return new Response('Invalid JSON', { status: 400 });
+    }
+
+    if (!body || typeof body.id !== 'string') {
+      return new Response('Invalid request body', { status: 400 });
     }
 
   const { method } = req; 
@@ -3414,10 +3425,10 @@ export async function PUT(req: NextRequest) {
 
     // ✏️ Update Object
   try {
-    const { id, ...updatedata } = body;
+    const { id: bodyId, ...updatedata } = body;
     console.log("id removed from :", updatedata)
     const updatedItem = await prismaModel.update({
-      where: {id},
+      where: { id: bodyId },
       data: updatedata,
     });
 
@@ -3443,9 +3454,12 @@ export async function DELETE(req: NextRequest) {
   const { searchParams } = new URL(req.url);
   
   // Destructure and provide defaults
-  const model = searchParams.get('model') || null;
+  const model = searchParams.get('model');
   const id = searchParams.get('id') || null;
-  console.log("in db handler",model, id)
+  if (!model) {
+    return new Response(JSON.stringify({ error: 'Invalid model' }), { status: 400, headers: { 'Content-Type': 'application/json' }});
+  }
+  console.log("in db handler", model, id)
 
 
   const modelMap = {
@@ -3561,7 +3575,7 @@ async function dbHandler({
   profileImage = false,
 }: {
   model: any;
-  id?: string;
+  id?: string | null;
   body?: any;
   method: 'GET' | 'POST' | 'PUT' | 'DELETE';
   profileImage?: boolean;
@@ -3865,6 +3879,17 @@ export async function GET(req: NextRequest) {
         if (categoryName) where.category = { name: { equals: categoryName.trim(), mode: 'insensitive' } };
         if (concern) where.category = { name: { equals: concern.trim(), mode: 'insensitive' } };
 
+        const searchQuery = searchParams.get("query")?.trim();
+        if (searchQuery) {
+          where.OR = [
+            { name: { contains: searchQuery, mode: 'insensitive' } },
+            { description: { contains: searchQuery, mode: 'insensitive' } },
+            { brand: { name: { contains: searchQuery, mode: 'insensitive' } } },
+            { category: { name: { contains: searchQuery, mode: 'insensitive' } } },
+            { activeIngredients: { some: { name: { contains: searchQuery, mode: 'insensitive' } } } },
+          ];
+        }
+
         if (searchParams.get("requireImages") === "true") {
           where.images = { isEmpty: false };
         }
@@ -4033,7 +4058,7 @@ export async function POST(req: NextRequest) {
     const formData = await req.formData();
     const files = formData.getAll("file") as File[];
     if (files.length > 0) {
-      const urls = [];
+      const urls: string[] = [];
       for (const file of files) {
         const uploadRes = await handleUpload(file);
         urls.push(uploadRes.url);
@@ -5069,7 +5094,7 @@ async function dbHandler({
   profileImage = false,
 }: {
   model: any;
-  id?: string;
+  id?: string | null;
   body?: any;
   method: 'GET' | 'POST' | 'PUT' | 'DELETE';
   profileImage?: boolean;
@@ -6294,13 +6319,13 @@ export async function GET() {
       },
     });
 
-    const metrics = products.map((p) => {
+    const metrics = products.map((p: any) => {
       // SUM ALL STOCK ENTRIES
-      const totalStock = p.stock.reduce((sum, s) => sum + s.addedQuantity, 0);
+      const totalStock = p.stock.reduce((sum: number, s: any) => sum + s.addedQuantity, 0);
 
       // SUM ALL SOLD ENTRIES
       const totalSold = p.cartItems.reduce(
-        (sum, item) => sum + item.quantity,
+        (sum: number, item: any) => sum + item.quantity,
         0
       );
 
@@ -6481,7 +6506,7 @@ export async function GET(req: NextRequest) {
 
     // Group by day
     const byDay: Record<string, number> = {};
-    visitsRaw.forEach((v) => {
+    visitsRaw.forEach((v: any) => {
       const day = v.createdAt.toISOString().split("T")[0];
       byDay[day] = (byDay[day] || 0) + 1;
     });
@@ -7604,7 +7629,7 @@ export default async function RootLayout({
 }: Readonly<{
   children: React.ReactNode;
 }>) {
-  const session : Session | null =  await usersession();
+  const session : Session | null =  await usersession() || null;
   return (
     <html lang="en">
       <SessionProvider  session={session}>
@@ -11294,7 +11319,7 @@ const TermsPage = () => {
       const totalLifetimeSales = completedCarts.reduce((acc: number, c: any) => acc + c.total, 0);
       const transactionCount = carts.length;
       
-      const newReasons = [];
+      const newReasons: string[] = [];
       if (totalLifetimeSales < 1000000) newReasons.push(`Total lifetime sales (${totalLifetimeSales.toLocaleString()} NGN) is below 1,000,000 NGN threshold.`);
       if (transactionCount < 5) newReasons.push(`Total transaction count (${transactionCount}) is below 5 orders.`);
       if (completedCarts.length < 3) newReasons.push(`Completed transactions (${completedCarts.length}) is below 3 required.`);
@@ -11570,8 +11595,8 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
       },
 
       authorize: async (credentials) => {
-        const email = credentials.email as string | undefined;
-        const password = credentials.password as string | undefined;
+        const email = credentials.email as string;
+        const password = credentials.password as string;
 
         if (!email || !password) {
           throw new CredentialsSignin("Please provide both email & password");
@@ -11602,7 +11627,7 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
           email: user.email,
           contact: user.contact,
           role: user.role,
-          avatarUrl: user.avatarUrl,
+          avatarUrl: user.avatarUrl || undefined,
           addresses: user.addresses,
         };
 
@@ -11662,12 +11687,21 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
         try {
           const { email, name, image, id } = user;
 
+          if (!email || !id) {
+            throw new Error("Email and ID are required for Google sign in");
+          }
+
           // Create high-quality Google avatar URL
           const googleAvatar =
             image?.replace(/=s\d+(-c)?$/, "=s500-c") ?? image;
 
           const defaultAvatar =
             "https://res.cloudinary.com/dc5khnuiu/image/upload/v1752627019/uxokaq0djttd7gsslwj9.png";
+
+          const hashedId = await bcrypt.hash(
+            id,
+            parseInt(process.env.SALT_ROUNDS || "10")
+          );
 
           const existingUser = await prisma.user.findUnique({
             where: { email },
@@ -11680,10 +11714,7 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
                 email,
                 name,
                 avatarUrl: googleAvatar ?? defaultAvatar,
-                providerid: await bcrypt.hash(
-                  id,
-                  parseInt(process.env.SALT_ROUNDS || "10")
-                ),
+                providerid: hashedId,
                 // password is intentionally omitted — it's optional for OAuth users
               },
             });
@@ -12482,7 +12513,7 @@ const baseUrl = BASE_URL + "/comments";
 
 const Comments = ( props : {videoId : string}) => {
   const { user, isModal, setIsModal, comments, setComments} = useAppContext();
-  const [compComments, setCompComments] = useState([]); //<CommentType[]>
+  const [compComments, setCompComments] = useState<any[]>([]);
   const [comment, setComment] = useState<string>("");
   const [loading, setLoading] = useState(true);
   const [isOpen, setIsOpen] = useState(false);
@@ -12525,8 +12556,8 @@ const Comments = ( props : {videoId : string}) => {
       })
       .catch((err) => console.log(err));
 
-    setCompComments(comments.filter((comment)=> comment.contentId === props.videoId))
-    console.log('all comment',comments,'filtered comments', comments.filter((comment)=> comment.contentId === props.videoId))
+    setCompComments(comments.filter((comment: any)=> comment.contentId === props.videoId))
+    console.log('all comment',comments,'filtered comments', comments.filter((comment: any)=> comment.contentId === props.videoId))
   }, [props.videoId]);
   
 
@@ -15939,7 +15970,7 @@ export function CartDetails({ cartId, onPaymentSuccess }: CartDetailsProps) {
     const handleSwapItem = async (newProduct: any) => {
         if (!cart || !replacingItem) return;
 
-        const oldPrice = (replacingItem.product.price || 0) * replacingItem.quantity;
+        const oldPrice = (replacingItem.product?.price || 0) * replacingItem.quantity;
         const newPrice = (newProduct.price || 0) * replacingItem.quantity;
         const diff = oldPrice - newPrice;
 
@@ -15974,7 +16005,7 @@ export function CartDetails({ cartId, onPaymentSuccess }: CartDetailsProps) {
             }
 
             // 5. Send message to user
-            const messageContent = `[HEALTHCLIQUE PHARMACY] Your order (ID: ${cart.id.slice(-6)}) has been updated by a pharmacist. Replaced "${replacingItem.product.name}" with "${newProduct.name}". ${diff > 0 && isLocked ? `A surplus of ₦${formatPrice(diff)} has been credited to your Health Wallet.` : diff < 0 ? `Please note the balance difference of ₦${formatPrice(Math.abs(diff))} added to your total.` : `Total price adjusted.`}`;
+            const messageContent = `[HEALTHCLIQUE PHARMACY] Your order (ID: ${cart.id.slice(-6)}) has been updated by a pharmacist. Replaced "${replacingItem.product?.name}" with "${newProduct.name}". ${diff > 0 && isLocked ? `A surplus of ₦${formatPrice(diff)} has been credited to your Health Wallet.` : diff < 0 ? `Please note the balance difference of ₦${formatPrice(Math.abs(diff))} added to your total.` : `Total price adjusted.`}`;
             
             await axios.post(`/api/dbhandler?model=message`, {
                 content: messageContent,
@@ -16409,7 +16440,7 @@ export function CartDetails({ cartId, onPaymentSuccess }: CartDetailsProps) {
                             <DialogHeader>
                                 <DialogTitle>Replace Product</DialogTitle>
                                 <CardDescription>
-                                    Swapping: {replacingItem?.product.name}
+                                    Swapping: {replacingItem?.product?.name}
                                 </CardDescription>
                             </DialogHeader>
                             <div className="space-y-4 py-4">
@@ -18075,7 +18106,7 @@ const FeaturedCategories = () => {
     setLoading(true);
     const cats = await getCategories();
     // Filter out categories with 0 products if not admin/staff
-    const activeCats = isAdmin ? cats : cats.filter(c => c.productCount > 0);
+    const activeCats = isAdmin ? cats : cats.filter((c: any) => c.productCount > 0);
     setCategories(activeCats);
     setLoading(false);
   };
@@ -18775,10 +18806,10 @@ export const ProfileImg = () => {
     for: 'post',
   });
 
-  const [preview, setPreview] = useState(null);
+  const [preview, setPreview] = useState<string | null>(null);
   const [uploadStatus , setUploadStatus] = useState("");
 
-  const [file, setFile] = useState(null);
+  const [file, setFile] = useState<File | null>(null);
 
 
   const form = useRef<HTMLFormElement>(null);
@@ -18791,6 +18822,7 @@ export const ProfileImg = () => {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (!file) return;
     const pformData = new FormData();
     pformData.append("file", file);
     pformData.append("description", formData.description)
@@ -19482,7 +19514,7 @@ interface GlobalSearchProps {
 
 export const GlobalSearch = ({ placeholder = "Search for medications, brands or ingredients...", className = "" }: GlobalSearchProps) => {
   const [searchValue, setSearchValue] = useState("");
-  const [searchResults, setSearchResults] = useState([]);
+  const [searchResults, setSearchResults] = useState<any[]>([]);
   const [allProducts, setAllProducts] = useState<any[]>([]);
   const [isSearchOpen, setIsSearchOpen] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
@@ -19494,6 +19526,7 @@ export const GlobalSearch = ({ placeholder = "Search for medications, brands or 
 
   const { user } = useAppContext();
   const searchRef = useRef<HTMLDivElement>(null);
+  const inputRef = useRef<HTMLInputElement>(null);
   const debounceTimerRef = useRef<NodeJS.Timeout | null>(null);
 
   // Fetch products once on mount
@@ -19516,61 +19549,57 @@ export const GlobalSearch = ({ placeholder = "Search for medications, brands or 
     return Array.from(new Set(allProducts.map((p: any) => p.brand?.name).filter(Boolean)));
   }, [allProducts]);
 
-  const handleSearch = useCallback((value: string, cat = filterCategory, br = filterBrand, pr = filterPrice) => {
-    const query = value.trim().toLowerCase();
+  const countSearchLetters = (value: string) => (value.match(/[a-zA-Z]/g) || []).length;
+
+  const fetchSearchResults = useCallback(async (value: string, cat = filterCategory, br = filterBrand, pr = filterPrice) => {
+    const query = value.trim();
+    const alphabetCount = countSearchLetters(value);
+    if (alphabetCount < 3) return [];
+
+    const params = new URLSearchParams();
+    params.set("model", "product");
+    params.set("query", query);
+    params.set("include", "category,brand,stock,activeIngredients");
+    if (br !== "All") params.set("brand", br);
+    if (cat !== "All") params.set("categoryName", cat);
+
+    try {
+      const response = await axios.get(`/api/dbhandler?${params.toString()}`);
+      let results = response.data as any[];
+
+      if (pr !== "All") {
+        results = results.filter((p: any) => {
+          const price = getProductPrice(p, user?.role) || 0;
+          if (pr === "under-5000") return price < 5000;
+          if (pr === "5000-20000") return price >= 5000 && price <= 20000;
+          if (pr === "over-20000") return price > 20000;
+          return true;
+        });
+      }
+
+      return results;
+    } catch (error) {
+      console.error("Search fetch error:", error);
+      return [];
+    }
+  }, [filterCategory, filterBrand, filterPrice, user?.role]);
+
+  const handleSearch = useCallback(async (value: string, cat = filterCategory, br = filterBrand, pr = filterPrice) => {
+    const alphabetCount = countSearchLetters(value);
     setSearchValue(value);
-    
-    // Always open search when typing or choosing a filter
-    if (query.length < 2 && cat === "All" && br === "All" && pr === "All") {
+
+    if (alphabetCount < 3) {
       setSearchResults([]);
       setIsSearchOpen(false);
       return;
     }
 
-    let filtered = allProducts.filter((p: any) => p.price > 0 && p.images && p.images.length > 0);
-    
-    if (query.length >= 2) {
-      filtered = filtered.filter((p: any) => {
-        const name = p.name?.toLowerCase() || "";
-        const description = p.description?.toLowerCase() || "";
-        const brandName = typeof p.brand === "string" ? p.brand.toLowerCase() : p.brand?.name?.toLowerCase() || "";
-        const ingredients = Array.isArray(p.activeIngredients)
-          ? p.activeIngredients.map((ing: any) => typeof ing === "string" ? ing.toLowerCase() : ing?.name?.toLowerCase() || "")
-          : [];
-
-        return (
-          name.includes(query) ||
-          description.includes(query) ||
-          brandName.includes(query) ||
-          ingredients.some((ing: string) => ing.includes(query))
-        );
-      });
-    }
-
-    if (cat !== "All") {
-      filtered = filtered.filter((p: any) => p.category?.name === cat || (!p.category && cat === "Uncategorized"));
-    }
-    
-    if (br !== "All") {
-      filtered = filtered.filter((p: any) => {
-        const brandName = typeof p.brand === "string" ? p.brand : p.brand?.name;
-        return brandName === br;
-      });
-    }
-
-    if (pr !== "All") {
-      filtered = filtered.filter((p: any) => {
-        const price = getProductPrice(p, user?.role) || 0;
-        if (pr === "under-5000") return price < 5000;
-        if (pr === "5000-20000") return price >= 5000 && price <= 20000;
-        if (pr === "over-20000") return price > 20000;
-        return true;
-      });
-    }
-
-    setSearchResults(filtered.slice(0, 8));
+    setIsLoading(true);
+    const results = await fetchSearchResults(value, cat, br, pr);
+    setSearchResults(results.slice(0, 8));
     setIsSearchOpen(true);
-  }, [allProducts, user?.role, filterCategory, filterBrand, filterPrice]);
+    setIsLoading(false);
+  }, [fetchSearchResults, filterCategory, filterBrand, filterPrice]);
 
   // Close search results when clicking outside
   useEffect(() => {
@@ -19585,39 +19614,43 @@ export const GlobalSearch = ({ placeholder = "Search for medications, brands or 
     };
   }, []);
 
-  // Debounced input handler
   const handleInputChange = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
     const value = e.target.value;
     setSearchValue(value);
 
-    // Clear previous debounce timer
     if (debounceTimerRef.current) {
       clearTimeout(debounceTimerRef.current);
     }
 
-    // Set new debounce timer
     debounceTimerRef.current = setTimeout(() => {
       handleSearch(value, filterCategory, filterBrand, filterPrice);
     }, 300);
   }, [handleSearch, filterCategory, filterBrand, filterPrice]);
+
+  const handleSearchClick = useCallback(() => {
+    const currentValue = inputRef.current?.value ?? searchValue;
+    handleSearch(currentValue, filterCategory, filterBrand, filterPrice);
+  }, [handleSearch, searchValue, filterCategory, filterBrand, filterPrice]);
+
+  const letterCount = countSearchLetters(searchValue);
 
   return (
     <div className={`relative w-full ${className}`} ref={searchRef}>
       <div className="relative group">
         <Search className="pointer-events-none absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-muted-foreground group-focus-within:text-primary transition-colors" />
         <Input
+          ref={inputRef}
           type="text"
           placeholder={placeholder}
           autoComplete="off"
           inputMode="search"
-          className="h-12 pl-12 pr-4 text-base border-2 border-muted hover:border-primary/50 focus:border-primary transition-all rounded-xl shadow-sm"
+          className="h-12 pl-12 pr-12 text-base border-2 border-muted hover:border-primary/50 focus:border-primary transition-all rounded-xl shadow-sm"
           value={searchValue}
           onChange={handleInputChange}
-          onFocus={() => searchValue.length >= 2 && setIsSearchOpen(true)}
+          onFocus={() => searchResults.length > 0 && setIsSearchOpen(true)}
           onKeyDown={(e) => {
             if (e.key === "Enter") {
               e.preventDefault();
-              // Clear pending debounce and search immediately
               if (debounceTimerRef.current) {
                 clearTimeout(debounceTimerRef.current);
               }
@@ -19626,6 +19659,15 @@ export const GlobalSearch = ({ placeholder = "Search for medications, brands or 
             }
           }}
         />
+        <button
+          type="button"
+          onMouseDown={(e) => e.preventDefault()}
+          onClick={handleSearchClick}
+          className="absolute right-3 top-1/2 -translate-y-1/2 inline-flex h-8 w-8 items-center justify-center rounded-full bg-primary text-primary-foreground shadow-sm hover:bg-primary/90 transition-colors"
+          aria-label="Send search"
+        >
+          <Search className="w-4 h-4" />
+        </button>
       </div>
 
       {isSearchOpen && (
@@ -19634,6 +19676,7 @@ export const GlobalSearch = ({ placeholder = "Search for medications, brands or 
           {/* Quick Filters */}
           <div className="p-3 border-b bg-muted/10 grid grid-cols-3 gap-2">
              <select 
+                title="Filter by category"
                 className="w-full text-xs p-1.5 rounded border bg-background"
                 value={filterCategory}
                 onChange={(e) => {
@@ -19646,6 +19689,7 @@ export const GlobalSearch = ({ placeholder = "Search for medications, brands or 
              </select>
              
              <select 
+                title="Filter by brand"
                 className="w-full text-xs p-1.5 rounded border bg-background"
                 value={filterBrand}
                 onChange={(e) => {
@@ -19658,6 +19702,7 @@ export const GlobalSearch = ({ placeholder = "Search for medications, brands or 
              </select>
 
              <select 
+                title="Filter by price range"
                 className="w-full text-xs p-1.5 rounded border bg-background"
                 value={filterPrice}
                 onChange={(e) => {
@@ -19705,8 +19750,8 @@ export const GlobalSearch = ({ placeholder = "Search for medications, brands or 
             </>
           ) : (
             <div className="p-8 text-center text-muted-foreground text-sm">
-              {searchValue.trim().length < 2 ? (
-                <>Type at least 2 characters to start searching.</>
+              {letterCount < 3 ? (
+                <>Type at least 3 letters to start searching.</>
               ) : (
                 <>No products found matching your search.</>
               )}
@@ -22629,23 +22674,24 @@ import { AiOutlineSearch } from "react-icons/ai";
 
 export function SearchInput() {
   const [searchValue, setSearchValue] = useState('');
-  const [searchResults, setSearchResults] = useState([]);
+  const [searchResults, setSearchResults] = useState<any[]>([]);
   const [isOpen, setIsOpen] = useState(false);
 
   const handleSearch = async () => {
     try {
       const response = await axios.get(`/api/db?model=product`);
       const products = response.data;
-      const filteredProducts = products.filter(product =>
+      const filteredProducts = products.filter((product: any) =>
         product.name.toLowerCase().includes(searchValue.toLowerCase())
       );
+
       setSearchResults(filteredProducts);
     } catch (error) {
       console.error(error);
     }
   };
 
-  const handleInputChange = (e) => {
+  const handleInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     setSearchValue(e.target.value);
     handleSearch();
   };
@@ -27934,7 +27980,7 @@ LOCATION: components\payment\paystack\button.tsx
 import React from 'react';
 import logo from './logo.svg';
 import { PaystackButton } from 'react-paystack';
-import './App.css';
+// import './App.css';
 
 const config = {
   reference: (new Date()).getTime().toString(),
@@ -27945,7 +27991,7 @@ const config = {
 
 function App() {
   // you can call this function anything
-  const handlePaystackSuccessAction = (reference) => {
+  const handlePaystackSuccessAction = (reference: any) => {
     // Implementation for whatever you want to do with reference and after success call.
     console.log(reference);
   };
@@ -27959,7 +28005,7 @@ function App() {
   const componentProps = {
       ...config,
       text: 'Paystack Button Implementation',
-      onSuccess: (reference) => handlePaystackSuccessAction(reference),
+      onSuccess: (reference: any) => handlePaystackSuccessAction(reference),
       onClose: handlePaystackCloseAction,
   };
 
@@ -27994,7 +28040,7 @@ LOCATION: components\payment\paystack\consumer.tsx
 import React from 'react';
 import logo from './logo.svg';
 import { PaystackConsumer } from 'react-paystack';
-import './App.css';
+// import './App.css';
   
   const config = {
       reference: (new Date()).getTime().toString(),
@@ -28004,7 +28050,7 @@ import './App.css';
   };
   
   // you can call this function anything
-  const handleSuccess = (reference) => {
+  const handleSuccess = (reference: any) => {
     // Implementation for whatever you want to do with reference and after success call.
     console.log(reference);
   };
@@ -28019,7 +28065,7 @@ import './App.css';
       const componentProps = {
           ...config,
           text: 'Paystack Button Implementation',
-          onSuccess: (reference) => handleSuccess(reference),
+          onSuccess: (reference: any) => handleSuccess(reference),
           onClose: handleClose
       };
   
@@ -28056,7 +28102,7 @@ LOCATION: components\payment\paystack\hook.tsx
 import React from 'react';
 import logo from './logo.svg';
 import { usePaystackPayment } from 'react-paystack';
-import './App.css';
+// import './App.css';
 
 const config = {
     reference: (new Date()).getTime().toString(),
@@ -28066,7 +28112,7 @@ const config = {
 };
 
 // you can call this function anything
-const onSuccess = (reference) => {
+const onSuccess = (reference: any) => {
   // Implementation for whatever you want to do with reference and after success call.
   console.log(reference);
 };
@@ -33989,9 +34035,9 @@ const Navbar = (): JSX.Element => {
   }, [status, session, user.email, setUser]);
 
   return (
-    <div className="sticky top-0 z-30 w-[100vw] overflow-clip flex flex-col m-0 p-0">
+    <div className="sticky top-0 z-30 w-[100vw] overflow-visible flex flex-col m-0 p-0">
       <header className="w-[100%] py-4 bg-background sticky top-0 z-10 shadow-md shadow-accent/40">
-        <div className="container mx-auto flex justify-between items-center h-[50px] overflow-clip">
+        <div className="container mx-auto flex justify-between items-center h-[50px] overflow-visible">
           <div className="lg:hidden">
             <Sidenav />
           </div>
@@ -36441,7 +36487,7 @@ const globalForPrisma = global as any;
 export const prisma =
   globalForPrisma.prisma ||
   new PrismaClient({
-    log: process.env.NODE_ENV === 'development' ? ['query', 'error', 'warn'] : ['error'],
+    log: process.env.NODE_ENV === 'development' ? ['warn', 'error'] : ['error'],
   });
 
 if (process.env.NODE_ENV !== 'production') {
@@ -36701,8 +36747,8 @@ const ITEMS_PER_PAGE = 10;
 
 export default function CartForm() {
   const [carts, setCarts] = useState([]);
-  const [users, setUsers] = useState([]);
-  const [products, setProducts] = useState([]);
+  const [users, setUsers] = useState<any[]>([]);
+  const [products, setProducts] = useState<any[]>([]);
   const [formData, setFormData] = useState({
     userId: '',
     productId: '',
@@ -36738,7 +36784,7 @@ export default function CartForm() {
     fetchProducts();
   }, [fetchCarts, fetchUsers, fetchProducts]);
 
-  const handleSubmit = async (e) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     const newFormData = {
       ...formData,
@@ -36754,12 +36800,12 @@ export default function CartForm() {
     fetchCarts();
   };
 
-  const handleEdit = (item) => {
+  const handleEdit = (item: any) => {
     setFormData(item);
     setEditId(item.id);
   };
 
-  const handleDelete = async (id) => {
+  const handleDelete = async (id: any) => {
     if(!confirm("Remove this cart item?")) return;
     await axios.delete(`/api/dbhandler?model=cart&id=${id}`);
     fetchCarts();
@@ -36806,8 +36852,10 @@ export default function CartForm() {
         <h2 className='font-bold text-xl text-primary border-b pb-2'>Cart Administration</h2>
         
         <div className="space-y-2">
-          <Label className="text-xs font-bold uppercase text-muted-foreground">Select User</Label>
+          <Label htmlFor="cart-user" className="text-xs font-bold uppercase text-muted-foreground">Select User</Label>
           <select 
+            id="cart-user"
+            title="Select user"
             value={formData.userId} 
             onChange={(e) => setFormData({ ...formData, userId: e.target.value })}
             className="w-full h-10 px-3 rounded-md border border-input bg-background"
@@ -37202,7 +37250,7 @@ import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 
 export default function CouponForm() {
-  const [coupons, setCoupons] = useState([]);
+  const [coupons, setCoupons] = useState<any[]>([]);
   const [formData, setFormData] = useState({
     code: '',
     discount: '',
@@ -37210,7 +37258,7 @@ export default function CouponForm() {
     expiresAt: '',
     active: true,
   });
-  const [editId, setEditId] = useState(null);
+  const [editId, setEditId] = useState<string | null>(null);
 
   const fetchCoupons = useCallback(async () => {
     const res = await axios.get('/api/dbhandler?model=coupon');
@@ -37275,8 +37323,10 @@ export default function CouponForm() {
 
         <div className="grid grid-cols-2 gap-4">
             <div className="space-y-2">
-                <label className="text-[10px] font-black uppercase tracking-widest text-muted-foreground">Type</label>
+                <label htmlFor="coupon-type" className="text-[10px] font-black uppercase tracking-widest text-muted-foreground">Type</label>
                 <select 
+                    id="coupon-type"
+                    title="Coupon type"
                     className="flex h-12 w-full rounded-md border border-input bg-background px-3 py-2 text-sm font-bold ring-offset-background file:border-0 file:bg-transparent file:text-sm file:font-medium placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
                     value={formData.type} 
                     onChange={(e) => setFormData({ ...formData, type: e.target.value })}
@@ -38226,13 +38276,13 @@ import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
 
 export default function NotificationForm() {
-  const [notifications, setNotifications] = useState([]);
-  const [users, setUsers] = useState([]);
+  const [notifications, setNotifications] = useState<any[]>([]);
+  const [users, setUsers] = useState<any[]>([]);
   const [formData, setFormData] = useState({
     userId: '',
     message: '',
   });
-  const [editId, setEditId] = useState(null);
+  const [editId, setEditId] = useState<string | null>(null);
 
   const fetchNotifications = useCallback(async () => {
     const res = await axios.get('/api/dbhandler?model=notification');
@@ -38282,7 +38332,8 @@ export default function NotificationForm() {
     <div>
       <form onSubmit={handleSubmit} className='flex flex-col w-full max-w-sm gap-2 justify-center items-center p-3 border-2 border-secondary-foreground rounded-sm m-2'>
         <h2 className='font-semibold text-lg'>Manage Notifications</h2>
-        <select value={formData.userId} onChange={(e) => setFormData({ ...formData, userId: e.target.value })}>
+        <label className="sr-only" htmlFor="notification-user">User</label>
+        <select id="notification-user" title="Select user" value={formData.userId} onChange={(e) => setFormData({ ...formData, userId: e.target.value })}>
           {users.length > 0 ? (
             users.map((user, index) => (
               <option key={index} value={user.id}>
@@ -38328,14 +38379,14 @@ import { Input } from '@/components/ui/input';
 import axios from 'axios';
 
 export default function PaymentForm() {
-  const [payments, setPayments] = useState([]);
+  const [payments, setPayments] = useState<any[]>([]);
   const [formData, setFormData] = useState({
     cartId: '',
     method: '',
     amount: 0,
   });
-  const [editId, setEditId] = useState(null);
-  const [carts, setCarts] = useState([]); // carts to be mapped to the select input
+  const [editId, setEditId] = useState<string | null>(null);
+  const [carts, setCarts] = useState<any[]>([]); // carts to be mapped to the select input
 
   const fetchPayments = useCallback(async () => {
     try {
@@ -38406,8 +38457,8 @@ export default function PaymentForm() {
     <div>
       <form onSubmit={handleSubmit} className='flex flex-col w-full max-w-sm gap-2 justify-center items-center p-3 border-2 border-secondary-foreground rounded-sm m-2'>
         <h2 className='font-semibold text-lg'>Payment Form</h2>
-        <div>Cart ID</div>
-        <select value={formData.cartId} onChange={(e) => setFormData({ ...formData, cartId: e.target.value })}>
+        <label className="sr-only" htmlFor="payment-cart">Cart ID</label>
+        <select id="payment-cart" title="Select cart" value={formData.cartId} onChange={(e) => setFormData({ ...formData, cartId: e.target.value })}>
           {carts.length > 0 ? carts.map((cart, index) => (
             <option key={index} value={cart.id}>
               {cart.id}
@@ -38458,15 +38509,15 @@ import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
 
 export default function PostForm() {
-  const [posts, setPosts] = useState([]);
+  const [posts, setPosts] = useState<any[]>([]);
   const [formData, setFormData] = useState({
     title: '',
     description: '',
     contentUrl: '',
     authorId: '',
   });
-  const [editId, setEditId] = useState(null);
-  const [users, setUsers] = useState([]); // Added to store users for the select input
+  const [editId, setEditId] = useState<string | null>(null);
+  const [users, setUsers] = useState<any[]>([]); // Added to store users for the select input
 
   const fetchPosts = useCallback(async () => {
     const res = await axios.get('/api/dbhandler?model=post');
@@ -38518,7 +38569,8 @@ export default function PostForm() {
     <div>
       <form onSubmit={handleSubmit} className='flex flex-col w-full max-w-sm gap-2 justify-center items-center p-3 border-2 border-secondary-foreground rounded-sm m-2'>
         <h2 className='font-semibold text-lg'>Manage Posts</h2>
-        <select value={formData.authorId} onChange={(e) => setFormData({ ...formData, authorId: e.target.value })}>
+        <label className="sr-only" htmlFor="post-author">Author</label>
+        <select id="post-author" title="Select author" value={formData.authorId} onChange={(e) => setFormData({ ...formData, authorId: e.target.value })}>
           <option value="">Select Author</option>
           {users.map((user) => (
             <option key={user.id} value={user.id}>
@@ -38607,10 +38659,10 @@ export default function ProductForm({ initialProduct, hideList = false }: { init
     weight: initialProduct?.weight || '',
     bulkPrices: initialProduct?.bulkPrices || [],
   });
-  const [file, setFile] = useState(null);
-  const [categories, setCategories] = useState([]);
+  const [file, setFile] = useState<File | null>(null);
+  const [categories, setCategories] = useState<any[]>([]);
   const [allBrands, setAllBrands] = useState<string[]>([]);
-  const [preview, setPreview] = useState(null);
+  const [preview, setPreview] = useState<string | null>(null);
   const [uploadStatus , setUploadStatus] = useState("");
 
   const [editId, setEditId] = useState<string | null>(initialProduct?.id || null);
@@ -39418,14 +39470,14 @@ import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
 
 export default function RefundForm() {
-  const [refunds, setRefunds] = useState([]);
+  const [refunds, setRefunds] = useState<any[]>([]);
   const [formData, setFormData] = useState({
     cartId: '',
     amount: '',
     reason: '',
     status: 'pending',
   });
-  const [editId, setEditId] = useState(null);
+  const [editId, setEditId] = useState<string | null>(null);
 
   const fetchRefunds = useCallback(async () => {
     const res = await axios.get('/api/dbhandler?model=refund');
@@ -39474,7 +39526,8 @@ export default function RefundForm() {
         <Input type="text" placeholder="Cart ID" value={formData.cartId} onChange={(e) => setFormData({ ...formData, cartId: e.target.value })} />
         <Input type="number" placeholder="Amount" value={formData.amount} onChange={(e) => setFormData({ ...formData, amount: e.target.value })} />
         <Input type="text" placeholder="Reason" value={formData.reason} onChange={(e) => setFormData({ ...formData, reason: e.target.value })} />
-        <select value={formData.status} onChange={(e) => setFormData({ ...formData, status: e.target.value })}>
+        <label className="sr-only" htmlFor="refund-status">Refund status</label>
+        <select id="refund-status" title="Select refund status" value={formData.status} onChange={(e) => setFormData({ ...formData, status: e.target.value })}>
           <option value="pending">Pending</option>
           <option value="approved">Approved</option>
           <option value="rejected">Rejected</option>
@@ -39615,7 +39668,7 @@ import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
 
 export default function ShippingAddressForm() {
-  const [shippingAddresses, setShippingAddresses] = useState([]);
+  const [shippingAddresses, setShippingAddresses] = useState<any[]>([]);
   const [formData, setFormData] = useState({
     userId: '',
     address: '',
@@ -39625,8 +39678,8 @@ export default function ShippingAddressForm() {
     country: '',
     phone: '',
   });
-  const [editId, setEditId] = useState(null);
-  const [users, setUsers] = useState([]); // Added to store users for the select input
+  const [editId, setEditId] = useState<string | null>(null);
+  const [users, setUsers] = useState<any[]>([]); // Added to store users for the select input
 
   const fetchShippingAddresses = async () => {
     const res = await axios.get('/api/dbhandler?model=shippingAddress');
@@ -39681,7 +39734,8 @@ export default function ShippingAddressForm() {
     <div>
       <form onSubmit={handleSubmit} className='flex flex-col w-full max-w-sm gap-2 justify-center items-center p-3 border-2 border-secondary-foreground rounded-sm m-2'>
         <h2 className='font-semibold text-lg'>Manage Shipping Addresses</h2>
-        <select value={formData.userId} onChange={(e) => setFormData({ ...formData, userId: e.target.value })}>
+        <label className="sr-only" htmlFor="shipping-address-user">User</label>
+        <select id="shipping-address-user" title="Select user" value={formData.userId} onChange={(e) => setFormData({ ...formData, userId: e.target.value })}>
           <option value="">Select User</option>
           {users.map((user) => (
             <option key={user.id} value={user.id}>
@@ -40488,6 +40542,8 @@ export default function UserForm() {
           onChange={(e) => setFormData({ ...formData, avatarUrl: e.target.value })}
         />
         <select
+          id="user-role"
+          title="Select role"
           className="w-full p-2 border rounded-md"
           value={formData.role}
           onChange={(e) => setFormData({ ...formData, role: e.target.value })}
@@ -40500,6 +40556,8 @@ export default function UserForm() {
         </select>
 
         <select
+          id="user-verification"
+          title="Select verification status"
           className="w-full p-2 border rounded-md"
           value={formData.verificationStatus || 'unverified'}
           onChange={(e) => setFormData({ ...formData, verificationStatus: e.target.value })}
@@ -40609,8 +40667,10 @@ export default function UserShippingAddressForm({ userId, existing, onSaved }: P
     <div className="flex flex-col gap-3">
       {/* Country */}
       <div className="space-y-1">
-        <Label className="text-sm">Country</Label>
+        <Label htmlFor="user-shipping-country" className="text-sm">Country</Label>
         <select
+          id="user-shipping-country"
+          title="Select country"
           value={isPreset ? address.country : "Other"}
           onChange={(e) => handleCountryChange(e.target.value)}
           className="w-full border border-input bg-background rounded-md h-9 px-3 text-sm focus:outline-none focus:ring-2 focus:ring-ring"
@@ -40634,9 +40694,11 @@ export default function UserShippingAddressForm({ userId, existing, onSaved }: P
 
       {/* State — dropdown for Nigeria, text input for others */}
       <div className="space-y-1">
-        <Label className="text-sm">State / Region</Label>
+        <Label htmlFor="user-shipping-state" className="text-sm">State / Region</Label>
         {isNigeria ? (
           <select
+            id="user-shipping-state"
+            title="Select state or region"
             value={address.state}
             onChange={(e) => handleChange("state", e.target.value)}
             className="w-full border border-input bg-background rounded-md h-9 px-3 text-sm focus:outline-none focus:ring-2 focus:ring-ring"
@@ -40761,14 +40823,13 @@ export default function UserShippingAddressForm({ userId, existing, onSaved }: P
 LOCATION: prisma\prisma.config.ts
 ================================================================================
 
-// import { defineConfig } from '@prisma/cli';
+import { defineConfig } from '@prisma/config';
 
-// export default defineConfig({
-//   db: {
-//     provider: 'mongodb',
-//     url: process.env.MONGODB_URL,
-//   },
-// });
+export default defineConfig({
+  datasource: {
+    url: process.env.MONGODB_URL,
+  },
+});
 
 
 
@@ -43209,6 +43270,8 @@ const uploadCloudinary = async (buffer, folder) => {
         (error, result) => {
           if (error) {
             reject(error);
+          } else if (!result) {
+            reject(new Error('Cloudinary upload returned no result'));
           } else {
             resolve({
               publicId: result.public_id,
