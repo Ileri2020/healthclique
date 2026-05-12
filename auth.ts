@@ -82,7 +82,7 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
         session.user.isAffiliate = token.isAffiliate as boolean;
       }
       if (token?.affiliate) {
-        session.user.affiliate = token.affiliate;
+        session.user.affiliate = token.affiliate as any;
       }
       return session;
     },

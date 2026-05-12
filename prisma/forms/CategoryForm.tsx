@@ -6,6 +6,7 @@ import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
 import { toast } from "sonner";
+import { Edit3, Trash2 } from "lucide-react";
 
 interface CategoriesFormProps {
   initialCategory?: any;
@@ -131,7 +132,7 @@ export default function CategoriesForm({ initialCategory, hideList = false }: Ca
   };
 
   return (
-    <div className="flex flex-col items-center">
+    <div className="flex flex-col items-center max-h-[72vh] overflow-y-auto">
       <form
         onSubmit={handleSubmit}
         className="flex flex-col w-full max-w-sm gap-3 p-4 border-2 border-secondary-foreground rounded-md m-2"
@@ -225,17 +226,25 @@ export default function CategoriesForm({ initialCategory, hideList = false }: Ca
                 )}
 
                 <div className="flex flex-row gap-2 w-full">
-                  <Button type="button" onClick={() => handleEdit(item)} className="flex-1">
-                    Edit
+                  <Button
+                    type="button"
+                    size="icon"
+                    className="h-8 w-8 p-0"
+                    onClick={() => handleEdit(item)}
+                    aria-label={`Edit ${item.name}`}
+                  >
+                    <Edit3 className="h-4 w-4" />
                   </Button>
 
                   <Button
                     type="button"
+                    size="icon"
+                    variant="destructive"
+                    className="h-8 w-8 p-0"
                     onClick={() => handleDelete(item.id)}
-                    variant="ghost"
-                    className="flex-1 border border-accent"
+                    aria-label={`Delete ${item.name}`}
                   >
-                    Delete
+                    <Trash2 className="h-4 w-4" />
                   </Button>
                 </div>
               </li>

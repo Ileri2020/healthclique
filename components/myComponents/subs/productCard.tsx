@@ -99,6 +99,9 @@ export function ProductCard({
     }
   };
 
+  const { user } = useAppContext();
+  const isAffiliate = user?.isAffiliate || false;
+
   const handleCopyAffiliateLink = async (e: React.MouseEvent) => {
     e.preventDefault();
     e.stopPropagation();
@@ -122,7 +125,6 @@ export function ProductCard({
   /**
    * Safe Data Access
    */
-  const { user } = useAppContext();
   const currentPrice = getProductPrice(product, user?.role);
   const inStock = typeof product.inStock === 'boolean' ? product.inStock : isProductInStock(product);
   const categoryName = product?.category?.name || product?.categoryName || "Pharmacy";

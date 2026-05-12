@@ -78,7 +78,7 @@ const CategoryCard = ({ category, isAdmin, onRefresh }: { category: any, isAdmin
                 <Edit3 className="h-3 w-3" />
               </Button>
             </DialogTrigger>
-            <DialogContent className="max-w-md">
+            <DialogContent className="max-w-md max-h-[80vh] overflow-y-auto">
               <DialogHeader>
                 <DialogTitle>Edit Category: {category.name}</DialogTitle>
               </DialogHeader>
@@ -170,7 +170,7 @@ const FeaturedCategories = () => {
                       Add Category
                     </Button>
                   </DialogTrigger>
-                  <DialogContent className="max-w-md">
+                  <DialogContent className="max-w-md max-h-[80vh] overflow-y-auto">
                     <DialogHeader>
                       <DialogTitle>Add New Category</DialogTitle>
                     </DialogHeader>

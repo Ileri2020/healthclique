@@ -10,6 +10,13 @@ declare module "next-auth" {
       role?: string
       avatarUrl?: string
       addresses?: any[]
+      isAffiliate?: boolean
+      affiliate?: {
+        id: string
+        affiliateId: string
+        name: string
+        earnings?: number
+      } | null
     } & DefaultSession["user"]
   }
 
@@ -18,6 +25,13 @@ declare module "next-auth" {
     role?: string
     avatarUrl?: string
     addresses?: any[]
+    isAffiliate?: boolean
+    affiliate?: {
+      id: string
+      affiliateId: string
+      name: string
+      earnings?: number
+    } | null
   }
 }
 
@@ -29,5 +43,12 @@ declare module "next-auth/jwt" {
     role?: string
     avatarUrl?: string
     addresses?: any[]
+    isAffiliate?: boolean
+    affiliate?: {
+      id: string
+      affiliateId: string
+      name: string
+      earnings?: number
+    } | null
   }
 }
