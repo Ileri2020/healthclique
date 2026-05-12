@@ -61,6 +61,9 @@ export default function ProductForm({ initialProduct, hideList = false }: { init
   
   // Ingredients tags state
   const [ingredientInput, setIngredientInput] = useState("");
+  
+  // Category search state
+  const [categorySearch, setCategorySearch] = useState("");
 
   const nameSuggestions = useMemo(() => {
     if (formData.name.length < 2) return [];
@@ -474,28 +477,41 @@ export default function ProductForm({ initialProduct, hideList = false }: { init
 
         <div className="w-full space-y-1 text-center flex flex-col items-center">
           <Label htmlFor="product-category" className='mb-2'>Product Category</Label>
-          <Select 
-            value={formData.categoryId} 
-            onValueChange={(value) => {
-              const selectedCategory = categories.find((cat: any) => cat.id === value);
-              setFormData({ 
-                ...formData, 
-                categoryId: value, 
-                category: selectedCategory ? (selectedCategory as any).name : ''
-              });
-            }}
-          >
-            <SelectTrigger id="product-category" className="w-full border-primary/20">
-              <SelectValue placeholder="Select a category" />
-            </SelectTrigger>
-            <SelectContent>
-              {categories.length > 0 ? categories.map((category: any) => (
-                <SelectItem key={category.id} value={category.id}>
-                  {category.name}
-                </SelectItem>
-              )) : <SelectItem value="none" disabled>No categories</SelectItem>}
-            </SelectContent>
-          </Select>
+          <div className="w-full space-y-2">
+            <Input
+              placeholder="Search categories..."
+              value={categorySearch}
+              onChange={(e) => setCategorySearch(e.target.value)}
+              className="border-primary/20 focus:border-primary h-8 text-xs"
+            />
+            <Select 
+              value={formData.categoryId} 
+              onValueChange={(value) => {
+                const selectedCategory = categories.find((cat: any) => cat.id === value);
+                setFormData({ 
+                  ...formData, 
+                  categoryId: value, 
+                  category: selectedCategory ? (selectedCategory as any).name : ''
+                });
+                setCategorySearch("");
+              }}
+            >
+              <SelectTrigger id="product-category" className="w-full border-primary/20">
+                <SelectValue placeholder="Select a category" />
+              </SelectTrigger>
+              <SelectContent className="max-h-48 overflow-y-auto">
+                {categories.length > 0 ? categories
+                  .filter((category: any) => 
+                    category.name.toLowerCase().includes(categorySearch.toLowerCase())
+                  )
+                  .map((category: any) => (
+                    <SelectItem key={category.id} value={category.id}>
+                      {category.name}
+                    </SelectItem>
+                  )) : <SelectItem value="none" disabled>No categories</SelectItem>}
+              </SelectContent>
+            </Select>
+          </div>
         </div>
 
         {/* ✅ Health Concerns Multi-Select Checkboxes */}
