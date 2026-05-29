@@ -73,7 +73,9 @@ export function CartClient({ className, cart: _unusedCart }: CartClientProps) {
   const [deliveryFee, setDeliveryFee] = React.useState(100);
   const [withDelivery, setWithDelivery] = React.useState(true);
   const [pendingAutoMethod, setPendingAutoMethod] = React.useState<'monnify' | 'manual' | 'test' | null>(null);
-  const [termsAccepted, setTermsAccepted] = React.useState(false);
+  const [termsAccepted, setTermsAccepted] = React.useState(
+    !!(user?.acceptedTerms && user?.acceptedPrivacy && user?.acceptedReturns)
+  );
 
   const monnifyRef = React.useRef<HTMLButtonElement>(null);
   const manualRef = React.useRef<HTMLButtonElement>(null);
@@ -130,6 +132,13 @@ export function CartClient({ className, cart: _unusedCart }: CartClientProps) {
   React.useEffect(() => {
     setIsMounted(true);
   }, []);
+
+  // Sync termsAccepted when user data loads asynchronously
+  React.useEffect(() => {
+    if (user?.acceptedTerms && user?.acceptedPrivacy && user?.acceptedReturns) {
+      setTermsAccepted(true);
+    }
+  }, [user?.acceptedTerms, user?.acceptedPrivacy, user?.acceptedReturns]);
 
   React.useEffect(() => {
     // Only fetch if undefined to prevent infinite loop on empty array

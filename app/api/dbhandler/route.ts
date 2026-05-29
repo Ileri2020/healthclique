@@ -498,6 +498,15 @@ export async function PUT(req: NextRequest) {
       // Remove categoryId to avoid conflicts
       delete updatedData.categoryId;
     }
+    if (updatedData.images !== undefined) {
+      if (Array.isArray(updatedData.images)) {
+        updatedData.images = updatedData.images.map((item: any) => String(item).trim()).filter(Boolean);
+      } else if (typeof updatedData.images === 'string') {
+        updatedData.images = updatedData.images.trim() ? [updatedData.images.trim()] : [];
+      } else {
+        delete updatedData.images;
+      }
+    }
     if (Array.isArray(updatedData.activeIngredients)) {
       updatedData.activeIngredients = { set: [], connectOrCreate: updatedData.activeIngredients.map((name: string) => ({ where: { name }, create: { name } })) };
     }

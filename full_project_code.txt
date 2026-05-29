@@ -1,6 +1,6 @@
 ================================================================================
 LOIS SPICE PROJECT - SOURCE CODE CONSOLIDATION
-Generated: 2026-05-12 16:12:20
+Generated: 2026-05-29 03:16:45
 ================================================================================
 
 
@@ -1280,6 +1280,8 @@ const Account = () => {
             <AffiliateDialog
               onSuccess={async () => {
                 try {
+                  // Since user just became an affiliate, we need to refresh session data
+                  // For now, we'll make a minimal API call to get updated affiliate data
                   const res = await fetch("/api/affiliate");
                   const data = await res.json();
                   setIsAffiliate(data.isAffiliate);
@@ -11655,7 +11657,7 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
         session.user.isAffiliate = token.isAffiliate as boolean;
       }
       if (token?.affiliate) {
-        session.user.affiliate = token.affiliate;
+        session.user.affiliate = token.affiliate as any;
       }
       return session;
     },
@@ -18068,7 +18070,7 @@ const CategoryCard = ({ category, isAdmin, onRefresh }: { category: any, isAdmin
                 <Edit3 className="h-3 w-3" />
               </Button>
             </DialogTrigger>
-            <DialogContent className="max-w-md">
+            <DialogContent className="max-w-md max-h-[80vh] overflow-y-auto">
               <DialogHeader>
                 <DialogTitle>Edit Category: {category.name}</DialogTitle>
               </DialogHeader>
@@ -18160,7 +18162,7 @@ const FeaturedCategories = () => {
                       Add Category
                     </Button>
                   </DialogTrigger>
-                  <DialogContent className="max-w-md">
+                  <DialogContent className="max-w-md max-h-[80vh] overflow-y-auto">
                     <DialogHeader>
                       <DialogTitle>Add New Category</DialogTitle>
                     </DialogHeader>
@@ -22048,6 +22050,9 @@ export function ProductCard({
     }
   };
 
+  const { user } = useAppContext();
+  const isAffiliate = user?.isAffiliate || false;
+
   const handleCopyAffiliateLink = async (e: React.MouseEvent) => {
     e.preventDefault();
     e.stopPropagation();
@@ -22071,7 +22076,6 @@ export function ProductCard({
   /**
    * Safe Data Access
    */
-  const { user } = useAppContext();
   const currentPrice = getProductPrice(product, user?.role);
   const inStock = typeof product.inStock === 'boolean' ? product.inStock : isProductInStock(product);
   const categoryName = product?.category?.name || product?.categoryName || "Pharmacy";
@@ -37011,6 +37015,7 @@ import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
 import { toast } from "sonner";
+import { Edit3, Trash2 } from "lucide-react";
 
 interface CategoriesFormProps {
   initialCategory?: any;
@@ -37136,7 +37141,7 @@ export default function CategoriesForm({ initialCategory, hideList = false }: Ca
   };
 
   return (
-    <div className="flex flex-col items-center">
+    <div className="flex flex-col items-center max-h-[72vh] overflow-y-auto">
       <form
         onSubmit={handleSubmit}
         className="flex flex-col w-full max-w-sm gap-3 p-4 border-2 border-secondary-foreground rounded-md m-2"
@@ -37230,17 +37235,25 @@ export default function CategoriesForm({ initialCategory, hideList = false }: Ca
                 )}
 
                 <div className="flex flex-row gap-2 w-full">
-                  <Button type="button" onClick={() => handleEdit(item)} className="flex-1">
-                    Edit
+                  <Button
+                    type="button"
+                    size="icon"
+                    className="h-8 w-8 p-0"
+                    onClick={() => handleEdit(item)}
+                    aria-label={`Edit ${item.name}`}
+                  >
+                    <Edit3 className="h-4 w-4" />
                   </Button>
 
                   <Button
                     type="button"
+                    size="icon"
+                    variant="destructive"
+                    className="h-8 w-8 p-0"
                     onClick={() => handleDelete(item.id)}
-                    variant="ghost"
-                    className="flex-1 border border-accent"
+                    aria-label={`Delete ${item.name}`}
                   >
-                    Delete
+                    <Trash2 className="h-4 w-4" />
                   </Button>
                 </div>
               </li>
@@ -38693,6 +38706,14 @@ export default function ProductForm({ initialProduct, hideList = false }: { init
   
   // Ingredients tags state
   const [ingredientInput, setIngredientInput] = useState("");
+  
+  // Category search state
+  const [categorySearch, setCategorySearch] = useState("");
+  
+  // Brand search state
+  const [brandSearch, setBrandSearch] = useState("");
+  const [newBrandInput, setNewBrandInput] = useState("");
+  const [newCategoryInput, setNewCategoryInput] = useState("");
 
   const nameSuggestions = useMemo(() => {
     if (formData.name.length < 2) return [];
@@ -39038,19 +39059,65 @@ export default function ProductForm({ initialProduct, hideList = false }: { init
           />
         </div>
 
-        <div className="w-full space-y-1">
-          <Label htmlFor="product-brand">Brand</Label>
-          <Input
-            id="product-brand"
-            placeholder="Brand / Company name"
-            list="brand-options"
-            value={formData.brand}
-            onChange={(e) => setFormData({ ...formData, brand: e.target.value })}
-            className="border-primary/20 focus:border-primary"
-          />
-          <datalist id="brand-options">
-            {allBrands.map((b) => <option key={b} value={b} />)}
-          </datalist>
+        <div className="w-full space-y-1 text-center flex flex-col items-center">
+          <Label htmlFor="product-brand" className='mb-2'>Brand</Label>
+          <div className="w-full space-y-2">
+            <Input
+              placeholder="Search brands..."
+              value={brandSearch}
+              onChange={(e) => setBrandSearch(e.target.value)}
+              className="border-primary/20 focus:border-primary h-8 text-xs"
+            />
+            <Select 
+              value={formData.brand} 
+              onValueChange={(value) => {
+                if (value === "__create_new__") return;
+                setFormData({ ...formData, brand: value });
+                setBrandSearch("");
+              }}
+            >
+              <SelectTrigger id="product-brand" className="w-full border-primary/20">
+                <SelectValue placeholder="Select a brand" />
+              </SelectTrigger>
+              <SelectContent className="max-h-48 overflow-y-auto">
+                {allBrands
+                  .filter((brand) => 
+                    brand.toLowerCase().includes(brandSearch.toLowerCase())
+                  )
+                  .map((brand) => (
+                    <SelectItem key={brand} value={brand}>
+                      {brand}
+                    </SelectItem>
+                  ))}
+                <SelectItem value="__create_new__" className="border-t pt-2 mt-2">
+                  <span className="text-primary font-semibold">+ Create New Brand</span>
+                </SelectItem>
+              </SelectContent>
+            </Select>
+            {formData.brand === "__create_new__" && (
+              <div className="flex gap-2 w-full">
+                <Input
+                  placeholder="Brand name"
+                  value={newBrandInput}
+                  onChange={(e) => setNewBrandInput(e.target.value)}
+                  className="border-primary/20 focus:border-primary h-8 text-xs flex-1"
+                />
+                <Button
+                  type="button"
+                  size="sm"
+                  onClick={() => {
+                    if (newBrandInput.trim()) {
+                      setFormData({ ...formData, brand: newBrandInput.trim() });
+                      setAllBrands([...new Set([...allBrands, newBrandInput.trim()])]);
+                      setNewBrandInput("");
+                    }
+                  }}
+                >
+                  Add
+                </Button>
+              </div>
+            )}
+          </div>
         </div>
 
         <div className="w-full space-y-2">
@@ -39106,28 +39173,41 @@ export default function ProductForm({ initialProduct, hideList = false }: { init
 
         <div className="w-full space-y-1 text-center flex flex-col items-center">
           <Label htmlFor="product-category" className='mb-2'>Product Category</Label>
-          <Select 
-            value={formData.categoryId} 
-            onValueChange={(value) => {
-              const selectedCategory = categories.find((cat: any) => cat.id === value);
-              setFormData({ 
-                ...formData, 
-                categoryId: value, 
-                category: selectedCategory ? (selectedCategory as any).name : ''
-              });
-            }}
-          >
-            <SelectTrigger id="product-category" className="w-full border-primary/20">
-              <SelectValue placeholder="Select a category" />
-            </SelectTrigger>
-            <SelectContent>
-              {categories.length > 0 ? categories.map((category: any) => (
-                <SelectItem key={category.id} value={category.id}>
-                  {category.name}
-                </SelectItem>
-              )) : <SelectItem value="none" disabled>No categories</SelectItem>}
-            </SelectContent>
-          </Select>
+          <div className="w-full space-y-2">
+            <Input
+              placeholder="Search categories..."
+              value={categorySearch}
+              onChange={(e) => setCategorySearch(e.target.value)}
+              className="border-primary/20 focus:border-primary h-8 text-xs"
+            />
+            <Select 
+              value={formData.categoryId} 
+              onValueChange={(value) => {
+                const selectedCategory = categories.find((cat: any) => cat.id === value);
+                setFormData({ 
+                  ...formData, 
+                  categoryId: value, 
+                  category: selectedCategory ? (selectedCategory as any).name : ''
+                });
+                setCategorySearch("");
+              }}
+            >
+              <SelectTrigger id="product-category" className="w-full border-primary/20">
+                <SelectValue placeholder="Select a category" />
+              </SelectTrigger>
+              <SelectContent className="max-h-48 overflow-y-auto">
+                {categories.length > 0 ? categories
+                  .filter((category: any) => 
+                    category.name.toLowerCase().includes(categorySearch.toLowerCase())
+                  )
+                  .map((category: any) => (
+                    <SelectItem key={category.id} value={category.id}>
+                      {category.name}
+                    </SelectItem>
+                  )) : <SelectItem value="none" disabled>No categories</SelectItem>}
+              </SelectContent>
+            </Select>
+          </div>
         </div>
 
         {/* ✅ Health Concerns Multi-Select Checkboxes */}
@@ -47828,6 +47908,13 @@ declare module "next-auth" {
       role?: string
       avatarUrl?: string
       addresses?: any[]
+      isAffiliate?: boolean
+      affiliate?: {
+        id: string
+        affiliateId: string
+        name: string
+        earnings?: number
+      } | null
     } & DefaultSession["user"]
   }
 
@@ -47836,6 +47923,13 @@ declare module "next-auth" {
     role?: string
     avatarUrl?: string
     addresses?: any[]
+    isAffiliate?: boolean
+    affiliate?: {
+      id: string
+      affiliateId: string
+      name: string
+      earnings?: number
+    } | null
   }
 }
 
@@ -47847,6 +47941,13 @@ declare module "next-auth/jwt" {
     role?: string
     avatarUrl?: string
     addresses?: any[]
+    isAffiliate?: boolean
+    affiliate?: {
+      id: string
+      affiliateId: string
+      name: string
+      earnings?: number
+    } | null
   }
 }
 

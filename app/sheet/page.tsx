@@ -75,6 +75,7 @@ interface Product {
   stock?: { id: string, addedQuantity: number, costPerProduct?: number }[]
   bulkPrices?: { id: string, name: string, quantity: number, price: number }[]
   vendors?: { id: string, vendor: { id: string, name: string }, costPrice: number, isDefault: boolean }[]
+  images?: string[]
   scarce: boolean
   requiresPrescription: boolean
   numberPcs?: string
@@ -771,9 +772,15 @@ const Sheet = () => {
       return;
     }
 
+    const exportFields = [...(columnOrderByTab[activeTab] || [])];
+    if (activeTab === 'products') {
+      if (!exportFields.includes('category')) exportFields.splice(1, 0, 'category');
+      if (!exportFields.includes('imageUrl')) exportFields.push('imageUrl');
+    }
+
     const csvData = data.map((row: any) => {
       const flatRow: any = { id: row.id };
-      (columnOrderByTab[activeTab] || []).forEach(field => {
+      exportFields.forEach(field => {
         let value = row[field];
         if (field === 'vendor') {
           const defaultVendor = row.vendors?.find((v: any) => v.isDefault);
@@ -782,21 +789,20 @@ const Sheet = () => {
           value = row.category?.name || '';
         } else if (field === 'brand') {
           value = row.brand?.name || '';
-          // Ensure empty string if brand is null/undefined or if somehow contains just the field name
           if (!value || value === 'brand' || (typeof value === 'string' && !value.trim())) {
             value = '';
           }
         } else if (field === 'stock') {
           value = row.stock?.reduce((acc: number, s: any) => acc + s.addedQuantity, 0) || 0;
         } else if (field === 'image') {
-          // Create Excel IMAGE formula for direct image display
-          const imageUrl = row.image || '';
+          const imageUrl = row.image || row.images?.[0] || '';
           if (imageUrl && imageUrl.trim()) {
-            // Use Excel IMAGE function: =IMAGE(url, [alt_text], [width], [height])
             value = `=IMAGE("${imageUrl}","Product Image",80,60)`;
           } else {
             value = '';
           }
+        } else if (field === 'imageUrl') {
+          value = row.image || row.images?.[0] || '';
         } else if (field === 'bulkName') {
           value = row.bulkPrices?.[0]?.name || '';
         } else if (field === 'bulkQty') {
@@ -851,12 +857,17 @@ const Sheet = () => {
               if (label.toLowerCase() === 'id' || !value) return;
               
               // Skip image formulas - they're display-only
-              if (label === 'Product Image' || (typeof value === 'string' && value.startsWith('=IMAGE'))) {
-                return;
-              }
+              const normalizedLabel = label.trim();
+            const isImageFormula = typeof value === 'string' && value.startsWith('=IMAGE');
+            if (normalizedLabel === 'Product Image' && isImageFormula) {
+              return;
+            }
 
-              // Map label to field name
-              const field = Object.keys(columnLabelByField).find(k => columnLabelByField[k] === label && activeDbFields.includes(k)) || label;
+            // Map label to field name
+            let field = Object.keys(columnLabelByField).find(k => columnLabelByField[k] === normalizedLabel && activeDbFields.includes(k)) || normalizedLabel;
+            if (normalizedLabel === 'Product Image URL' || normalizedLabel === 'Product Image') {
+              field = 'images';
+            }
               
               // Process value
               let processedValue = value;
@@ -864,7 +875,19 @@ const Sheet = () => {
               else if (value === "false") processedValue = false;
               else if (!isNaN(value) && value !== "") processedValue = parseFloat(value);
 
-              if (processedValue !== "") {
+              if (field === 'category' && typeof processedValue === 'string') {
+                const pieces = processedValue.split(/[|;,]/).map((item: string) => item.trim()).filter(Boolean);
+                processedValue = pieces[0] || '';
+              }
+              if (field === 'images') {
+                if (typeof processedValue === 'string') {
+                  processedValue = processedValue.trim() ? [processedValue.trim()] : [];
+                } else if (Array.isArray(processedValue)) {
+                  processedValue = processedValue.map((item: any) => String(item).trim()).filter(Boolean);
+                }
+              }
+
+              if (processedValue !== "" && !(Array.isArray(processedValue) && processedValue.length === 0)) {
                 updateData[field] = processedValue;
                 hasChanges = true;
               }
@@ -971,6 +994,7 @@ const Sheet = () => {
     numberPcs: "Pack Size",
     form: "Form",
     image: "Product Image",
+    imageUrl: "Product Image URL",
     scarce: "Scarce",
     requiresPrescription: "Rx Req",
     bulkPrices: "Bulk",

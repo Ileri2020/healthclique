@@ -73,6 +73,7 @@ export async function GET(req: NextRequest) {
         brandId: true,
         category: { select: { id: true, name: true } },
         brand: { select: { id: true, name: true } },
+        images: true,
       };
 
       const productSelect: any = {
