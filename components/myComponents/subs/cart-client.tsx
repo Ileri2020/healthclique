@@ -73,9 +73,17 @@ export function CartClient({ className, cart: _unusedCart }: CartClientProps) {
   const [deliveryFee, setDeliveryFee] = React.useState(100);
   const [withDelivery, setWithDelivery] = React.useState(true);
   const [pendingAutoMethod, setPendingAutoMethod] = React.useState<'monnify' | 'manual' | 'test' | null>(null);
+  const [savedCartMeta, setSavedCartMeta] = React.useState<{
+    cartId: string;
+    snapshot: string;
+    tx_ref: string;
+    amount: number;
+  } | null>(null);
   const [termsAccepted, setTermsAccepted] = React.useState(
     !!(user?.acceptedTerms && user?.acceptedPrivacy && user?.acceptedReturns)
   );
+  const [agreementStateLoaded, setAgreementStateLoaded] = React.useState(false);
+  const [agreementStateLoading, setAgreementStateLoading] = React.useState(false);
 
   const monnifyRef = React.useRef<HTMLButtonElement>(null);
   const manualRef = React.useRef<HTMLButtonElement>(null);
@@ -87,6 +95,54 @@ export function CartClient({ className, cart: _unusedCart }: CartClientProps) {
   const [selectedAddressId, setSelectedAddressId] = React.useState<string | null>(
     user?.addresses?.[0]?.id ?? null
   );
+
+  const savedCartStorageKey = React.useMemo(
+    () => (user?.id && user.id !== 'nil' ? `hc_saved_cart_${user.id}` : null),
+    [user?.id]
+  );
+
+  React.useEffect(() => {
+    if (!savedCartStorageKey) {
+      setSavedCartMeta(null);
+      return;
+    }
+
+    try {
+      const raw = localStorage.getItem(savedCartStorageKey);
+      if (!raw) return;
+      const parsed = JSON.parse(raw);
+      if (
+        parsed?.cartId &&
+        parsed?.snapshot &&
+        parsed?.tx_ref &&
+        typeof parsed.amount === 'number'
+      ) {
+        setSavedCartMeta(parsed);
+      }
+    } catch (error) {
+      console.error('Failed to load saved cart metadata:', error);
+    }
+  }, [savedCartStorageKey]);
+
+  React.useEffect(() => {
+    if (!savedCartStorageKey) return;
+    if (savedCartMeta) {
+      localStorage.setItem(savedCartStorageKey, JSON.stringify(savedCartMeta));
+    } else {
+      localStorage.removeItem(savedCartStorageKey);
+    }
+  }, [savedCartStorageKey, savedCartMeta]);
+
+  React.useEffect(() => {
+    if (!checkoutData && savedCartMeta) {
+      setCheckoutData({
+        cartId: savedCartMeta.cartId,
+        tx_ref: savedCartMeta.tx_ref,
+        amount: savedCartMeta.amount,
+        currency: 'NGN',
+      });
+    }
+  }, [checkoutData, savedCartMeta, setCheckoutData]);
 
   React.useEffect(() => {
     const fetchDeliveryFee = async () => {
@@ -126,6 +182,30 @@ export function CartClient({ className, cart: _unusedCart }: CartClientProps) {
   const discountAmountRounded = roundUpToNearest5(discountAmount);
 
   const totalAmount = Math.max(0, (subtotalRounded - discountAmountRounded) + deliveryFeeRounded);
+
+  const currentCartSnapshot = React.useMemo(() => {
+    return JSON.stringify({
+      items: items.map((i) => ({
+        id: i.id,
+        quantity: i.quantity,
+        bulkPriceId: (i as any).bulkPriceId || null,
+        customName: (i as any).customName || null,
+        customPrice: (i as any).customPrice || null,
+        isSpecial: !!(i as any).isSpecial,
+      })),
+      selectedAddressId,
+      withDelivery,
+      couponCode: appliedCoupon?.code || null,
+      discountAmountRounded,
+      deliveryFeeRounded,
+    });
+  }, [items, selectedAddressId, withDelivery, appliedCoupon?.code, discountAmountRounded, deliveryFeeRounded]);
+
+  const isCartUnchanged = savedCartMeta?.snapshot === currentCartSnapshot;
+  const hasSavedCart = Boolean(savedCartMeta?.cartId);
+  const showCheckoutButton = items.length > 0 && (!hasSavedCart || !isCartUnchanged);
+  const showPaymentButtons = items.length > 0 && hasSavedCart && isCartUnchanged;
+
   const role = user?.role || "customer";
   const markup = PRICE_MARKUPS[role as keyof typeof PRICE_MARKUPS] || 1.3;
 
@@ -135,10 +215,33 @@ export function CartClient({ className, cart: _unusedCart }: CartClientProps) {
 
   // Sync termsAccepted when user data loads asynchronously
   React.useEffect(() => {
-    if (user?.acceptedTerms && user?.acceptedPrivacy && user?.acceptedReturns) {
-      setTermsAccepted(true);
-    }
+    setTermsAccepted(!!(user?.acceptedTerms && user?.acceptedPrivacy && user?.acceptedReturns));
   }, [user?.acceptedTerms, user?.acceptedPrivacy, user?.acceptedReturns]);
+
+  React.useEffect(() => {
+    if (!isOpen || !user?.id || user.id === 'nil') {
+      setAgreementStateLoaded(true);
+      setAgreementStateLoading(false);
+      return;
+    }
+
+    const fetchAgreementState = async () => {
+      setAgreementStateLoading(true);
+      try {
+        const res = await axios.get(`/api/dbhandler?model=user&id=${user.id}`);
+        if (res.data) {
+          setUser({ ...user, ...res.data });
+        }
+      } catch (err) {
+        console.error('Failed to refresh user agreement state', err);
+      } finally {
+        setAgreementStateLoading(false);
+        setAgreementStateLoaded(true);
+      }
+    };
+
+    fetchAgreementState();
+  }, [isOpen, user?.id, user, setUser]);
 
   React.useEffect(() => {
     // Only fetch if undefined to prevent infinite loop on empty array
@@ -155,7 +258,7 @@ export function CartClient({ className, cart: _unusedCart }: CartClientProps) {
       };
       fetchAddresses();
     }
-  }, [user?.id, user?.addresses, setUser]);
+  }, [user, setUser]);
 
   React.useEffect(() => {
     if (!selectedAddressId && user?.addresses?.length) {
@@ -206,6 +309,7 @@ export function CartClient({ className, cart: _unusedCart }: CartClientProps) {
     try {
       const payload = {
         userId: user.id,
+        cartId: savedCartMeta?.cartId,
         items: items.map(i => ({
           productId: i.id,
           quantity: i.quantity,
@@ -223,6 +327,15 @@ export function CartClient({ className, cart: _unusedCart }: CartClientProps) {
       };
 
       const res = await axios.post('/api/payment', payload);
+      if (res.data?.cartId) {
+        const newMeta = {
+          cartId: res.data.cartId,
+          snapshot: currentCartSnapshot,
+          tx_ref: res.data.tx_ref,
+          amount: res.data.amount,
+        };
+        setSavedCartMeta(newMeta);
+      }
       setCheckoutData(res.data);
       return res.data;
     } catch (err) {
@@ -235,13 +348,23 @@ export function CartClient({ className, cart: _unusedCart }: CartClientProps) {
   };
 
   const handlePaymentMethod = async (method: 'monnify' | 'manual' | null) => {
-    setPendingAutoMethod(method);
-    await initiateCheckout();
+    if (!method) {
+      setPendingAutoMethod(null);
+      await initiateCheckout();
+      return;
+    }
+
+    const result = await initiateCheckout();
+    if (result) {
+      setPendingAutoMethod(method);
+    }
   };
 
   const handleAdminTest = async () => {
-    setPendingAutoMethod('test');
-    await initiateCheckout(100);
+    const result = await initiateCheckout(100);
+    if (result) {
+      setPendingAutoMethod('test');
+    }
   };
 
   const handleApplyCoupon = async () => {
@@ -360,6 +483,7 @@ export function CartClient({ className, cart: _unusedCart }: CartClientProps) {
                         {item.name}
                       </Link>
                       <button
+                        title='Remove item'
                         className="text-muted-foreground hover:text-destructive p-1"
                         onClick={() => removeItem(item.id, (item as any).bulkPriceId)}
                       >
@@ -381,6 +505,7 @@ export function CartClient({ className, cart: _unusedCart }: CartClientProps) {
                   <div className="flex items-center justify-between">
                     <div className="flex items-center border rounded-lg bg-background">
                       <button
+                        title='Decrease quantity'
                         className="p-1 hover:bg-muted rounded-l-lg transition-colors"
                         disabled={item.quantity <= 1}
                         onClick={() => updateQuantity(item.id, item.quantity - 1, (item as any).bulkPriceId)}
@@ -389,6 +514,7 @@ export function CartClient({ className, cart: _unusedCart }: CartClientProps) {
                       </button>
                       <span className="w-8 text-center text-xs font-bold">{item.quantity}</span>
                       <button
+                        title='Increase quantity'
                         className="p-1 hover:bg-muted rounded-r-lg transition-colors"
                         onClick={() => updateQuantity(item.id, item.quantity + 1, (item as any).bulkPriceId)}
                       >
@@ -418,6 +544,7 @@ export function CartClient({ className, cart: _unusedCart }: CartClientProps) {
               </div>
               {user.addresses && user.addresses.length > 0 ? (
                 <select
+                  title='Select Delivery Address'
                   className="w-full h-10 rounded-xl border px-3 text-xs font-bold bg-muted/20 outline-none focus:ring-2 focus:ring-primary/20 transition-all cursor-pointer"
                   value={selectedAddressId ?? ""}
                   onChange={(e) => setSelectedAddressId(e.target.value)}
@@ -511,54 +638,66 @@ export function CartClient({ className, cart: _unusedCart }: CartClientProps) {
               </div>
            </div>
 
-           {!(user?.acceptedTerms && user?.acceptedPrivacy && user?.acceptedReturns) && (
+           {agreementStateLoaded && !agreementStateLoading && !(user?.acceptedTerms && user?.acceptedPrivacy && user?.acceptedReturns) && (
               <TermsAgreements onAllAcceptedChange={setTermsAccepted} />
            )}
 
           {/* Buttons Block */}
           {user?.id !== 'nil' && !isCheckingOut && (
             <div className="space-y-2">
-              <Button 
-                className="w-full h-11 rounded-xl font-black shadow-lg shadow-primary/10 hover:shadow-primary/20 transition-all gap-2"
-                disabled={!selectedAddressId || !termsAccepted}
-                onClick={() => handlePaymentMethod(null)}
-              >
-                  <LayoutList className="w-4 h-4" />
-                  Checkout
-              </Button>
-
-              <div className="grid grid-cols-2 gap-2">
-                 <Button 
-                    className="w-full h-10 rounded-xl font-black border-2 border-primary/20 hover:bg-primary/5 transition-all gap-2 text-xs"
-                    disabled={!selectedAddressId || !termsAccepted}
-                    onClick={() => handlePaymentMethod('monnify')}
-                    variant="outline"
-                  >
-                    <CreditCard className="w-4 h-4 text-primary" />
-                    Monnify
-                  </Button>
-
-                 <Button 
-                    className="w-full h-10 rounded-xl font-black border-2 border-primary/20 hover:bg-primary/5 transition-all gap-2 text-xs"
-                    disabled={!selectedAddressId || !termsAccepted}
-                    onClick={() => handlePaymentMethod('manual')}
-                    variant="outline"
-                  >
-                    <Landmark className="w-4 h-4 text-primary" />
-                    Bank Transfer
-                  </Button>
-              </div>
-
-              {user.role === 'admin' && (
+              {showCheckoutButton && (
                 <Button 
-                  className="w-full h-10 rounded-xl font-black border-dashed border-2 border-amber-500 text-amber-600 hover:bg-amber-100 transition-all gap-2 text-xs"
+                  className="w-full h-11 rounded-xl font-black shadow-lg shadow-primary/10 hover:shadow-primary/20 transition-all gap-2"
                   disabled={!selectedAddressId || !termsAccepted}
-                  onClick={handleAdminTest}
-                  variant="outline"
+                  onClick={() => handlePaymentMethod(null)}
                 >
-                  <div className="w-4 h-4 bg-amber-500 rounded-full flex items-center justify-center text-white text-[10px]">₦</div>
-                  Admin Test (₦100) Payment
+                    <LayoutList className="w-4 h-4" />
+                    Checkout
                 </Button>
+              )}
+
+              {showPaymentButtons && (
+                <>
+                  <div className="grid grid-cols-2 gap-2">
+                    <Button 
+                      className="w-full h-10 rounded-xl font-black border-2 border-primary/20 hover:bg-primary/5 transition-all gap-2 text-xs"
+                      disabled={!selectedAddressId || !termsAccepted}
+                      onClick={() => handlePaymentMethod('monnify')}
+                      variant="outline"
+                    >
+                      <CreditCard className="w-4 h-4 text-primary" />
+                      Monnify
+                    </Button>
+
+                    <Button 
+                      className="w-full h-10 rounded-xl font-black border-2 border-primary/20 hover:bg-primary/5 transition-all gap-2 text-xs"
+                      disabled={!selectedAddressId || !termsAccepted}
+                      onClick={() => handlePaymentMethod('manual')}
+                      variant="outline"
+                    >
+                      <Landmark className="w-4 h-4 text-primary" />
+                      Bank Transfer
+                    </Button>
+                  </div>
+
+                  {user.role === 'admin' && (
+                    <Button 
+                      className="w-full h-10 rounded-xl font-black border-dashed border-2 border-amber-500 text-amber-600 hover:bg-amber-100 transition-all gap-2 text-xs"
+                      disabled={!selectedAddressId || !termsAccepted}
+                      onClick={handleAdminTest}
+                      variant="outline"
+                    >
+                      <div className="w-4 h-4 bg-amber-500 rounded-full flex items-center justify-center text-white text-[10px]">₦</div>
+                      Admin Test (₦100) Payment
+                    </Button>
+                  )}
+                </>
+              )}
+
+              {showPaymentButtons && (
+                <div className="rounded-xl border border-primary/20 bg-primary/5 p-3 text-xs font-black text-primary">
+                  Cart saved. Use a payment option to complete your order.
+                </div>
               )}
             </div>
           )}
@@ -593,7 +732,7 @@ export function CartClient({ className, cart: _unusedCart }: CartClientProps) {
               <Button 
                 variant="outline" 
                 className="flex-1 h-9 rounded-xl text-xs font-black text-destructive hover:bg-destructive hover:text-white transition-all"
-                onClick={() => { clearCart(); setCheckoutData(null); }}
+                onClick={() => { clearCart(); setCheckoutData(null); setSavedCartMeta(null); }}
               >
                 CLEAR CART
              </Button>
@@ -690,6 +829,7 @@ export function CartClient({ className, cart: _unusedCart }: CartClientProps) {
 
                 clearCart();
                 setCheckoutData(null);
+                setSavedCartMeta(null);
                 setIsOpen(false);
                 window.location.reload();
               }}

@@ -60,6 +60,8 @@ const Account = () => {
   const [affiliateLinkInput, setAffiliateLinkInput] = useState("");
   const [loadingAffiliateData, setLoadingAffiliateData] = useState(true);
   const [downloadingDataOps, setDownloadingDataOps] = useState(false);
+  const [affiliatePopupSeen, setAffiliatePopupSeen] = useState(false);
+  const AFFILIATE_ACCOUNT_POPUP_KEY = 'hc_affiliate_account_popup_shown';
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   const appUrl = process.env.NEXT_PUBLIC_APP_URL || "https://localhost:3000";
@@ -69,6 +71,11 @@ const Account = () => {
     if (saved === 'vertical' || saved === 'horizontal') {
       setCardOrientation(saved);
     }
+  }, []);
+
+  useEffect(() => {
+    const seen = localStorage.getItem(AFFILIATE_ACCOUNT_POPUP_KEY) === 'true';
+    setAffiliatePopupSeen(seen);
   }, []);
 
   useEffect(() => {
@@ -82,10 +89,13 @@ const Account = () => {
     setIsAffiliate(user.isAffiliate || false);
     setAffiliateData(user.affiliate || null);
     setLoadingAffiliateData(false);
-    if (!user.isAffiliate) {
+
+    if (!user.isAffiliate && !affiliatePopupSeen) {
       setShowAffiliateLinkDialog(true);
+      localStorage.setItem(AFFILIATE_ACCOUNT_POPUP_KEY, 'true');
+      setAffiliatePopupSeen(true);
     }
-  }, [user?.email]);
+  }, [user?.email, affiliatePopupSeen]);
 
   useEffect(() => {
     if (!isAffiliate) return;
