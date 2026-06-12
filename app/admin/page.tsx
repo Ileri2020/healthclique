@@ -64,10 +64,27 @@ const forms = [
   { name: "Post", component: PostForm },
 ];
 
+import { useSession } from "next-auth/react";
+import { useRouter } from "next/navigation";
+import { useEffect } from "react";
+
 const Admin = () => {
-    const { user } = useAppContext();
-    const isAdmin = user?.role === "admin";
-    const isStaff = user?.role === "staff";
+    const { data: session, status } = useSession();
+    const router = useRouter();
+    const isAdmin = session?.user?.role === "admin";
+    const isStaff = session?.user?.role === "staff";
+
+    useEffect(() => {
+      if (status !== "loading") {
+        if (!session || session.user?.role !== "admin") {
+          router.push("/");
+        }
+      }
+    }, [status, session, router]);
+
+    if (status === "loading" || !isAdmin) {
+      return null;
+    }
 
     const [selectedForms, setSelectedForms] = useState<string[]>([]);
     const [searchQuery, setSearchQuery] = useState("");

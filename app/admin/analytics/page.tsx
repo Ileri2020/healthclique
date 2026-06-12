@@ -15,7 +15,6 @@ import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
 import { KpiSectionSkeleton, ChartSkeleton } from "@/components/skeletons";
 import { Download, Calendar as CalendarIcon } from "lucide-react";
-import { useState } from "react";
 import { DateRange } from "react-day-picker";
 import { format, subDays } from "date-fns";
 import {
@@ -24,9 +23,23 @@ import {
   PopoverTrigger,
 } from "@/components/ui/popover";
 import { Calendar } from "@/components/ui/calendar";
-import { useEffect } from "react";
+import { useEffect, useState } from "react";
+import { useSession } from "next-auth/react";
+import { useRouter } from "next/navigation";
 
 export default function AnalyticsDashboard() {
+  const { data: session, status } = useSession();
+  const router = useRouter();
+  const isAdmin = session?.user?.role === "admin";
+
+  useEffect(() => {
+    if (status !== "loading") {
+      if (!session || session.user?.role !== "admin") {
+        router.push("/");
+      }
+    }
+  }, [status, session, router]);
+
   const [date, setDate] = useState<DateRange | undefined>({
     from: subDays(new Date(), 30),
     to: new Date(),
@@ -54,6 +67,10 @@ export default function AnalyticsDashboard() {
         setIsLoading(false);
       });
   }, [queryParams.from, queryParams.to]);
+
+  if (status === "loading" || !isAdmin) {
+    return null;
+  }
 
   return (
     <div className="flex-1 space-y-6 p-4 md:p-8 pt-6">
