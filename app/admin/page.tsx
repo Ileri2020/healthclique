@@ -1,7 +1,7 @@
 "use client";
 
 import { motion } from "framer-motion";
-import { useState, useMemo } from "react";
+import { useState, useMemo, useEffect } from "react";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Input } from "@/components/ui/input";
 import { DataTableDemo } from "@/components/myComponents/subs/datatable";
@@ -28,7 +28,6 @@ import { AccountUpgrade } from "@/components/myComponents/subs/AccountUpgrade";
 import { AdminUserManager } from "@/components/myComponents/subs/AdminUserManager";
 import { useAppContext } from "@/hooks/useAppContext";
 import { CartDetailsDialog } from "@/components/myComponents/subs/CartDetailsDialog";
-import { useEffect } from "react";
 import { formatPrice } from "@/lib/stock-pricing";
 import { toast } from "sonner";
 
@@ -66,7 +65,6 @@ const forms = [
 
 import { useSession } from "next-auth/react";
 import { useRouter } from "next/navigation";
-import { useEffect } from "react";
 
 const Admin = () => {
     const { data: session, status } = useSession();
