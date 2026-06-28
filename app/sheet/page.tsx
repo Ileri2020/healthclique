@@ -36,6 +36,7 @@ import {
   Plus,
   Search,
   Loader2,
+  Download,
   MoreVertical,
   Trash2,
   ExternalLink,
@@ -713,35 +714,79 @@ const Sheet = () => {
   const downloadAllDatabaseObjects = async () => {
     try {
       setLoading(true);
-      const allData: Record<string, any[]> = {};
-      
-      // Define all tabs to export
+
       const tabs = ['products', 'categories', 'brands', 'vendors', 'ingredients', 'stocks', 'bulkprices', 'productvendors'];
-      
-      // Fetch data from all tabs
+      const csvRows: any[] = [];
+
       for (const tab of tabs) {
         try {
           const model = tabToModel[tab as keyof typeof tabToModel];
           const res = await axios.get(`/api/sheet?model=${model}&limit=2000&details=true`);
-          allData[tab] = res.data.data || [];
+          const data = res.data.data || [];
+
+          if (!data.length) continue;
+
+          const exportFields = [...(columnOrderByTab[tab] || [])];
+          if (tab === 'products') {
+            if (!exportFields.includes('category')) exportFields.splice(1, 0, 'category');
+            if (!exportFields.includes('imageUrl')) exportFields.push('imageUrl');
+          }
+
+          data.forEach((row: any) => {
+            const flatRow: any = { sourceTab: tab, id: row.id };
+            exportFields.forEach(field => {
+              let value = row[field];
+              if (field === 'vendor') {
+                const defaultVendor = row.vendors?.find((v: any) => v.isDefault);
+                value = defaultVendor ? defaultVendor.vendor?.name : (row.vendors?.[0]?.vendor?.name || '');
+              } else if (field === 'category') {
+                value = row.category?.name || '';
+              } else if (field === 'brand') {
+                value = row.brand?.name || '';
+                if (!value || value === 'brand' || (typeof value === 'string' && !value.trim())) {
+                  value = '';
+                }
+              } else if (field === 'stock') {
+                value = row.stock?.reduce((acc: number, s: any) => acc + s.addedQuantity, 0) || 0;
+              } else if (field === 'image') {
+                const imageUrl = row.image || row.images?.[0] || '';
+                value = imageUrl && imageUrl.trim() ? `=IMAGE("${imageUrl}","Product Image",80,60)` : '';
+              } else if (field === 'imageUrl') {
+                value = row.image || row.images?.[0] || '';
+              } else if (field === 'bulkName') {
+                value = row.bulkPrices?.[0]?.name || '';
+              } else if (field === 'bulkQty') {
+                value = row.bulkPrices?.[0]?.quantity || '';
+              } else if (field === 'bulkPrice') {
+                value = typeof row.bulkPrices?.[0]?.price === 'number' ? row.bulkPrices[0].price.toFixed(3) : '';
+              } else if (field === 'price' && typeof value === 'number') {
+                value = value.toFixed(3);
+              }
+              flatRow[columnLabelByField[field] || field] = value ?? "";
+            });
+            csvRows.push(flatRow);
+          });
         } catch (err) {
           console.error(`Failed to fetch ${tab}:`, err);
-          allData[tab] = [];
         }
       }
-      
-      // Create JSON file with all data
-      const jsonData = JSON.stringify(allData, null, 2);
-      const blob = new Blob([jsonData], { type: 'application/json;charset=utf-8;' });
+
+      if (!csvRows.length) {
+        toast.error("No data to export");
+        return;
+      }
+
+      const csv = Papa.unparse(csvRows);
+      const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
       const url = URL.createObjectURL(blob);
       const link = document.createElement('a');
       link.href = url;
-      link.setAttribute('download', `all-database-objects_${new Date().toISOString()}.json`);
+      link.setAttribute('download', `all-database-objects_${new Date().toISOString()}.csv`);
       document.body.appendChild(link);
       link.click();
       document.body.removeChild(link);
-      
-      toast.success("All database objects downloaded successfully!");
+
+      toast.success("All database objects downloaded successfully as CSV!");
     } catch (err) {
       toast.error("Failed to download all database objects");
       console.error(err);
@@ -1720,12 +1765,12 @@ const Sheet = () => {
             </TabsTrigger>
             <Button 
               size="sm" 
-              onClick={downloadAllDatabaseObjects}
+              onClick={() => exportToCSV('all')}
               disabled={loading}
               className="h-9 gap-2 border-2 bg-indigo-600 hover:bg-indigo-700 text-white text-[11px] font-bold uppercase tracking-wider shadow-lg shadow-indigo-200"
             >
-              <Database size={14} /> 
-              {loading ? <Loader2 size={14} className="animate-spin" /> : "Download All DB Objects"}
+              <Download size={14} /> 
+              {loading ? <Loader2 size={14} className="animate-spin" /> : "Download CSV of All DB objects"}
             </Button>
 
             <input 
