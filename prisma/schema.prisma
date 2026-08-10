@@ -7,7 +7,6 @@ generator client {
 
 datasource db {
   provider = "mongodb"
-  url      = env("MONGODB_URL")
 }
 
 model User {
@@ -142,6 +141,51 @@ model Stock {
 
   @@index([productId])
   @@index([createdAt])
+}
+
+model Inventory {
+  id        String           @id @default(auto()) @map("_id") @db.ObjectId
+  type      String
+  date      DateTime?
+  rangeFrom DateTime?
+  rangeTo   DateTime?
+  sales     InventorySale[]
+  stocks    InventoryStock[]
+  createdAt DateTime         @default(now())
+  updatedAt DateTime         @updatedAt
+  version   Int              @default(0)
+
+  @@index([type])
+  @@index([date])
+  @@index([rangeFrom, rangeTo])
+}
+
+model InventorySale {
+  id           String    @id @default(auto()) @map("_id") @db.ObjectId
+  inventory    Inventory @relation(fields: [inventoryId], references: [id])
+  inventoryId  String    @db.ObjectId
+  sn           Int?
+  customerSn   Int?
+  productName  String
+  pack         Boolean   @default(false)
+  price        Float?
+  total        Float?
+  createdAt    DateTime  @default(now())
+  updatedAt    DateTime  @updatedAt
+}
+
+model InventoryStock {
+  id           String    @id @default(auto()) @map("_id") @db.ObjectId
+  inventory    Inventory @relation(fields: [inventoryId], references: [id])
+  inventoryId  String    @db.ObjectId
+  sn           Int?
+  productName  String
+  pack         Boolean   @default(false)
+  pcsCount     Int?
+  costPrice    Float?
+  total        Float?
+  createdAt    DateTime  @default(now())
+  updatedAt    DateTime  @updatedAt
 }
 
 model BulkPrice {
