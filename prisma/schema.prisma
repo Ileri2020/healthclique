@@ -161,31 +161,51 @@ model Inventory {
 }
 
 model InventorySale {
-  id           String    @id @default(auto()) @map("_id") @db.ObjectId
-  inventory    Inventory @relation(fields: [inventoryId], references: [id])
-  inventoryId  String    @db.ObjectId
-  sn           Int?
-  customerSn   Int?
-  productName  String
-  pack         Boolean   @default(false)
-  price        Float?
-  total        Float?
-  createdAt    DateTime  @default(now())
-  updatedAt    DateTime  @updatedAt
+  id              String    @id @default(auto()) @map("_id") @db.ObjectId
+  inventory       Inventory @relation(fields: [inventoryId], references: [id])
+  inventoryId     String    @db.ObjectId
+  sn              Int?
+  customerSn      Int?
+  productName     String
+  carton          Boolean   @default(false)
+  cartonQty       Int?
+  packsPerCarton  Int?
+  pack            Boolean   @default(false)
+  pcsCount        Int?
+  packQty         Int?
+  pcsQty          Int?
+  totalPcs        Int?
+  qty             Int?
+  costPrice       Float?
+  packSalesPrice  Float?
+  pcsSalesPrice   Float?
+  price           Float?
+  total           Float?
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
 }
 
 model InventoryStock {
-  id           String    @id @default(auto()) @map("_id") @db.ObjectId
-  inventory    Inventory @relation(fields: [inventoryId], references: [id])
-  inventoryId  String    @db.ObjectId
-  sn           Int?
-  productName  String
-  pack         Boolean   @default(false)
-  pcsCount     Int?
-  costPrice    Float?
-  total        Float?
-  createdAt    DateTime  @default(now())
-  updatedAt    DateTime  @updatedAt
+  id              String    @id @default(auto()) @map("_id") @db.ObjectId
+  inventory       Inventory @relation(fields: [inventoryId], references: [id])
+  inventoryId     String    @db.ObjectId
+  sn              Int?
+  productName     String
+  carton          Boolean   @default(false)
+  cartonQty       Int?
+  packsPerCarton  Int?
+  pack            Boolean   @default(false)
+  pcsCount        Int?
+  packQty         Int?
+  pcsQty          Int?
+  totalPcs        Int?
+  qty             Int?
+  costPrice       Float?
+  packSalesPrice  Float?
+  pcsSalesPrice   Float?
+  total           Float?
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
 }
 
 model BulkPrice {

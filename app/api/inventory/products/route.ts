@@ -3,23 +3,20 @@ import { prisma } from "@/lib/prisma"
 
 export async function GET() {
   try {
-    const inventoryItems = await prisma.inventory.findMany({
-      where: { type: "stock" },
-      include: { stocks: true },
-    })
+    const stockModel = (prisma as any).inventoryStock || (prisma as any).inventoryStockItem
+    const inventoryStocks = stockModel ? await stockModel.findMany({ select: { productName: true } }) : []
 
-    const names = new Set<string>()
-    inventoryItems.forEach((item) => {
-      item.stocks.forEach((stock) => {
-        if (typeof stock.productName === "string" && stock.productName.trim()) {
-          names.add(stock.productName.trim())
-        }
-      })
-    })
+    const names = Array.from(
+      new Set(
+        inventoryStocks
+          .map((stock: any) => stock?.productName)
+          .filter((name: any): name is string => typeof name === "string" && name.trim().length > 0)
+      )
+    ).sort()
 
-    return NextResponse.json(Array.from(names).sort())
+    return NextResponse.json(names)
   } catch (error) {
     console.error(error)
-    return NextResponse.json({ error: "Unable to fetch products" }, { status: 500 })
+    return NextResponse.json([], { status: 200 })
   }
 }

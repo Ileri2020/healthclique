@@ -9,24 +9,36 @@ import { Tables, TableColumn, TableRow } from "@/components/myComponents/tables"
 import { toast } from "sonner"
 
 const salesColumns: TableColumn[] = [
-  { key: "sn", label: "S/N", type: "number", required: true },
-  { key: "customerSn", label: "Customer S/N", type: "number", required: true },
+  { key: "sn", label: "S/N", type: "number", required: true, className: "w-10" },
+  { key: "customerSn", label: "Customer S/N", type: "number", required: true, className: "w-10" },
   { key: "productName", label: "Product Name", type: "text", required: true },
-  { key: "pack", label: "Pack", type: "boolean" },
-  { key: "price", label: "Price", type: "number" },
-  { key: "total", label: "Total", type: "number" },
+  { key: "pack", label: "Pack", type: "boolean", className: "w-10" },
+  { key: "packQty", label: "Pack Qty", type: "number", className: "w-20" },
+  { key: "pcsCount", label: "Pcs/Pack", type: "number", className: "w-20" },
+  { key: "pcsQty", label: "Pcs Qty", type: "number", className: "w-20" },
+  { key: "totalPcs", label: "Total Pcs", type: "number", className: "w-24" },
+  { key: "costPrice", label: "Cost Price", type: "number", required: true, className: "w-32" },
+  { key: "packSalesPrice", label: "Pack Sales Price", type: "number", className: "w-32" },
+  { key: "pcsSalesPrice", label: "Pcs Sales Price", type: "number", className: "w-32" },
+  { key: "price", label: "Price", type: "number", className: "w-32" },
+  { key: "total", label: "Total", type: "number", className: "w-40" },
 ]
 
-interface InventoryProduct {
-  id: string
-  name: string
-}
+type InventoryProductName = string
 
 const createBlankSalesRow = () => ({
   sn: "",
   customerSn: "",
   productName: "",
   pack: false,
+  packQty: "",
+  pcsCount: "",
+  pcsQty: "",
+  totalPcs: "",
+  qty: "",
+  costPrice: "",
+  packSalesPrice: "",
+  pcsSalesPrice: "",
   price: "",
   total: "",
 })
@@ -37,17 +49,20 @@ const SalesPage = () => {
   )
   const [dateRangeOpen, setDateRangeOpen] = useState(false)
   const [selectedDate, setSelectedDate] = useState<Date>(new Date())
+  const [dateMode, setDateMode] = useState<"single" | "range">("single")
   const [selectedRange, setSelectedRange] = useState<{ from: Date | undefined; to: Date | undefined }>({ from: undefined, to: undefined })
-  const [cachedProducts, setCachedProducts] = useState<InventoryProduct[]>([])
+  const [cachedProducts, setCachedProducts] = useState<InventoryProductName[]>([])
+  const [stockPricing, setStockPricing] = useState<Record<string, { costPrice?: number; packSalesPrice?: number; pcsSalesPrice?: number }>>({})
   const [loadingProducts, setLoadingProducts] = useState(false)
 
   const productNames = useMemo(
-    () => cachedProducts.map((product) => product.name),
+    () => cachedProducts,
     [cachedProducts]
   )
 
   useEffect(() => {
     loadInventoryProducts()
+    loadStockPricing()
   }, [])
 
   const loadInventoryProducts = async () => {
@@ -55,12 +70,37 @@ const SalesPage = () => {
     try {
       const response = await fetch("/api/inventory/products")
       const data = await response.json()
-      setCachedProducts(data || [])
+      setCachedProducts(
+        Array.isArray(data) ? data.filter((item): item is string => typeof item === "string") : []
+      )
     } catch (error) {
       console.error(error)
       toast.error("Unable to load inventory products")
     } finally {
       setLoadingProducts(false)
+    }
+  }
+
+  const loadStockPricing = async () => {
+    try {
+      const response = await fetch("/api/inventory/stock")
+      const data = await response.json()
+      if (Array.isArray(data)) {
+        setStockPricing(
+          data.reduce((acc, item: any) => {
+            if (item?.productName) {
+              acc[item.productName] = {
+                costPrice: item.costPrice,
+                packSalesPrice: item.packSalesPrice,
+                pcsSalesPrice: item.pcsSalesPrice,
+              }
+            }
+            return acc
+          }, {} as Record<string, { costPrice?: number; packSalesPrice?: number; pcsSalesPrice?: number }>)
+        )
+      }
+    } catch (error) {
+      console.error(error)
     }
   }
 
@@ -78,18 +118,81 @@ const SalesPage = () => {
   }, [tableRows])
 
   const currentLabel = useMemo(() => {
-    if (selectedRange.from && selectedRange.to) {
+    if (dateMode === "range" && selectedRange.from && selectedRange.to) {
       return `${format(selectedRange.from, "PPP")} - ${format(selectedRange.to, "PPP")}`
     }
     return format(selectedDate, "PPP")
-  }, [selectedDate, selectedRange])
+  }, [dateMode, selectedDate, selectedRange])
 
   const handleRowChange = (rows: TableRow[]) => {
-    setTableRows(rows)
+    const normalizedRows = rows.map((row) => {
+      const productName = typeof row.productName === "string" ? row.productName : ""
+      const stockInfo = productName ? stockPricing[productName] : undefined
+      const costValue = row.costPrice === "" || row.costPrice === undefined || row.costPrice === null
+        ? stockInfo?.costPrice
+        : Number(row.costPrice)
+
+      const pkQty = row.packQty !== "" && row.packQty !== undefined && row.packQty !== null
+        ? Number(row.packQty)
+        : (row.qty !== "" && row.qty !== undefined && row.qty !== null ? Number(row.qty) : 0)
+      const pCount = row.pcsCount !== "" && row.pcsCount !== undefined && row.pcsCount !== null ? Number(row.pcsCount) : 1
+      const pcQty = row.pcsQty !== "" && row.pcsQty !== undefined && row.pcsQty !== null ? Number(row.pcsQty) : 0
+
+      const hasQty = row.packQty !== "" || row.pcsQty !== "" || row.qty !== ""
+      const computedTotalPcs = hasQty ? (pkQty * pCount) + pcQty : ""
+
+      const packRequested = Boolean(row.pack) || pkQty > 0
+      const pcsRequested = pCount > 0 || pcQty > 0
+
+      const hasPackSales = row.packSalesPrice !== "" && row.packSalesPrice !== undefined && row.packSalesPrice !== null
+      const hasPcsSales = row.pcsSalesPrice !== "" && row.pcsSalesPrice !== undefined && row.pcsSalesPrice !== null
+      const suggestedSale = costValue !== undefined && !Number.isNaN(costValue)
+        ? Number((costValue + 0.3).toFixed(2))
+        : undefined
+
+      const packPrice = hasPackSales ? Number(row.packSalesPrice) : (stockInfo?.packSalesPrice ?? suggestedSale)
+      const pcsPrice = hasPcsSales ? Number(row.pcsSalesPrice) : (stockInfo?.pcsSalesPrice ?? suggestedSale)
+
+      let calculatedTotal = row.total
+      if (pkQty > 0 && packPrice !== undefined) {
+        calculatedTotal = Number((pkQty * packPrice + (pcQty > 0 && pcsPrice ? pcQty * pcsPrice : 0)).toFixed(2))
+      } else if (pcQty > 0 && pcsPrice !== undefined) {
+        calculatedTotal = Number((pcQty * pcsPrice).toFixed(2))
+      }
+
+      return {
+        ...row,
+        costPrice: costValue ?? row.costPrice,
+        totalPcs: computedTotalPcs,
+        total: calculatedTotal,
+        packSalesPrice: packRequested
+          ? (hasPackSales ? row.packSalesPrice : (stockInfo?.packSalesPrice ?? suggestedSale ?? row.packSalesPrice))
+          : row.packSalesPrice,
+        pcsSalesPrice: pcsRequested
+          ? (hasPcsSales ? row.pcsSalesPrice : (stockInfo?.pcsSalesPrice ?? suggestedSale ?? row.pcsSalesPrice))
+          : row.pcsSalesPrice,
+      }
+    })
+
+    setTableRows(normalizedRows)
   }
 
   const handleSubmit = async () => {
     const validRows = tableRows.filter((row) => row.productName && row.customerSn)
+    const invalidRow = validRows.find(
+      (row) =>
+        row.costPrice === "" ||
+        row.costPrice === undefined ||
+        Number.isNaN(Number(row.costPrice)) ||
+        ((row.packSalesPrice === "" || row.packSalesPrice === undefined || row.packSalesPrice === null) &&
+          (row.pcsSalesPrice === "" || row.pcsSalesPrice === undefined || row.pcsSalesPrice === null))
+    )
+
+    if (invalidRow) {
+      toast.error("Each sales row requires cost price plus either pack sales or pcs sales price.")
+      return
+    }
+
     const payload = {
       date: selectedRange.from && selectedRange.to ? { from: selectedRange.from, to: selectedRange.to } : { date: selectedDate },
       rows: validRows,
@@ -137,6 +240,7 @@ const SalesPage = () => {
                   className="mt-2 w-full rounded border bg-transparent px-3 py-2 text-sm"
                   value={format(selectedDate, "yyyy-MM-dd")}
                   onChange={(event) => {
+                    setDateMode("single")
                     setSelectedDate(new Date(event.target.value))
                     setSelectedRange({ from: undefined, to: undefined })
                   }}
@@ -149,12 +253,13 @@ const SalesPage = () => {
                   type="date"
                   className="mt-2 w-full rounded border bg-transparent px-3 py-2 text-sm"
                   value={selectedRange.from ? format(selectedRange.from, "yyyy-MM-dd") : ""}
-                  onChange={(event) =>
+                  onChange={(event) => {
+                    setDateMode("range")
                     setSelectedRange((prev) => ({
                       ...prev,
                       from: event.target.value ? new Date(event.target.value) : undefined,
                     }))
-                  }
+                  }}
                 />
               </div>
               <div>
@@ -164,12 +269,13 @@ const SalesPage = () => {
                   type="date"
                   className="mt-2 w-full rounded border bg-transparent px-3 py-2 text-sm"
                   value={selectedRange.to ? format(selectedRange.to, "yyyy-MM-dd") : ""}
-                  onChange={(event) =>
+                  onChange={(event) => {
+                    setDateMode("range")
                     setSelectedRange((prev) => ({
                       ...prev,
                       to: event.target.value ? new Date(event.target.value) : undefined,
                     }))
-                  }
+                  }}
                 />
               </div>
             </div>
@@ -180,7 +286,7 @@ const SalesPage = () => {
         </Dialog>
       </div>
 
-      <div className="rounded-lg border bg-card p-4">
+      <div className="rounded-lg border bg-card p-2 sm:p-4 overflow-x-auto max-w-full">
         <Tables
           columns={salesColumns}
           defaultRowCount={4}
@@ -189,6 +295,7 @@ const SalesPage = () => {
           autocomplete={{ productName: productNames }}
           restrictToOptions={["productName"]}
           showTotals
+          minWidth="1300px"
         />
       </div>
 

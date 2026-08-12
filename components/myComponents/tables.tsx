@@ -12,6 +12,7 @@ export type TableColumn = {
   label: string
   type: "text" | "number" | "boolean"
   required?: boolean
+  className?: string
 }
 
 export type TableRow = Record<string, string | number | boolean | undefined>
@@ -24,6 +25,7 @@ interface TablesProps {
   autocomplete?: Record<string, string[]>
   restrictToOptions?: string[]
   showTotals?: boolean
+  minWidth?: string
 }
 
 function createBlankRow(columns: TableColumn[]) {
@@ -41,6 +43,7 @@ export function Tables({
   autocomplete,
   restrictToOptions = [],
   showTotals = false,
+  minWidth = "1100px",
 }: TablesProps) {
   const [internalRows, setInternalRows] = useState<TableRow[]>(
     () => Array.from({ length: defaultRowCount }, () => createBlankRow(columns))
@@ -101,6 +104,8 @@ export function Tables({
     }
   }
 
+  const [snEditableRows, setSnEditableRows] = useState<Record<number, boolean>>({})
+
   const addRow = () => {
     updateRows([...activeRows, createBlankRow(columns)])
   }
@@ -122,12 +127,13 @@ export function Tables({
   }, [activeRows, columns, showTotals])
 
   return (
-    <div className="w-full overflow-x-auto">
-      <Table>
+    <div className="w-full max-w-full overflow-x-auto touch-pan-x scrollbar-thin">
+      <div style={{ minWidth }}>
+        <Table>
         <TableHeader>
           <TableRow>
             {columns.map((column) => (
-              <TableHead key={column.key}>{column.label}</TableHead>
+              <TableHead key={column.key} className={column.className ?? ""}>{column.label}</TableHead>
             ))}
           </TableRow>
         </TableHeader>
@@ -139,8 +145,16 @@ export function Tables({
                 const hasSuggestions = autocomplete?.[column.key]?.length
                 const datalistId = `suggest-${column.key}-${rowIndex}`
 
+                const isSn = column.key === "sn"
+                const isSnEditable = Boolean(snEditableRows[rowIndex])
+                const displayValue = isSn
+                  ? String(value === undefined || value === "" ? rowIndex + 1 : value)
+                  : value === undefined || value === null
+                  ? ""
+                  : String(value)
+
                 return (
-                  <TableCell key={column.key} className="align-top py-2">
+                  <TableCell key={column.key} className={`align-top py-2 ${column.className ?? ""}`}>
                     {column.type === "boolean" ? (
                       <div className="flex items-center">
                         <Checkbox
@@ -150,21 +164,37 @@ export function Tables({
                           }
                         />
                       </div>
+                    ) : isSn && !isSnEditable ? (
+                      <div
+                        className="cursor-pointer px-2 py-1 text-sm text-muted-foreground"
+                        onDoubleClick={() => {
+                          setSnEditableRows((prev) => ({
+                            ...prev,
+                            [rowIndex]: true,
+                          }))
+                        }}
+                      >
+                        {rowIndex + 1}
+                      </div>
                     ) : (
                       <div className="space-y-1">
                         <Input
                           type={column.type === "number" ? "number" : "text"}
-                          value={
-                            value === undefined || value === null
-                              ? ""
-                              : String(value)
-                          }
+                          value={displayValue}
                           placeholder={column.label}
                           list={hasSuggestions ? datalistId : undefined}
                           onChange={(event) =>
                             handleCellChange(rowIndex, column, event.target.value)
                           }
-                          onBlur={() => handleCellBlur(rowIndex, column)}
+                          onBlur={() => {
+                            if (isSn) {
+                              setSnEditableRows((prev) => ({
+                                ...prev,
+                                [rowIndex]: false,
+                              }))
+                            }
+                            handleCellBlur(rowIndex, column)
+                          }}
                         />
                         {hasSuggestions ? (
                           <datalist id={datalistId}>
@@ -191,6 +221,7 @@ export function Tables({
           ) : null}
         </TableBody>
       </Table>
+      </div>
       <div className="mt-4 flex justify-end">
         <Button type="button" variant="secondary" onClick={addRow}>
           Add row
