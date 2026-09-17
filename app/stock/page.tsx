@@ -21,6 +21,7 @@ const stockColumns: TableColumn[] = [
     conditionalFields: [
       { key: "cartonQty", label: "Carton Qty" },
       { key: "packsPerCarton", label: "Packs/Carton" },
+      { key: "pcsCount", label: "Pcs/Pack" },
     ],
   },
   {
@@ -161,8 +162,13 @@ const StockPage = () => {
         : (row.qty !== "" && row.qty !== undefined && row.qty !== null ? Number(row.qty) : 0)
       const pCount = row.pcsCount !== "" && row.pcsCount !== undefined && row.pcsCount !== null ? Number(row.pcsCount) : 1
       const totalPacks = (cQty * ppc) + pkQty
-      const totalPieces = totalPacks * pCount
-      const computedTotalPcs = totalPacks > 0 ? totalPieces : ""
+      const calculatedPieces = totalPacks * pCount
+      const hasPackQuantity = totalPacks > 0
+      const manualPieces = row.totalPcs !== "" && row.totalPcs !== undefined && row.totalPcs !== null
+        ? Number(row.totalPcs)
+        : 0
+      const totalPieces = hasPackQuantity ? calculatedPieces : manualPieces
+      const computedTotalPcs = hasPackQuantity ? calculatedPieces : row.totalPcs
 
       const costValue = row.costPrice === "" || row.costPrice === undefined || row.costPrice === null ? undefined : Number(row.costPrice)
       const costPerPack = costValue !== undefined && !Number.isNaN(costValue) && totalPacks > 0
