@@ -12,7 +12,7 @@ type Props = { columns: InventoryColumn[]; rows: InventoryRow[]; products: strin
 
 export function InventoryTable({ columns, rows, products, onRowsChange }: Props) {
   const [editableSerial, setEditableSerial] = useState<Record<number, boolean>>({})
-  const update = (index: number, column: InventoryColumn, value: string | boolean) => onRowsChange(rows.map((row, rowIndex) => rowIndex === index ? { ...row, [column.key]: column.type === "number" && value !== "" ? Number(value) : value } : row))
+  const update = (index: number, column: InventoryColumn, value: string | boolean) => onRowsChange(rows.map((row, rowIndex): InventoryRow => rowIndex === index ? { ...row, [column.key]: column.type === "number" && value !== "" ? Number(value) : value } : row))
   return <div className="table-wrap"><Table><TableHeader><TableRow>{columns.map((column) => <TableHead key={column.key}>{column.label}</TableHead>)}</TableRow></TableHeader><TableBody>{rows.map((row, rowIndex) => <TableRow key={rowIndex}>{columns.map((column) => {
     const value = row[column.key]
     if (column.type === "boolean") return <TableCell key={column.key}><Input type="checkbox" checked={Boolean(value)} onChange={(event) => update(rowIndex, column, event.target.checked)} /></TableCell>

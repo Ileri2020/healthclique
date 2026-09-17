@@ -6,6 +6,14 @@ import { Input } from "@/components/ui/input"
 import { Checkbox } from "@/components/ui/checkbox"
 import { Button } from "@/components/ui/button"
 import { Label } from "@/components/ui/label"
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog"
 
 export type TableColumn = {
   key: string
@@ -31,6 +39,7 @@ interface TablesProps {
   restrictToOptions?: string[]
   showTotals?: boolean
   minWidth?: string
+  readOnly?: boolean
 }
 
 function createBlankRow(columns: TableColumn[]) {
@@ -48,8 +57,10 @@ export function Tables({
   autocomplete,
   showTotals = false,
   minWidth = "1100px",
+  readOnly = false,
 }: TablesProps) {
   const [activeSuggestion, setActiveSuggestion] = useState<{ rowIndex: number; columnKey: string } | null>(null)
+  const [quantityDialog, setQuantityDialog] = useState<{ rowIndex: number; column: TableColumn } | null>(null)
   const [internalRows, setInternalRows] = useState<TableRow[]>(
     () => Array.from({ length: defaultRowCount }, () => createBlankRow(columns))
   )
@@ -147,24 +158,29 @@ export function Tables({
                 return (
                   <TableCell key={column.key} className={`align-top py-2 ${column.className ?? ""}`}>
                     {column.type === "boolean" ? (
-                      <div className="space-y-2">
+                      <div className="flex items-center gap-2 whitespace-nowrap">
                         <Checkbox
                           checked={Boolean(value)}
-                          onCheckedChange={(checked) => handleCellChange(rowIndex, column, checked ?? false)}
+                          disabled={readOnly}
+                          onCheckedChange={(checked) => {
+                            if (readOnly) return
+                            const enabled = checked ?? false
+                            handleCellChange(rowIndex, column, enabled)
+                            if (enabled && column.conditionalFields?.length) {
+                              setQuantityDialog({ rowIndex, column })
+                            }
+                          }}
                         />
-                        {Boolean(value) && column.conditionalFields?.map((field) => (
-                          <label key={field.key} className="block space-y-1">
-                            <span className="text-[10px] text-muted-foreground">{field.label}</span>
-                            <Input
-                              type="number"
-                              min="0"
-                              className="h-8 w-full min-w-20 text-xs"
-                              placeholder={field.label}
-                              value={String(activeRows[rowIndex]?.[field.key] ?? "")}
-                              onChange={(event) => handleCellChange(rowIndex, { ...column, key: field.key, type: "number" }, event.target.value)}
-                            />
-                          </label>
-                        ))}
+                        {!readOnly && Boolean(value) && column.conditionalFields?.length ? (
+                          <Button
+                            type="button"
+                            variant="outline"
+                            className="h-7 px-2 text-xs"
+                            onClick={() => setQuantityDialog({ rowIndex, column })}
+                          >
+                            🖊️edit
+                          </Button>
+                        ) : null}
                       </div>
                     ) : isSn && !isSnEditable ? (
                       <div
@@ -197,7 +213,7 @@ export function Tables({
                               setActiveSuggestion(null)
                             }
                           }}
-                          readOnly={column.readOnly}
+                          readOnly={readOnly || column.readOnly}
                           onBlur={() => {
                             if (isSn) {
                               setSnEditableRows((prev) => ({
@@ -245,11 +261,36 @@ export function Tables({
         </TableBody>
       </Table>
       </div>
-      <div className="mt-4 flex justify-end">
+      {!readOnly && <div className="mt-4 flex justify-end">
         <Button type="button" variant="secondary" onClick={addRow}>
           Add row
         </Button>
-      </div>
+      </div>}
+      <Dialog open={quantityDialog !== null} onOpenChange={(open) => !open && setQuantityDialog(null)}>
+        <DialogContent className="max-w-sm">
+          <DialogHeader>
+            <DialogTitle>Set {quantityDialog?.column.label.toLowerCase()} quantities</DialogTitle>
+            <DialogDescription>Enter the quantities for this row.</DialogDescription>
+          </DialogHeader>
+          <div className="grid gap-4 py-2">
+            {quantityDialog?.column.conditionalFields?.map((field) => (
+              <div key={field.key} className="space-y-2">
+                <Label htmlFor={`quantity-${quantityDialog.rowIndex}-${field.key}`}>{field.label}</Label>
+                <Input
+                  id={`quantity-${quantityDialog.rowIndex}-${field.key}`}
+                  type="number"
+                  min="0"
+                  value={String(activeRows[quantityDialog.rowIndex]?.[field.key] ?? "")}
+                  onChange={(event) => handleCellChange(quantityDialog.rowIndex, { ...quantityDialog.column, key: field.key, type: "number" }, event.target.value)}
+                />
+              </div>
+            ))}
+          </div>
+          <DialogFooter>
+            <Button type="button" onClick={() => setQuantityDialog(null)}>Done</Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   )
 }

@@ -3,7 +3,7 @@
   "version": "0.1.0",
   "private": true,
   "scripts": {
-    "dev": "node consolidate.js && next dev",
+    "dev": "next dev",
     "build": "npx prisma generate && next build",
     "consolidate": "node consolidate.js",
     "start": "next start",

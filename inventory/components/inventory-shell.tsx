@@ -26,7 +26,7 @@ export function InventoryShell({ mode, columns }: Props) {
     const cartonQty = asNumber(row.cartonQty), packsPerCarton = asNumber(row.packsPerCarton) || 1, packQty = asNumber(row.packQty), pcsCount = asNumber(row.pcsCount) || 1, pcsQty = asNumber(row.pcsQty)
     const totalPcs = mode === "stock" ? cartonQty * packsPerCarton * pcsCount + packQty * pcsCount + pcsQty : packQty * pcsCount + pcsQty
     const cost = asNumber(row.costPrice), salePrice = Number((cost + .3).toFixed(2))
-    const next = { ...row, totalPcs }
+    const next: InventoryRow = { ...row, totalPcs }
     if (cost > 0 && row.packSalesPrice === "" && (Boolean(row.pack) || packQty > 0)) next.packSalesPrice = salePrice
     if (cost > 0 && row.pcsSalesPrice === "" && (pcsCount > 0 || pcsQty > 0)) next.pcsSalesPrice = salePrice
     next.total = mode === "stock" ? Number((cost * (cartonQty || packQty || pcsQty)).toFixed(2)) : Number((packQty * asNumber(row.packSalesPrice) + pcsQty * asNumber(row.pcsSalesPrice)).toFixed(2))

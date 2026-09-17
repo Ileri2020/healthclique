@@ -51,6 +51,9 @@ export async function GET(req: Request) {
             packSalesPrice: true,
             pcsSalesPrice: true,
             cartonSalesPrice: true,
+            wholesaleCartonSalesPrice: true,
+            wholesalePackSalesPrice: true,
+            wholesalePcsSalesPrice: true,
             carton: true,
             cartonQty: true,
             packsPerCarton: true,
@@ -72,6 +75,9 @@ export async function GET(req: Request) {
         packSalesPrice?: number
         pcsSalesPrice?: number
         cartonSalesPrice?: number
+        wholesaleCartonSalesPrice?: number
+        wholesalePackSalesPrice?: number
+        wholesalePcsSalesPrice?: number
         totalPcs?: number
       }
     >()
@@ -87,6 +93,9 @@ export async function GET(req: Request) {
           packSalesPrice: stock.packSalesPrice ?? undefined,
           pcsSalesPrice: stock.pcsSalesPrice ?? undefined,
           cartonSalesPrice: stock.cartonSalesPrice ?? undefined,
+          wholesaleCartonSalesPrice: stock.wholesaleCartonSalesPrice ?? undefined,
+          wholesalePackSalesPrice: stock.wholesalePackSalesPrice ?? undefined,
+          wholesalePcsSalesPrice: stock.wholesalePcsSalesPrice ?? undefined,
           totalPcs: stock.totalPcs ?? undefined,
         })
       }
@@ -138,15 +147,41 @@ export async function POST(req: Request) {
             const costPerPack = costPrice !== undefined && totalPacks > 0 ? costPrice / totalPacks : undefined
             const costPerPiece = costPrice !== undefined && totalPieces > 0 ? costPrice / totalPieces : undefined
             const costPerCarton = costPerPack !== undefined && cQty > 0 ? costPerPack * ppc : undefined
-            const packSalesPrice = costPerPack !== undefined
-              ? Number((costPerPack * 1.3).toFixed(2))
-              : undefined
-            const pcsSalesPrice = costPerPiece !== undefined
-              ? Number((costPerPiece * 1.3).toFixed(2))
-              : undefined
-            const cartonSalesPrice = carton && packSalesPrice !== undefined
-              ? Number((packSalesPrice * ppc).toFixed(2))
-              : undefined
+            const retailMarkup = 1.3
+            const wholesaleMarkup = 1.1
+            const isWs = Boolean(row.wholesale)
+
+            const rawRetailCarton = row.retailCartonSalesPrice !== "" && row.retailCartonSalesPrice !== undefined
+              ? Number(row.retailCartonSalesPrice)
+              : (!isWs && row.cartonSalesPrice !== "" && row.cartonSalesPrice !== undefined ? Number(row.cartonSalesPrice) : undefined)
+
+            const rawRetailPack = row.retailPackSalesPrice !== "" && row.retailPackSalesPrice !== undefined
+              ? Number(row.retailPackSalesPrice)
+              : (!isWs && row.packSalesPrice !== "" && row.packSalesPrice !== undefined ? Number(row.packSalesPrice) : undefined)
+
+            const rawRetailPcs = row.retailPcsSalesPrice !== "" && row.retailPcsSalesPrice !== undefined
+              ? Number(row.retailPcsSalesPrice)
+              : (!isWs && row.pcsSalesPrice !== "" && row.pcsSalesPrice !== undefined ? Number(row.pcsSalesPrice) : undefined)
+
+            const rawWholesaleCarton = row.wholesaleCartonSalesPrice !== "" && row.wholesaleCartonSalesPrice !== undefined
+              ? Number(row.wholesaleCartonSalesPrice)
+              : (isWs && row.cartonSalesPrice !== "" && row.cartonSalesPrice !== undefined ? Number(row.cartonSalesPrice) : undefined)
+
+            const rawWholesalePack = row.wholesalePackSalesPrice !== "" && row.wholesalePackSalesPrice !== undefined
+              ? Number(row.wholesalePackSalesPrice)
+              : (isWs && row.packSalesPrice !== "" && row.packSalesPrice !== undefined ? Number(row.packSalesPrice) : undefined)
+
+            const rawWholesalePcs = row.wholesalePcsSalesPrice !== "" && row.wholesalePcsSalesPrice !== undefined
+              ? Number(row.wholesalePcsSalesPrice)
+              : (isWs && row.pcsSalesPrice !== "" && row.pcsSalesPrice !== undefined ? Number(row.pcsSalesPrice) : undefined)
+
+            const cartonSalesPrice = rawRetailCarton ?? (costPerCarton !== undefined ? Number((costPerCarton * retailMarkup).toFixed(2)) : undefined)
+            const finalPackSalesPrice = rawRetailPack ?? (costPerPack !== undefined ? Number((costPerPack * retailMarkup).toFixed(2)) : undefined)
+            const finalPcsSalesPrice = rawRetailPcs ?? (costPerPiece !== undefined ? Number((costPerPiece * retailMarkup).toFixed(2)) : undefined)
+
+            const wholesaleCartonSalesPrice = rawWholesaleCarton ?? (costPerCarton !== undefined ? Number((costPerCarton * wholesaleMarkup).toFixed(2)) : undefined)
+            const wholesalePackSalesPrice = rawWholesalePack ?? (costPerPack !== undefined ? Number((costPerPack * wholesaleMarkup).toFixed(2)) : undefined)
+            const wholesalePcsSalesPrice = rawWholesalePcs ?? (costPerPiece !== undefined ? Number((costPerPiece * wholesaleMarkup).toFixed(2)) : undefined)
 
             let totalPcs = (cQty * ppc * pCount) + (pkQty * pCount)
             if (!cQty && !pkQty) {
@@ -171,8 +206,11 @@ export async function POST(req: Request) {
               packCostPrice: costPerPack !== undefined ? Number(costPerPack.toFixed(2)) : undefined,
               pcsCostPrice: costPerPiece !== undefined ? Number(costPerPiece.toFixed(2)) : undefined,
               cartonSalesPrice,
-              packSalesPrice,
-              pcsSalesPrice,
+              packSalesPrice: finalPackSalesPrice,
+              pcsSalesPrice: finalPcsSalesPrice,
+              wholesaleCartonSalesPrice,
+              wholesalePackSalesPrice,
+              wholesalePcsSalesPrice,
             }
           }),
         },

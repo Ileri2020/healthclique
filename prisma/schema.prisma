@@ -7,6 +7,7 @@ generator client {
 
 datasource db {
   provider = "mongodb"
+  url      = env("MONGODB_URL")
 }
 
 model User {
@@ -210,6 +211,9 @@ model InventoryStock {
   cartonSalesPrice Float?
   packSalesPrice  Float?
   pcsSalesPrice   Float?
+  wholesaleCartonSalesPrice Float?
+  wholesalePackSalesPrice   Float?
+  wholesalePcsSalesPrice    Float?
   createdAt       DateTime  @default(now())
   updatedAt       DateTime  @updatedAt
 }
