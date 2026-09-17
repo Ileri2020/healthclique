@@ -46,7 +46,6 @@ export function Tables({
   rows,
   onRowsChange,
   autocomplete,
-  restrictToOptions = [],
   showTotals = false,
   minWidth = "1100px",
 }: TablesProps) {
@@ -95,19 +94,6 @@ export function Tables({
 
     newRows[rowIndex] = row
     updateRows(newRows)
-  }
-
-  const handleCellBlur = (rowIndex: number, column: TableColumn) => {
-    if (!restrictToOptions.includes(column.key)) {
-      return
-    }
-
-    const value = activeRows[rowIndex]?.[column.key]
-    const options = autocomplete?.[column.key] ?? []
-
-    if (typeof value === "string" && value && !options.includes(value)) {
-      handleCellChange(rowIndex, column, "")
-    }
   }
 
   const [snEditableRows, setSnEditableRows] = useState<Record<number, boolean>>({})
@@ -219,7 +205,6 @@ export function Tables({
                                 [rowIndex]: false,
                               }))
                             }
-                            handleCellBlur(rowIndex, column)
                             window.setTimeout(() => setActiveSuggestion(null), 150)
                           }}
                         />
