@@ -50,6 +50,7 @@ export function Tables({
   showTotals = false,
   minWidth = "1100px",
 }: TablesProps) {
+  const [activeSuggestion, setActiveSuggestion] = useState<{ rowIndex: number; columnKey: string } | null>(null)
   const [internalRows, setInternalRows] = useState<TableRow[]>(
     () => Array.from({ length: defaultRowCount }, () => createBlankRow(columns))
   )
@@ -147,8 +148,7 @@ export function Tables({
             <TableRow key={rowIndex}>
               {columns.map((column) => {
                 const value = row[column.key]
-                const hasSuggestions = autocomplete?.[column.key]?.length
-                const datalistId = `suggest-${column.key}-${rowIndex}`
+                const suggestions = autocomplete?.[column.key] ?? []
 
                 const isSn = column.key === "sn"
                 const isSnEditable = Boolean(snEditableRows[rowIndex])
@@ -193,13 +193,24 @@ export function Tables({
                         {rowIndex + 1}
                       </div>
                     ) : (
-                      <div className="space-y-1">
+                      <div className="relative space-y-1">
                         <Input
                           type={column.type === "number" ? "number" : "text"}
                           value={displayValue}
                           placeholder={column.label}
-                          list={hasSuggestions ? datalistId : undefined}
-                          onChange={(event) => handleCellChange(rowIndex, column, event.target.value)}
+                          onFocus={() => {
+                            if (column.type === "text" && displayValue.length >= 4) {
+                              setActiveSuggestion({ rowIndex, columnKey: column.key })
+                            }
+                          }}
+                          onChange={(event) => {
+                            handleCellChange(rowIndex, column, event.target.value)
+                            if (column.type === "text" && event.target.value.length >= 4) {
+                              setActiveSuggestion({ rowIndex, columnKey: column.key })
+                            } else {
+                              setActiveSuggestion(null)
+                            }
+                          }}
                           readOnly={column.readOnly}
                           onBlur={() => {
                             if (isSn) {
@@ -209,14 +220,26 @@ export function Tables({
                               }))
                             }
                             handleCellBlur(rowIndex, column)
+                            window.setTimeout(() => setActiveSuggestion(null), 150)
                           }}
                         />
-                        {hasSuggestions ? (
-                          <datalist id={datalistId}>
-                            {autocomplete![column.key].map((item) => (
-                              <option key={item} value={item} />
+                        {activeSuggestion?.rowIndex === rowIndex && activeSuggestion.columnKey === column.key && displayValue.length >= 4 ? (
+                          <div className="absolute left-0 right-0 top-full z-50 mt-1 max-h-48 overflow-y-auto rounded-md border bg-popover p-1 text-popover-foreground shadow-md">
+                            {suggestions.filter((item) => item.toLowerCase().includes(displayValue.toLowerCase())).slice(0, 12).map((item) => (
+                              <button
+                                key={item}
+                                type="button"
+                                className="block w-full rounded px-2 py-1.5 text-left text-sm hover:bg-accent"
+                                onMouseDown={(event) => {
+                                  event.preventDefault()
+                                  handleCellChange(rowIndex, column, item)
+                                  setActiveSuggestion(null)
+                                }}
+                              >
+                                {item}
+                              </button>
                             ))}
-                          </datalist>
+                          </div>
                         ) : null}
                       </div>
                     )}

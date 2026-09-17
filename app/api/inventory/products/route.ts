@@ -3,12 +3,14 @@ import { prisma } from "@/lib/prisma"
 
 export async function GET() {
   try {
-    const stockModel = (prisma as any).inventoryStock || (prisma as any).inventoryStockItem
-    const inventoryStocks = stockModel ? await stockModel.findMany({ select: { productName: true } }) : []
+    const [inventoryStocks, inventorySales] = await Promise.all([
+      prisma.inventoryStock.findMany({ select: { productName: true } }),
+      prisma.inventorySale.findMany({ select: { productName: true } }),
+    ])
 
     const names = Array.from(
       new Set(
-        inventoryStocks
+        [...inventoryStocks, ...inventorySales]
           .map((stock: any) => stock?.productName)
           .filter((name: any): name is string => typeof name === "string" && name.trim().length > 0)
       )
