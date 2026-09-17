@@ -136,7 +136,7 @@ export function Tables({
         <TableHeader>
           <TableRow>
             {columns.map((column) => (
-              <TableHead key={column.key} className={column.className ?? ""}>{column.label}</TableHead>
+              <TableHead key={column.key} className={`${column.key === "productName" ? "min-w-[300px]" : ""} ${column.className ?? ""}`}>{column.label}</TableHead>
             ))}
           </TableRow>
         </TableHeader>
@@ -156,7 +156,7 @@ export function Tables({
                   : String(value)
 
                 return (
-                  <TableCell key={column.key} className={`align-top py-2 ${column.className ?? ""}`}>
+                  <TableCell key={column.key} className={`align-top py-2 ${column.key === "productName" ? "min-w-[300px]" : ""} ${column.className ?? ""}`}>
                     {column.type === "boolean" ? (
                       <div className="flex items-center gap-2 whitespace-nowrap">
                         <Checkbox
