@@ -13,6 +13,11 @@ export type TableColumn = {
   type: "text" | "number" | "boolean"
   required?: boolean
   className?: string
+  readOnly?: boolean
+  conditionalFields?: {
+    key: string
+    label: string
+  }[]
 }
 
 export type TableRow = Record<string, string | number | boolean | undefined>
@@ -156,13 +161,24 @@ export function Tables({
                 return (
                   <TableCell key={column.key} className={`align-top py-2 ${column.className ?? ""}`}>
                     {column.type === "boolean" ? (
-                      <div className="flex items-center">
+                      <div className="space-y-2">
                         <Checkbox
                           checked={Boolean(value)}
-                          onCheckedChange={(checked) =>
-                            handleCellChange(rowIndex, column, checked ?? false)
-                          }
+                          onCheckedChange={(checked) => handleCellChange(rowIndex, column, checked ?? false)}
                         />
+                        {Boolean(value) && column.conditionalFields?.map((field) => (
+                          <label key={field.key} className="block space-y-1">
+                            <span className="text-[10px] text-muted-foreground">{field.label}</span>
+                            <Input
+                              type="number"
+                              min="0"
+                              className="h-8 w-full min-w-20 text-xs"
+                              placeholder={field.label}
+                              value={String(activeRows[rowIndex]?.[field.key] ?? "")}
+                              onChange={(event) => handleCellChange(rowIndex, { ...column, key: field.key, type: "number" }, event.target.value)}
+                            />
+                          </label>
+                        ))}
                       </div>
                     ) : isSn && !isSnEditable ? (
                       <div
@@ -183,9 +199,8 @@ export function Tables({
                           value={displayValue}
                           placeholder={column.label}
                           list={hasSuggestions ? datalistId : undefined}
-                          onChange={(event) =>
-                            handleCellChange(rowIndex, column, event.target.value)
-                          }
+                          onChange={(event) => handleCellChange(rowIndex, column, event.target.value)}
+                          readOnly={column.readOnly}
                           onBlur={() => {
                             if (isSn) {
                               setSnEditableRows((prev) => ({

@@ -36,6 +36,13 @@ function shouldCacheRequest(url: URL, req: Request) {
 
 export async function proxy(req: Request) {
   const url = new URL(req.url);
+
+  // Do not run the proxy/cache logic for API routes. This pattern can re-fetch
+  // the same /api URL and create the same runaway loop seen in the Vercel logs.
+  if (url.pathname.startsWith("/api/")) {
+    return (auth as any)(req);
+  }
+
   if (shouldCacheRequest(url, req)) {
     const cacheKey = url.toString();
     const cached = getCachedResponse(cacheKey);
@@ -68,4 +75,10 @@ export async function proxy(req: Request) {
 
   return (auth as any)(req);
 }
+
+export const config = {
+  matcher: [
+    "/((?!_next/static|_next/image|favicon.ico|public|api/).*)",
+  ],
+};
 

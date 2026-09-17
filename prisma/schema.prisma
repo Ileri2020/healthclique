@@ -149,6 +149,8 @@ model Inventory {
   date      DateTime?
   rangeFrom DateTime?
   rangeTo   DateTime?
+  total     Float      @default(0)
+  amountPaid Float     @default(0)
   sales     InventorySale[]
   stocks    InventoryStock[]
   createdAt DateTime         @default(now())
@@ -191,19 +193,23 @@ model InventoryStock {
   inventoryId     String    @db.ObjectId
   sn              Int?
   productName     String
+  companyName     String?
+  repName         String?
   carton          Boolean   @default(false)
   cartonQty       Int?
   packsPerCarton  Int?
   pack            Boolean   @default(false)
   pcsCount        Int?
   packQty         Int?
-  pcsQty          Int?
   totalPcs        Int?
   qty             Int?
   costPrice       Float?
+  cartonCostPrice Float?
+  packCostPrice   Float?
+  pcsCostPrice    Float?
+  cartonSalesPrice Float?
   packSalesPrice  Float?
   pcsSalesPrice   Float?
-  total           Float?
   createdAt       DateTime  @default(now())
   updatedAt       DateTime  @updatedAt
 }

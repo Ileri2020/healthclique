@@ -1,6 +1,6 @@
 ================================================================================
 LOIS SPICE PROJECT - SOURCE CODE CONSOLIDATION
-Generated: 2026-08-12 14:57:37
+Generated: 2026-09-17 07:46:20
 ================================================================================
 
 
@@ -4679,15 +4679,14 @@ import { prisma } from "@/lib/prisma"
 
 export async function GET() {
   try {
-    const inventoryStocks = await prisma.inventoryStock.findMany({
-      select: { productName: true },
-    })
+    const stockModel = (prisma as any).inventoryStock || (prisma as any).inventoryStockItem
+    const inventoryStocks = stockModel ? await stockModel.findMany({ select: { productName: true } }) : []
 
     const names = Array.from(
       new Set(
         inventoryStocks
-          .map((stock) => stock.productName)
-          .filter((name): name is string => typeof name === "string" && name.trim().length > 0)
+          .map((stock: any) => stock?.productName)
+          .filter((name: any): name is string => typeof name === "string" && name.trim().length > 0)
       )
     ).sort()
 
@@ -4758,33 +4757,56 @@ import { prisma } from "@/lib/prisma"
 
 export async function GET() {
   try {
-    const inventoryStocks = await prisma.inventoryStock.findMany({
-      orderBy: { createdAt: "desc" },
-      select: {
-        productName: true,
-        costPrice: true,
-        packSalesPrice: true,
-        pcsSalesPrice: true,
-      },
-    })
+    const stockModel = (prisma as any).inventoryStock || (prisma as any).inventoryStockItem
+    const inventoryStocks = stockModel
+      ? await stockModel.findMany({
+          orderBy: { createdAt: "desc" },
+          select: {
+            productName: true,
+            costPrice: true,
+            cartonCostPrice: true,
+            packCostPrice: true,
+            pcsCostPrice: true,
+            packSalesPrice: true,
+            pcsSalesPrice: true,
+            cartonSalesPrice: true,
+            carton: true,
+            cartonQty: true,
+            packsPerCarton: true,
+            packQty: true,
+            pcsCount: true,
+            totalPcs: true,
+          },
+        })
+      : []
 
     const latestByProduct = new Map<
       string,
       {
         productName: string
         costPrice?: number
+        cartonCostPrice?: number
+        packCostPrice?: number
+        pcsCostPrice?: number
         packSalesPrice?: number
         pcsSalesPrice?: number
+        cartonSalesPrice?: number
+        totalPcs?: number
       }
     >()
 
-    inventoryStocks.forEach((stock) => {
-      if (!latestByProduct.has(stock.productName)) {
+    inventoryStocks.forEach((stock: any) => {
+      if (stock?.productName && !latestByProduct.has(stock.productName)) {
         latestByProduct.set(stock.productName, {
           productName: stock.productName,
           costPrice: stock.costPrice ?? undefined,
+          cartonCostPrice: stock.cartonCostPrice ?? undefined,
+          packCostPrice: stock.packCostPrice ?? undefined,
+          pcsCostPrice: stock.pcsCostPrice ?? undefined,
           packSalesPrice: stock.packSalesPrice ?? undefined,
           pcsSalesPrice: stock.pcsSalesPrice ?? undefined,
+          cartonSalesPrice: stock.cartonSalesPrice ?? undefined,
+          totalPcs: stock.totalPcs ?? undefined,
         })
       }
     })
@@ -4812,17 +4834,60 @@ export async function POST(req: Request) {
         rangeFrom: date?.from ? new Date(date.from) : undefined,
         rangeTo: date?.to ? new Date(date.to) : undefined,
         stocks: {
-          create: rows.map((row: any) => ({
-            sn: row.sn === "" ? undefined : Number(row.sn),
-            productName: String(row.productName || ""),
-            pack: Boolean(row.pack),
-            pcsCount: row.pcsCount === "" ? undefined : Number(row.pcsCount),
-            qty: row.qty === "" ? undefined : Number(row.qty),
-            costPrice: row.costPrice === "" ? undefined : Number(row.costPrice),
-            packSalesPrice: row.packSalesPrice === "" ? undefined : Number(row.packSalesPrice),
-            pcsSalesPrice: row.pcsSalesPrice === "" ? undefined : Number(row.pcsSalesPrice),
-            total: row.total === "" ? undefined : Number(row.total),
-          })),
+          create: rows.map((row: any) => {
+            const carton = Boolean(row.carton)
+            const cartonQty = row.cartonQty === "" || row.cartonQty === undefined || row.cartonQty === null ? undefined : Number(row.cartonQty)
+            const packsPerCarton = row.packsPerCarton === "" || row.packsPerCarton === undefined || row.packsPerCarton === null ? undefined : Number(row.packsPerCarton)
+            const pack = Boolean(row.pack)
+            const pcsCount = row.pcsCount === "" || row.pcsCount === undefined || row.pcsCount === null ? undefined : Number(row.pcsCount)
+            const packQty = row.packQty === "" || row.packQty === undefined || row.packQty === null
+              ? (row.qty === "" || row.qty === undefined || row.qty === null ? undefined : Number(row.qty))
+              : Number(row.packQty)
+            const cQty = cartonQty || 0
+            const ppc = packsPerCarton || 1
+            const pCount = pcsCount || 1
+            const pkQty = packQty || 0
+            const costPrice = row.costPrice === "" || row.costPrice === undefined ? undefined : Number(row.costPrice)
+            const totalPacks = (cQty * ppc) + pkQty
+            const totalPieces = totalPacks * pCount
+            const costPerPack = costPrice !== undefined && totalPacks > 0 ? costPrice / totalPacks : undefined
+            const costPerPiece = costPrice !== undefined && totalPieces > 0 ? costPrice / totalPieces : undefined
+            const costPerCarton = costPerPack !== undefined && cQty > 0 ? costPerPack * ppc : undefined
+            const packSalesPrice = costPerPack !== undefined
+              ? Number((costPerPack * 1.3).toFixed(2))
+              : undefined
+            const pcsSalesPrice = costPerPiece !== undefined
+              ? Number((costPerPiece * 1.3).toFixed(2))
+              : undefined
+            const cartonSalesPrice = carton && packSalesPrice !== undefined
+              ? Number((packSalesPrice * ppc).toFixed(2))
+              : undefined
+
+            let totalPcs = (cQty * ppc * pCount) + (pkQty * pCount)
+            if (!cQty && !pkQty) {
+              totalPcs = 0
+            }
+
+            return {
+              sn: row.sn === "" || row.sn === undefined ? undefined : Number(row.sn),
+              productName: String(row.productName || ""),
+              carton,
+              cartonQty,
+              packsPerCarton,
+              pack,
+              pcsCount,
+              packQty,
+              totalPcs,
+              qty: packQty,
+              costPrice,
+              cartonCostPrice: costPerCarton !== undefined ? Number(costPerCarton.toFixed(2)) : undefined,
+              packCostPrice: costPerPack !== undefined ? Number(costPerPack.toFixed(2)) : undefined,
+              pcsCostPrice: costPerPiece !== undefined ? Number(costPerPiece.toFixed(2)) : undefined,
+              cartonSalesPrice,
+              packSalesPrice,
+              pcsSalesPrice,
+            }
+          }),
         },
       },
     })
@@ -8885,13 +8950,15 @@ const salesColumns: TableColumn[] = [
   { key: "customerSn", label: "Customer S/N", type: "number", required: true, className: "w-10" },
   { key: "productName", label: "Product Name", type: "text", required: true },
   { key: "pack", label: "Pack", type: "boolean", className: "w-10" },
-  { key: "pcsCount", label: "Pcs Count", type: "number", className: "w-60" },
-  { key: "qty", label: "Qty", type: "number", className: "w-10" },
-  { key: "costPrice", label: "Cost Price", type: "number", required: true, className: "w-60" },
-  { key: "packSalesPrice", label: "Pack Sales Price", type: "number", className: "w-60" },
-  { key: "pcsSalesPrice", label: "Pcs Sales Price", type: "number", className: "w-60" },
-  { key: "price", label: "Price", type: "number", className: "w-60" },
-  { key: "total", label: "Total", type: "number", className: "w-60" },
+  { key: "packQty", label: "Pack Qty", type: "number", className: "w-20" },
+  { key: "pcsCount", label: "Pcs/Pack", type: "number", className: "w-20" },
+  { key: "pcsQty", label: "Pcs Qty", type: "number", className: "w-20" },
+  { key: "totalPcs", label: "Total Pcs", type: "number", className: "w-24" },
+  { key: "costPrice", label: "Cost Price", type: "number", required: true, className: "w-32" },
+  { key: "packSalesPrice", label: "Pack Sales Price", type: "number", className: "w-32" },
+  { key: "pcsSalesPrice", label: "Pcs Sales Price", type: "number", className: "w-32" },
+  { key: "price", label: "Price", type: "number", className: "w-32" },
+  { key: "total", label: "Total", type: "number", className: "w-40" },
 ]
 
 type InventoryProductName = string
@@ -8901,7 +8968,10 @@ const createBlankSalesRow = () => ({
   customerSn: "",
   productName: "",
   pack: false,
+  packQty: "",
   pcsCount: "",
+  pcsQty: "",
+  totalPcs: "",
   qty: "",
   costPrice: "",
   packSalesPrice: "",
@@ -8995,23 +9065,48 @@ const SalesPage = () => {
     const normalizedRows = rows.map((row) => {
       const productName = typeof row.productName === "string" ? row.productName : ""
       const stockInfo = productName ? stockPricing[productName] : undefined
-      const costValue = row.costPrice === "" || row.costPrice === undefined ? undefined : Number(row.costPrice)
+      const costValue = row.costPrice === "" || row.costPrice === undefined || row.costPrice === null
+        ? stockInfo?.costPrice
+        : Number(row.costPrice)
+
+      const pkQty = row.packQty !== "" && row.packQty !== undefined && row.packQty !== null
+        ? Number(row.packQty)
+        : (row.qty !== "" && row.qty !== undefined && row.qty !== null ? Number(row.qty) : 0)
+      const pCount = row.pcsCount !== "" && row.pcsCount !== undefined && row.pcsCount !== null ? Number(row.pcsCount) : 1
+      const pcQty = row.pcsQty !== "" && row.pcsQty !== undefined && row.pcsQty !== null ? Number(row.pcsQty) : 0
+
+      const hasQty = row.packQty !== "" || row.pcsQty !== "" || row.qty !== ""
+      const computedTotalPcs = hasQty ? (pkQty * pCount) + pcQty : ""
+
+      const packRequested = Boolean(row.pack) || pkQty > 0
+      const pcsRequested = pCount > 0 || pcQty > 0
+
       const hasPackSales = row.packSalesPrice !== "" && row.packSalesPrice !== undefined && row.packSalesPrice !== null
       const hasPcsSales = row.pcsSalesPrice !== "" && row.pcsSalesPrice !== undefined && row.pcsSalesPrice !== null
-      const packRequested = Boolean(row.pack)
-      const pcsRequested = row.pcsCount !== "" && row.pcsCount !== undefined && Number(row.pcsCount) > 0
       const suggestedSale = costValue !== undefined && !Number.isNaN(costValue)
         ? Number((costValue + 0.3).toFixed(2))
         : undefined
 
+      const packPrice = hasPackSales ? Number(row.packSalesPrice) : (stockInfo?.packSalesPrice ?? suggestedSale)
+      const pcsPrice = hasPcsSales ? Number(row.pcsSalesPrice) : (stockInfo?.pcsSalesPrice ?? suggestedSale)
+
+      let calculatedTotal = row.total
+      if (pkQty > 0 && packPrice !== undefined) {
+        calculatedTotal = Number((pkQty * packPrice + (pcQty > 0 && pcsPrice ? pcQty * pcsPrice : 0)).toFixed(2))
+      } else if (pcQty > 0 && pcsPrice !== undefined) {
+        calculatedTotal = Number((pcQty * pcsPrice).toFixed(2))
+      }
+
       return {
         ...row,
-        costPrice: row.costPrice === "" && stockInfo?.costPrice !== undefined ? stockInfo.costPrice : row.costPrice,
-        packSalesPrice: packRequested && !hasPackSales
-          ? stockInfo?.packSalesPrice ?? suggestedSale ?? row.packSalesPrice
+        costPrice: costValue ?? row.costPrice,
+        totalPcs: computedTotalPcs,
+        total: calculatedTotal,
+        packSalesPrice: packRequested
+          ? (hasPackSales ? row.packSalesPrice : (stockInfo?.packSalesPrice ?? suggestedSale ?? row.packSalesPrice))
           : row.packSalesPrice,
-        pcsSalesPrice: pcsRequested && !hasPcsSales
-          ? stockInfo?.pcsSalesPrice ?? suggestedSale ?? row.pcsSalesPrice
+        pcsSalesPrice: pcsRequested
+          ? (hasPcsSales ? row.pcsSalesPrice : (stockInfo?.pcsSalesPrice ?? suggestedSale ?? row.pcsSalesPrice))
           : row.pcsSalesPrice,
       }
     })
@@ -9128,7 +9223,7 @@ const SalesPage = () => {
         </Dialog>
       </div>
 
-      <div className="rounded-lg border bg-card p-4">
+      <div className="rounded-lg border bg-card p-2 sm:p-4 overflow-x-auto max-w-full">
         <Tables
           columns={salesColumns}
           defaultRowCount={4}
@@ -9137,6 +9232,7 @@ const SalesPage = () => {
           autocomplete={{ productName: productNames }}
           restrictToOptions={["productName"]}
           showTotals
+          minWidth="1300px"
         />
       </div>
 
@@ -11562,15 +11658,33 @@ import { Tables, TableColumn, TableRow } from "@/components/myComponents/tables"
 import { toast } from "sonner"
 
 const stockColumns: TableColumn[] = [
-  { key: "sn", label: "S/N", type: "number", required: true, className: "max-w-10" },
+  { key: "sn", label: "S/N", type: "number", required: true, className: "w-10" },
   { key: "productName", label: "Product Name", type: "text", required: true },
-  { key: "pack", label: "Pack", type: "boolean", className: "max-w-10" },
-  { key: "pcsCount", label: "Pcs Count", type: "number", className: "max-w-50" },
-  { key: "qty", label: "Qty", type: "number", className: "max-w-10" },
-  { key: "costPrice", label: "Cost Price", type: "number", className: "max-w-40" },
-  { key: "packSalesPrice", label: "Pack Sales Price", type: "number", className: "max-w-50" },
-  { key: "pcsSalesPrice", label: "Pcs Sales Price", type: "number", className: "max-w-50" },
-  { key: "total", label: "Total", type: "number", className: "w-60" },
+  {
+    key: "carton",
+    label: "Carton",
+    type: "boolean",
+    className: "w-28",
+    conditionalFields: [
+      { key: "cartonQty", label: "Carton Qty" },
+      { key: "packsPerCarton", label: "Packs/Carton" },
+    ],
+  },
+  {
+    key: "pack",
+    label: "Pack",
+    type: "boolean",
+    className: "w-28",
+    conditionalFields: [
+      { key: "packQty", label: "Pack Qty" },
+      { key: "pcsCount", label: "Pcs/Pack" },
+    ],
+  },
+  { key: "totalPcs", label: "Total Pcs", type: "number", className: "w-28" },
+  { key: "costPrice", label: "Purchase Cost", type: "number", className: "w-32" },
+  { key: "cartonSalesPrice", label: "Carton Sales Price", type: "number", className: "w-36", readOnly: true },
+  { key: "packSalesPrice", label: "Pack Sales Price", type: "number", className: "w-36", readOnly: true },
+  { key: "pcsSalesPrice", label: "Pcs Sales Price", type: "number", className: "w-36", readOnly: true },
 ]
 
 type InventoryProductName = string
@@ -11578,13 +11692,17 @@ type InventoryProductName = string
 const createBlankStockRow = () => ({
   sn: "",
   productName: "",
+  carton: false,
+  cartonQty: "",
+  packsPerCarton: "",
   pack: false,
+  packQty: "",
   pcsCount: "",
-  qty: "",
+  totalPcs: "",
   costPrice: "",
+  cartonSalesPrice: "",
   packSalesPrice: "",
   pcsSalesPrice: "",
-  total: "",
 })
 
 const StockPage = () => {
@@ -11632,26 +11750,38 @@ const StockPage = () => {
 
   const handleRowChange = (rows: TableRow[]) => {
     const normalizedRows = rows.map((row) => {
-      const costValue = row.costPrice === "" || row.costPrice === undefined ? undefined : Number(row.costPrice)
-      const hasPackSales = row.packSalesPrice !== "" && row.packSalesPrice !== undefined && row.packSalesPrice !== null
-      const hasPcsSales = row.pcsSalesPrice !== "" && row.pcsSalesPrice !== undefined && row.pcsSalesPrice !== null
-      const suggestedSale = costValue !== undefined && !Number.isNaN(costValue)
-        ? Number((costValue + 0.3).toFixed(2))
+      const cQty = row.cartonQty !== "" && row.cartonQty !== undefined && row.cartonQty !== null ? Number(row.cartonQty) : 0
+      const ppc = row.packsPerCarton !== "" && row.packsPerCarton !== undefined && row.packsPerCarton !== null ? Number(row.packsPerCarton) : 1
+      const pkQty = row.packQty !== "" && row.packQty !== undefined && row.packQty !== null
+        ? Number(row.packQty)
+        : (row.qty !== "" && row.qty !== undefined && row.qty !== null ? Number(row.qty) : 0)
+      const pCount = row.pcsCount !== "" && row.pcsCount !== undefined && row.pcsCount !== null ? Number(row.pcsCount) : 1
+      const totalPacks = (cQty * ppc) + pkQty
+      const totalPieces = totalPacks * pCount
+      const computedTotalPcs = totalPacks > 0 ? totalPieces : ""
+
+      const costValue = row.costPrice === "" || row.costPrice === undefined || row.costPrice === null ? undefined : Number(row.costPrice)
+      const costPerPack = costValue !== undefined && !Number.isNaN(costValue) && totalPacks > 0
+        ? costValue / totalPacks
+        : undefined
+      const costPerPiece = costValue !== undefined && !Number.isNaN(costValue) && totalPieces > 0
+        ? costValue / totalPieces
+        : undefined
+      const suggestedPackSale = costPerPack !== undefined
+        ? Number((costPerPack * 1.3).toFixed(2))
+        : undefined
+      const suggestedPcsSale = costPerPiece !== undefined
+        ? Number((costPerPiece * 1.3).toFixed(2))
         : undefined
 
       return {
         ...row,
-        packSalesPrice: row.pack
-          ? hasPackSales
-            ? row.packSalesPrice
-            : suggestedSale ?? row.packSalesPrice
-          : row.packSalesPrice,
-        pcsSalesPrice:
-          row.pcsCount !== "" && row.pcsCount !== undefined && Number(row.pcsCount) > 0
-            ? hasPcsSales
-              ? row.pcsSalesPrice
-              : suggestedSale ?? row.pcsSalesPrice
-            : row.pcsSalesPrice,
+        totalPcs: computedTotalPcs,
+        cartonSalesPrice: row.carton && suggestedPackSale !== undefined
+          ? Number((suggestedPackSale * ppc).toFixed(2))
+          : "",
+        packSalesPrice: totalPacks > 0 ? suggestedPackSale ?? "" : "",
+        pcsSalesPrice: totalPieces > 0 ? suggestedPcsSale ?? "" : "",
       }
     })
 
@@ -11688,7 +11818,7 @@ const StockPage = () => {
       if (!result.ok) {
         throw new Error("Failed to save stock")
       }
-      toast.success("Stock saved")
+      toast.success("Stock saved successfully")
       setTableRows(Array.from({ length: 4 }, createBlankStockRow))
     } catch (error) {
       console.error(error)
@@ -11767,7 +11897,7 @@ const StockPage = () => {
         </Dialog>
       </div>
 
-      <div className="rounded-lg border bg-card p-4">
+      <div className="rounded-lg border bg-card p-2 sm:p-4 overflow-x-auto max-w-full">
         <Tables
           columns={stockColumns}
           defaultRowCount={4}
@@ -11776,6 +11906,7 @@ const StockPage = () => {
           autocomplete={{ productName: productNames }}
           restrictToOptions={["productName"]}
           showTotals
+          minWidth="1050px"
         />
       </div>
 
@@ -13285,6 +13416,142 @@ export function KpiSection({ data, isLoading }: KpiSectionProps) {
             </div>
         </div>
     );
+}
+
+
+
+================================================================================
+LOCATION: components\ClientApiCache.tsx
+================================================================================
+
+"use client";
+
+import axios, { AxiosResponse } from "axios";
+
+const CACHE_TTL = 5000;
+const publicModels = new Set([
+  "activeIngredient",
+  "brand",
+  "business",
+  "category",
+  "featuredProduct",
+  "healthConcern",
+  "product",
+]);
+
+type CachedFetch = {
+  timestamp: number;
+  status: number;
+  statusText: string;
+  headers: [string, string][];
+  body: string;
+};
+
+type CachedAxios = {
+  timestamp: number;
+  response: AxiosResponse;
+};
+
+const fetchCache = new Map<string, CachedFetch>();
+const fetchPending = new Map<string, Promise<CachedFetch>>();
+const axiosCache = new Map<string, CachedAxios>();
+const axiosPending = new Map<string, Promise<AxiosResponse>>();
+
+function isCacheable(urlValue: string) {
+  const url = new URL(urlValue, window.location.origin);
+  if (url.origin !== window.location.origin || url.pathname !== "/api/dbhandler") return false;
+  if (!publicModels.has(url.searchParams.get("model") || "")) return false;
+  if (url.searchParams.has("userId") || url.searchParams.has("code")) return false;
+  return true;
+}
+
+function cacheKey(method: string, urlValue: string) {
+  const url = new URL(urlValue, window.location.origin);
+  url.searchParams.sort();
+  return `${method.toUpperCase()}:${url.toString()}`;
+}
+
+function isFresh(timestamp: number) {
+  return Date.now() - timestamp < CACHE_TTL;
+}
+
+function createFetchResponse(entry: CachedFetch) {
+  return new Response(entry.body, {
+    status: entry.status,
+    statusText: entry.statusText,
+    headers: entry.headers,
+  });
+}
+
+if (typeof window !== "undefined") {
+  const originalFetch = window.fetch.bind(window);
+  const originalAxiosGet = axios.get.bind(axios);
+
+  window.fetch = async (input: RequestInfo | URL, init?: RequestInit) => {
+    const method = init?.method || (input instanceof Request ? input.method : "GET");
+    const url = input instanceof Request ? input.url : input.toString();
+
+    if (method.toUpperCase() !== "GET" || !isCacheable(url)) {
+      return originalFetch(input, init);
+    }
+
+    const key = cacheKey(method, url);
+    const cached = fetchCache.get(key);
+    if (cached && isFresh(cached.timestamp)) return createFetchResponse(cached);
+    if (cached) fetchCache.delete(key);
+
+    const pending = fetchPending.get(key);
+    if (pending) return createFetchResponse(await pending);
+
+    const request = originalFetch(input, init).then(async (response) => {
+      const entry: CachedFetch = {
+        timestamp: Date.now(),
+        status: response.status,
+        statusText: response.statusText,
+        headers: Array.from(response.headers.entries()),
+        body: await response.text(),
+      };
+      if (response.ok) fetchCache.set(key, entry);
+      return entry;
+    });
+
+    fetchPending.set(key, request);
+    try {
+      return createFetchResponse(await request);
+    } finally {
+      fetchPending.delete(key);
+    }
+  };
+
+  axios.get = (async (url: string, config?: any) => {
+    if (!isCacheable(url)) return originalAxiosGet(url, config);
+
+    const key = cacheKey("GET", url);
+    const cached = axiosCache.get(key);
+    if (cached && isFresh(cached.timestamp)) return cached.response;
+    if (cached) axiosCache.delete(key);
+
+    const pending = axiosPending.get(key);
+    if (pending) return pending;
+
+    const request = originalAxiosGet(url, config).then((response) => {
+      if (response.status >= 200 && response.status < 300) {
+        axiosCache.set(key, { timestamp: Date.now(), response });
+      }
+      return response;
+    });
+
+    axiosPending.set(key, request);
+    try {
+      return await request;
+    } finally {
+      axiosPending.delete(key);
+    }
+  }) as typeof axios.get;
+}
+
+export default function ClientApiCache() {
+  return null;
 }
 
 
@@ -26737,6 +27004,11 @@ export type TableColumn = {
   type: "text" | "number" | "boolean"
   required?: boolean
   className?: string
+  readOnly?: boolean
+  conditionalFields?: {
+    key: string
+    label: string
+  }[]
 }
 
 export type TableRow = Record<string, string | number | boolean | undefined>
@@ -26749,6 +27021,7 @@ interface TablesProps {
   autocomplete?: Record<string, string[]>
   restrictToOptions?: string[]
   showTotals?: boolean
+  minWidth?: string
 }
 
 function createBlankRow(columns: TableColumn[]) {
@@ -26766,6 +27039,7 @@ export function Tables({
   autocomplete,
   restrictToOptions = [],
   showTotals = false,
+  minWidth = "1100px",
 }: TablesProps) {
   const [internalRows, setInternalRows] = useState<TableRow[]>(
     () => Array.from({ length: defaultRowCount }, () => createBlankRow(columns))
@@ -26849,8 +27123,9 @@ export function Tables({
   }, [activeRows, columns, showTotals])
 
   return (
-    <div className="w-full overflow-x-auto">
-      <Table>
+    <div className="w-full max-w-full overflow-x-auto touch-pan-x scrollbar-thin">
+      <div style={{ minWidth }}>
+        <Table>
         <TableHeader>
           <TableRow>
             {columns.map((column) => (
@@ -26877,13 +27152,24 @@ export function Tables({
                 return (
                   <TableCell key={column.key} className={`align-top py-2 ${column.className ?? ""}`}>
                     {column.type === "boolean" ? (
-                      <div className="flex items-center">
+                      <div className="space-y-2">
                         <Checkbox
                           checked={Boolean(value)}
-                          onCheckedChange={(checked) =>
-                            handleCellChange(rowIndex, column, checked ?? false)
-                          }
+                          onCheckedChange={(checked) => handleCellChange(rowIndex, column, checked ?? false)}
                         />
+                        {Boolean(value) && column.conditionalFields?.map((field) => (
+                          <label key={field.key} className="block space-y-1">
+                            <span className="text-[10px] text-muted-foreground">{field.label}</span>
+                            <Input
+                              type="number"
+                              min="0"
+                              className="h-8 w-full min-w-20 text-xs"
+                              placeholder={field.label}
+                              value={String(activeRows[rowIndex]?.[field.key] ?? "")}
+                              onChange={(event) => handleCellChange(rowIndex, { ...column, key: field.key, type: "number" }, event.target.value)}
+                            />
+                          </label>
+                        ))}
                       </div>
                     ) : isSn && !isSnEditable ? (
                       <div
@@ -26904,9 +27190,8 @@ export function Tables({
                           value={displayValue}
                           placeholder={column.label}
                           list={hasSuggestions ? datalistId : undefined}
-                          onChange={(event) =>
-                            handleCellChange(rowIndex, column, event.target.value)
-                          }
+                          onChange={(event) => handleCellChange(rowIndex, column, event.target.value)}
+                          readOnly={column.readOnly}
                           onBlur={() => {
                             if (isSn) {
                               setSnEditableRows((prev) => ({
@@ -26942,6 +27227,7 @@ export function Tables({
           ) : null}
         </TableBody>
       </Table>
+      </div>
       <div className="mt-4 flex justify-end">
         <Button type="button" variant="secondary" onClick={addRow}>
           Add row
@@ -38056,6 +38342,425 @@ export const useIsAdmin = () => {
 
 
 ================================================================================
+LOCATION: inventory\app\api\inventory\products\route.ts
+================================================================================
+
+import { NextResponse } from "next/server"
+import { prisma } from "@/lib/prisma"
+
+export async function GET() {
+  try {
+    const stocks = await prisma.inventoryStock.findMany({ select: { productName: true } })
+    const names = [...new Set(stocks.map((stock) => stock.productName.trim()).filter(Boolean))].sort()
+    return NextResponse.json(names)
+  } catch {
+    return NextResponse.json([])
+  }
+}
+
+
+================================================================================
+LOCATION: inventory\app\api\inventory\sales\route.ts
+================================================================================
+
+import { NextResponse } from "next/server"
+import { prisma } from "@/lib/prisma"
+
+const optionalNumber = (value: unknown) => value === "" || value == null ? undefined : Number(value)
+
+export async function POST(request: Request) {
+  try {
+    const { date, rows } = await request.json()
+    if (!Array.isArray(rows) || rows.length === 0) return NextResponse.json({ error: "No rows provided" }, { status: 400 })
+    const inventory = await prisma.inventory.create({
+      data: {
+        type: "sale",
+        date: date?.date ? new Date(date.date) : undefined,
+        rangeFrom: date?.from ? new Date(date.from) : undefined,
+        rangeTo: date?.to ? new Date(date.to) : undefined,
+        sales: { create: rows.map((row) => ({
+          sn: optionalNumber(row.sn) as number | undefined, customerSn: optionalNumber(row.customerSn) as number | undefined,
+          productName: String(row.productName || ""), pack: Boolean(row.pack), pcsCount: optionalNumber(row.pcsCount) as number | undefined,
+          packQty: optionalNumber(row.packQty) as number | undefined, pcsQty: optionalNumber(row.pcsQty) as number | undefined,
+          totalPcs: optionalNumber(row.totalPcs) as number | undefined, costPrice: optionalNumber(row.costPrice) as number | undefined,
+          packSalesPrice: optionalNumber(row.packSalesPrice) as number | undefined, pcsSalesPrice: optionalNumber(row.pcsSalesPrice) as number | undefined,
+          price: optionalNumber(row.price) as number | undefined, total: optionalNumber(row.total) as number | undefined,
+        })) },
+      },
+    })
+    return NextResponse.json(inventory)
+  } catch (error) {
+    console.error(error)
+    return NextResponse.json({ error: "Unable to save sales" }, { status: 500 })
+  }
+}
+
+
+================================================================================
+LOCATION: inventory\app\api\inventory\stock\route.ts
+================================================================================
+
+import { NextResponse } from "next/server"
+import { prisma } from "@/lib/prisma"
+
+const optionalNumber = (value: unknown) => value === "" || value == null ? undefined : Number(value)
+
+export async function GET() {
+  try {
+    const stocks = await prisma.inventoryStock.findMany({ orderBy: { createdAt: "desc" } })
+    const latest = new Map<string, (typeof stocks)[number]>()
+    stocks.forEach((stock) => { if (!latest.has(stock.productName)) latest.set(stock.productName, stock) })
+    return NextResponse.json([...latest.values()])
+  } catch {
+    return NextResponse.json([])
+  }
+}
+
+export async function POST(request: Request) {
+  try {
+    const { date, rows } = await request.json()
+    if (!Array.isArray(rows) || rows.length === 0) return NextResponse.json({ error: "No rows provided" }, { status: 400 })
+
+    const inventory = await prisma.inventory.create({
+      data: {
+        type: "stock",
+        date: date?.date ? new Date(date.date) : undefined,
+        rangeFrom: date?.from ? new Date(date.from) : undefined,
+        rangeTo: date?.to ? new Date(date.to) : undefined,
+        stocks: { create: rows.map((row) => {
+          const cartonQty = optionalNumber(row.cartonQty) as number | undefined
+          const packsPerCarton = optionalNumber(row.packsPerCarton) as number | undefined
+          const pcsCount = optionalNumber(row.pcsCount) as number | undefined
+          const packQty = optionalNumber(row.packQty ?? row.qty) as number | undefined
+          const pcsQty = optionalNumber(row.pcsQty) as number | undefined
+          const totalPcs = (cartonQty || 0) * (packsPerCarton || 1) * (pcsCount || 1) + (packQty || 0) * (pcsCount || 1) + (pcsQty || 0)
+          return {
+            sn: optionalNumber(row.sn) as number | undefined, productName: String(row.productName || ""),
+            carton: Boolean(row.carton), cartonQty, packsPerCarton, pack: Boolean(row.pack), pcsCount, packQty, pcsQty,
+            totalPcs, costPrice: optionalNumber(row.costPrice) as number | undefined,
+            packSalesPrice: optionalNumber(row.packSalesPrice) as number | undefined,
+            pcsSalesPrice: optionalNumber(row.pcsSalesPrice) as number | undefined,
+            total: optionalNumber(row.total) as number | undefined,
+          }
+        }) },
+      },
+    })
+    return NextResponse.json(inventory)
+  } catch (error) {
+    console.error(error)
+    return NextResponse.json({ error: "Unable to save stock" }, { status: 500 })
+  }
+}
+
+
+================================================================================
+LOCATION: inventory\app\globals.css
+================================================================================
+
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root { --ink: #17221d; --muted: #6b786f; --line: #dbe4dc; --paper: #f7faf6; --green: #176b4d; --lime: #d8f26a; --orange: #f28f52; }
+* { box-sizing: border-box; }
+body { margin: 0; color: var(--ink); background: var(--paper); font-family: Georgia, "Times New Roman", serif; }
+button, input { font: inherit; }
+button { cursor: pointer; }
+.sans { font-family: ui-sans-serif, system-ui, sans-serif; }
+.workspace { min-height: 100vh; display: grid; grid-template-columns: 228px 1fr; }
+.sidebar { background: var(--green); color: #f5faef; padding: 30px 20px; display: flex; flex-direction: column; }
+.brand { font-size: 22px; letter-spacing: -0.04em; margin-bottom: 54px; }
+.brand span { color: var(--lime); }
+.eyebrow { color: #a7c8b5; font: 700 10px ui-sans-serif, system-ui, sans-serif; letter-spacing: .14em; text-transform: uppercase; }
+.nav { display: grid; gap: 8px; margin-top: 18px; }
+.nav a { text-align: left; text-decoration: none; color: #bfd2c5; padding: 12px 14px; border-radius: 8px; font: 600 14px ui-sans-serif, system-ui, sans-serif; }
+.nav a.active { background: rgba(216,242,106,.16); color: var(--lime); }
+.side-note { margin-top: auto; padding: 16px; border: 1px solid rgba(255,255,255,.18); border-radius: 8px; color: #c9dacd; font: 12px/1.5 ui-sans-serif, system-ui, sans-serif; }
+.main { padding: 34px clamp(20px, 5vw, 66px); max-width: 1500px; width: 100%; }
+.topbar { display: flex; justify-content: space-between; align-items: start; gap: 20px; margin-bottom: 38px; }
+h1 { font-size: clamp(36px, 5vw, 62px); line-height: .96; letter-spacing: -.06em; margin: 8px 0 12px; font-weight: 500; }
+.intro { color: var(--muted); font: 14px ui-sans-serif, system-ui, sans-serif; }
+.date-pill { border: 1px solid var(--line); background: white; padding: 10px 14px; color: var(--muted); font: 12px ui-sans-serif, system-ui, sans-serif; border-radius: 999px; }
+.stats { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 14px; margin-bottom: 28px; }
+.stat { background: white; border: 1px solid var(--line); padding: 20px; min-height: 110px; }
+.stat:nth-child(2) { background: var(--lime); border-color: var(--lime); }
+.stat:nth-child(3) { background: #fff0df; border-color: #f6d5b5; }
+.stat-label { color: var(--muted); font: 11px 700 ui-sans-serif, system-ui, sans-serif; text-transform: uppercase; letter-spacing: .1em; }
+.stat-value { font-size: 32px; margin-top: 18px; letter-spacing: -.05em; }
+.panel { background: white; border: 1px solid var(--line); padding: 22px; }
+.panel-head { display: flex; justify-content: space-between; align-items: end; gap: 12px; margin-bottom: 20px; }
+.panel-title { font-size: 23px; margin: 0; letter-spacing: -.04em; font-weight: 500; }
+.panel-subtitle { color: var(--muted); font: 12px ui-sans-serif, system-ui, sans-serif; margin-top: 5px; }
+.action { border: 0; background: var(--green); color: white; padding: 11px 16px; border-radius: 5px; font: 700 12px ui-sans-serif, system-ui, sans-serif; }
+.action.secondary { color: var(--green); background: #edf4ed; }
+.date-controls { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; margin-bottom: 18px; }
+.date-controls label { color: var(--muted); font: 11px ui-sans-serif, system-ui, sans-serif; }
+.date-controls input { border: 1px solid var(--line); padding: 8px; border-radius: 4px; font: 12px ui-sans-serif, system-ui, sans-serif; color: var(--ink); }
+.table-wrap { overflow-x: auto; border: 1px solid var(--line); }
+table { width: 100%; min-width: 1040px; border-collapse: collapse; }
+th { background: #f2f6f1; color: var(--muted); font: 700 10px ui-sans-serif, system-ui, sans-serif; letter-spacing: .08em; text-transform: uppercase; text-align: left; white-space: nowrap; }
+th, td { padding: 10px 9px; border-bottom: 1px solid var(--line); }
+td { font: 13px ui-sans-serif, system-ui, sans-serif; }
+.serial { display: inline-block; min-width: 32px; padding: 8px 6px; color: var(--muted); cursor: pointer; }
+td input { width: 100%; min-width: 72px; border: 1px solid transparent; background: #fbfdfb; padding: 8px 6px; color: var(--ink); }
+td input:focus { outline: 2px solid var(--lime); border-color: var(--green); }
+td input[type=checkbox] { width: 16px; min-width: 16px; accent-color: var(--green); }
+.table-footer { display: flex; justify-content: space-between; align-items: center; padding-top: 16px; color: var(--muted); font: 12px ui-sans-serif, system-ui, sans-serif; }
+.empty { color: var(--muted); padding: 40px; text-align: center; font: 14px ui-sans-serif, system-ui, sans-serif; }
+@media (max-width: 760px) { .workspace { grid-template-columns: 1fr; } .sidebar { padding: 18px 20px; } .brand { margin-bottom: 18px; } .nav { display: flex; margin-top: 10px; } .side-note { display: none; } .main { padding: 28px 16px; } .topbar { margin-bottom: 26px; } .stats { grid-template-columns: 1fr; } .panel-head { align-items: start; flex-direction: column; } }
+
+
+================================================================================
+LOCATION: inventory\app\layout.tsx
+================================================================================
+
+import type { Metadata } from "next"
+import "./globals.css"
+
+export const metadata: Metadata = {
+  title: "Inventory desk | HealthClique",
+  description: "A focused sales and stock workspace.",
+}
+
+export default function RootLayout({ children }: Readonly<{ children: React.ReactNode }>) {
+  return <html lang="en"><body>{children}</body></html>
+}
+
+
+================================================================================
+LOCATION: inventory\app\page.tsx
+================================================================================
+
+import { redirect } from "next/navigation"
+
+export default function Page() {
+  redirect("/sales")
+}
+
+
+================================================================================
+LOCATION: inventory\app\sales\page.tsx
+================================================================================
+
+import { InventoryShell } from "@/components/inventory-shell"
+
+const columns = [
+  { key: "sn", label: "S/N", type: "number" as const }, { key: "customerSn", label: "Customer S/N", type: "number" as const }, { key: "productName", label: "Product Name", type: "text" as const }, { key: "pack", label: "Pack", type: "boolean" as const }, { key: "packQty", label: "Pack Qty", type: "number" as const }, { key: "pcsCount", label: "Pcs/Pack", type: "number" as const }, { key: "pcsQty", label: "Pcs Qty", type: "number" as const }, { key: "totalPcs", label: "Total Pcs", type: "number" as const }, { key: "costPrice", label: "Cost Price", type: "number" as const }, { key: "packSalesPrice", label: "Pack Sales Price", type: "number" as const }, { key: "pcsSalesPrice", label: "Pcs Sales Price", type: "number" as const }, { key: "price", label: "Price", type: "number" as const }, { key: "total", label: "Total", type: "number" as const },
+]
+
+export default function SalesPage() { return <InventoryShell mode="sales" columns={columns} /> }
+
+
+================================================================================
+LOCATION: inventory\app\stock\page.tsx
+================================================================================
+
+import { InventoryShell } from "@/components/inventory-shell"
+
+const columns = [
+  { key: "sn", label: "S/N", type: "number" as const }, { key: "productName", label: "Product Name", type: "text" as const }, { key: "carton", label: "Carton", type: "boolean" as const }, { key: "cartonQty", label: "Carton Qty", type: "number" as const }, { key: "packsPerCarton", label: "Packs/Carton", type: "number" as const }, { key: "pack", label: "Pack", type: "boolean" as const }, { key: "packQty", label: "Pack Qty", type: "number" as const }, { key: "pcsCount", label: "Pcs/Pack", type: "number" as const }, { key: "pcsQty", label: "Pcs Qty", type: "number" as const }, { key: "totalPcs", label: "Total Pcs", type: "number" as const }, { key: "costPrice", label: "Cost Price", type: "number" as const }, { key: "packSalesPrice", label: "Pack Sales Price", type: "number" as const }, { key: "pcsSalesPrice", label: "Pcs Sales Price", type: "number" as const }, { key: "total", label: "Total Cost", type: "number" as const },
+]
+
+export default function StockPage() { return <InventoryShell mode="stock" columns={columns} /> }
+
+
+================================================================================
+LOCATION: inventory\components\inventory-shell.tsx
+================================================================================
+
+"use client"
+
+import { useEffect, useMemo, useState } from "react"
+import { format } from "date-fns"
+import { Toaster, toast } from "sonner"
+import { Button } from "@/components/ui/button"
+import { Input } from "@/components/ui/input"
+import { Label } from "@/components/ui/label"
+import { InventoryColumn, InventoryRow, InventoryTable } from "@/components/inventory-table"
+
+type Props = { mode: "sales" | "stock"; columns: InventoryColumn[] }
+const asNumber = (value: unknown) => value === "" || value == null ? 0 : Number(value) || 0
+
+export function InventoryShell({ mode, columns }: Props) {
+  const [rows, setRows] = useState<InventoryRow[]>(() => Array.from({ length: 4 }, () => Object.fromEntries(columns.map((column) => [column.key, column.type === "boolean" ? false : ""]))))
+  const [products, setProducts] = useState<string[]>([])
+  const [selectedDate, setSelectedDate] = useState(new Date())
+  const [rangeFrom, setRangeFrom] = useState("")
+  const [rangeTo, setRangeTo] = useState("")
+  const [saving, setSaving] = useState(false)
+
+  useEffect(() => { fetch("/api/inventory/products").then((response) => response.json()).then(setProducts).catch(() => setProducts([])) }, [])
+  const value = useMemo(() => rows.reduce((sum, row) => sum + asNumber(row.total), 0), [rows])
+  const customerCount = useMemo(() => new Set(rows.map((row) => row.customerSn).filter(Boolean)).size, [rows])
+  const updateRows = (nextRows: InventoryRow[]) => setRows(nextRows.map((row) => {
+    const cartonQty = asNumber(row.cartonQty), packsPerCarton = asNumber(row.packsPerCarton) || 1, packQty = asNumber(row.packQty), pcsCount = asNumber(row.pcsCount) || 1, pcsQty = asNumber(row.pcsQty)
+    const totalPcs = mode === "stock" ? cartonQty * packsPerCarton * pcsCount + packQty * pcsCount + pcsQty : packQty * pcsCount + pcsQty
+    const cost = asNumber(row.costPrice), salePrice = Number((cost + .3).toFixed(2))
+    const next = { ...row, totalPcs }
+    if (cost > 0 && row.packSalesPrice === "" && (Boolean(row.pack) || packQty > 0)) next.packSalesPrice = salePrice
+    if (cost > 0 && row.pcsSalesPrice === "" && (pcsCount > 0 || pcsQty > 0)) next.pcsSalesPrice = salePrice
+    next.total = mode === "stock" ? Number((cost * (cartonQty || packQty || pcsQty)).toFixed(2)) : Number((packQty * asNumber(row.packSalesPrice) + pcsQty * asNumber(row.pcsSalesPrice)).toFixed(2))
+    return next
+  }))
+  const blankRows = () => Array.from({ length: 4 }, () => Object.fromEntries(columns.map((column) => [column.key, column.type === "boolean" ? false : ""])))
+  const save = async () => {
+    const valid = rows.filter((row) => row.productName && (mode === "stock" || row.customerSn))
+    if (!valid.length) return toast.error(mode === "sales" ? "Add a product and customer number first." : "Add at least one product first.")
+    if (valid.some((row) => !asNumber(row.costPrice) || (!asNumber(row.packSalesPrice) && !asNumber(row.pcsSalesPrice)))) return toast.error("Each row needs a cost price and a sales price.")
+    setSaving(true)
+    try {
+      const response = await fetch(`/api/inventory/${mode}`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ date: rangeFrom && rangeTo ? { from: rangeFrom, to: rangeTo } : { date: selectedDate }, rows: valid }) })
+      if (!response.ok) throw new Error()
+      toast.success(`${mode === "sales" ? "Sales" : "Stock"} saved`)
+      setRows(blankRows())
+    } catch { toast.error(`Unable to save ${mode}. Check your database connection.`) } finally { setSaving(false) }
+  }
+  return <div className="workspace"><Toaster position="top-right" /><aside className="sidebar"><div className="brand">health<span>clique</span></div><div className="eyebrow">Operations</div><nav className="nav"><a className={mode === "sales" ? "active" : ""} href="/sales">↗ Sales ledger</a><a className={mode === "stock" ? "active" : ""} href="/stock">＋ Stock intake</a></nav><div className="side-note">A focused workspace for the people keeping every product accounted for.</div></aside><main className="main"><header className="topbar"><div><div className="eyebrow">Inventory desk / {mode}</div><h1>{mode === "sales" ? "Sales, in view." : "Stock, accounted for."}</h1><p className="intro">Capture {mode === "sales" ? "outgoing orders" : "new inventory"} without leaving the ledger.</p></div><div className="date-pill">{format(selectedDate, "EEE, dd MMM yyyy")}</div></header><section className="stats"><div className="stat"><div className="stat-label">Rows ready</div><div className="stat-value">{rows.filter((row) => row.productName).length.toString().padStart(2, "0")}</div></div><div className="stat"><div className="stat-label">Customers today</div><div className="stat-value">{customerCount.toString().padStart(2, "0")}</div></div><div className="stat"><div className="stat-label">Ledger value</div><div className="stat-value">₦{value.toLocaleString()}</div></div></section><section className="panel"><div className="panel-head"><div><h2 className="panel-title">{mode === "sales" ? "Daily sales ledger" : "New stock intake"}</h2><div className="panel-subtitle">Use a date or define a range before saving.</div></div><Button onClick={save} disabled={saving}>{saving ? "Saving..." : `Save ${mode}`}</Button></div><div className="date-controls"><Label>Date <Input type="date" value={format(selectedDate, "yyyy-MM-dd")} onChange={(event) => setSelectedDate(new Date(event.target.value))} /></Label><Label>From <Input type="date" value={rangeFrom} onChange={(event) => setRangeFrom(event.target.value)} /></Label><Label>To <Input type="date" value={rangeTo} onChange={(event) => setRangeTo(event.target.value)} /></Label><Button variant="secondary" onClick={() => { setRangeFrom(""); setRangeTo("") }}>Clear range</Button></div><InventoryTable columns={columns} rows={rows} products={products} onRowsChange={updateRows} /></section></main></div>
+}
+
+
+================================================================================
+LOCATION: inventory\components\inventory-table.tsx
+================================================================================
+
+"use client"
+
+import { useState } from "react"
+import { Button } from "@/components/ui/button"
+import { Input } from "@/components/ui/input"
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
+
+export type CellValue = string | number | boolean
+export type InventoryRow = Record<string, CellValue>
+export type InventoryColumn = { key: string; label: string; type: "text" | "number" | "boolean" }
+type Props = { columns: InventoryColumn[]; rows: InventoryRow[]; products: string[]; onRowsChange: (rows: InventoryRow[]) => void }
+
+export function InventoryTable({ columns, rows, products, onRowsChange }: Props) {
+  const [editableSerial, setEditableSerial] = useState<Record<number, boolean>>({})
+  const update = (index: number, column: InventoryColumn, value: string | boolean) => onRowsChange(rows.map((row, rowIndex) => rowIndex === index ? { ...row, [column.key]: column.type === "number" && value !== "" ? Number(value) : value } : row))
+  return <div className="table-wrap"><Table><TableHeader><TableRow>{columns.map((column) => <TableHead key={column.key}>{column.label}</TableHead>)}</TableRow></TableHeader><TableBody>{rows.map((row, rowIndex) => <TableRow key={rowIndex}>{columns.map((column) => {
+    const value = row[column.key]
+    if (column.type === "boolean") return <TableCell key={column.key}><Input type="checkbox" checked={Boolean(value)} onChange={(event) => update(rowIndex, column, event.target.checked)} /></TableCell>
+    if (column.key === "sn" && !editableSerial[rowIndex]) return <TableCell key={column.key}><span className="serial" onDoubleClick={() => setEditableSerial((current) => ({ ...current, [rowIndex]: true }))}>{value || rowIndex + 1}</span></TableCell>
+    const listId = column.key === "productName" ? `products-${rowIndex}` : undefined
+    return <TableCell key={column.key}><Input type={column.type} list={listId} value={value === undefined ? "" : String(value)} readOnly={["sn", "totalPcs", "total"].includes(column.key)} onBlur={() => column.key === "sn" && setEditableSerial((current) => ({ ...current, [rowIndex]: false }))} onChange={(event) => update(rowIndex, column, event.target.value)} />{listId && <datalist id={listId}>{products.map((product) => <option key={product} value={product} />)}</datalist>}</TableCell>
+  })}</TableRow>)}</TableBody></Table><div className="table-footer"><span>{rows.length} lines ready</span><Button variant="secondary" onClick={() => onRowsChange([...rows, Object.fromEntries(columns.map((column) => [column.key, column.type === "boolean" ? false : ""]))])}>+ Add row</Button></div></div>
+}
+
+
+================================================================================
+LOCATION: inventory\lib\prisma.ts
+================================================================================
+
+import { PrismaClient } from "@prisma/client"
+
+const globalForPrisma = globalThis as unknown as { prisma?: PrismaClient }
+
+export const prisma = globalForPrisma.prisma ?? new PrismaClient()
+
+if (process.env.NODE_ENV !== "production") globalForPrisma.prisma = prisma
+
+
+================================================================================
+LOCATION: inventory\next.config.ts
+================================================================================
+
+import type { NextConfig } from "next"
+
+const nextConfig: NextConfig = {}
+
+export default nextConfig
+
+
+================================================================================
+LOCATION: inventory\prisma\schema.prisma
+================================================================================
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "mongodb"
+  url      = env("DATABASE_URL")
+}
+
+model Inventory {
+  id        String           @id @default(auto()) @map("_id") @db.ObjectId
+  type      String
+  date      DateTime?
+  rangeFrom DateTime?
+  rangeTo   DateTime?
+  sales     InventorySale[]
+  stocks    InventoryStock[]
+  createdAt DateTime         @default(now())
+  updatedAt DateTime         @updatedAt
+
+  @@index([type])
+  @@index([date])
+  @@index([rangeFrom, rangeTo])
+}
+
+model InventorySale {
+  id             String    @id @default(auto()) @map("_id") @db.ObjectId
+  inventory      Inventory @relation(fields: [inventoryId], references: [id])
+  inventoryId    String    @db.ObjectId
+  sn             Int?
+  customerSn     Int?
+  productName    String
+  pack           Boolean   @default(false)
+  pcsCount       Int?
+  packQty        Int?
+  pcsQty         Int?
+  totalPcs       Int?
+  costPrice      Float?
+  packSalesPrice Float?
+  pcsSalesPrice  Float?
+  price          Float?
+  total          Float?
+  createdAt      DateTime  @default(now())
+  updatedAt      DateTime  @updatedAt
+}
+
+model InventoryStock {
+  id             String    @id @default(auto()) @map("_id") @db.ObjectId
+  inventory      Inventory @relation(fields: [inventoryId], references: [id])
+  inventoryId    String    @db.ObjectId
+  sn             Int?
+  productName    String
+  carton         Boolean   @default(false)
+  cartonQty      Int?
+  packsPerCarton Int?
+  pack           Boolean   @default(false)
+  pcsCount       Int?
+  packQty        Int?
+  pcsQty         Int?
+  totalPcs       Int?
+  costPrice      Float?
+  packSalesPrice Float?
+  pcsSalesPrice  Float?
+  total          Float?
+  createdAt      DateTime  @default(now())
+  updatedAt      DateTime  @updatedAt
+}
+
+
+================================================================================
+LOCATION: inventory\tailwind.config.ts
+================================================================================
+
+import type { Config } from "tailwindcss"
+
+const config: Config = {
+  content: ["./app/**/*.{ts,tsx}"],
+  theme: { extend: {} },
+  plugins: [],
+}
+
+export default config
+
+
+================================================================================
 LOCATION: lib\affiliate-tracking.ts
 ================================================================================
 
@@ -43023,8 +43728,14 @@ model InventorySale {
   sn              Int?
   customerSn      Int?
   productName     String
+  carton          Boolean   @default(false)
+  cartonQty       Int?
+  packsPerCarton  Int?
   pack            Boolean   @default(false)
   pcsCount        Int?
+  packQty         Int?
+  pcsQty          Int?
+  totalPcs        Int?
   qty             Int?
   costPrice       Float?
   packSalesPrice  Float?
@@ -43036,18 +43747,28 @@ model InventorySale {
 }
 
 model InventoryStock {
-  id           String    @id @default(auto()) @map("_id") @db.ObjectId
-  inventory    Inventory @relation(fields: [inventoryId], references: [id])
-  inventoryId  String    @db.ObjectId
-  sn           Int?
-  productName  String
-  pack         Boolean   @default(false)
-  pcsCount     Int?
-  qty          Int?
-  costPrice    Float?  packSalesPrice Float?
-  pcsSalesPrice Float?  total        Float?
-  createdAt    DateTime  @default(now())
-  updatedAt    DateTime  @updatedAt
+  id              String    @id @default(auto()) @map("_id") @db.ObjectId
+  inventory       Inventory @relation(fields: [inventoryId], references: [id])
+  inventoryId     String    @db.ObjectId
+  sn              Int?
+  productName     String
+  carton          Boolean   @default(false)
+  cartonQty       Int?
+  packsPerCarton  Int?
+  pack            Boolean   @default(false)
+  pcsCount        Int?
+  packQty         Int?
+  totalPcs        Int?
+  qty             Int?
+  costPrice       Float?
+  cartonCostPrice Float?
+  packCostPrice   Float?
+  pcsCostPrice    Float?
+  cartonSalesPrice Float?
+  packSalesPrice  Float?
+  pcsSalesPrice   Float?
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
 }
 
 model BulkPrice {
@@ -43564,6 +44285,13 @@ function shouldCacheRequest(url: URL, req: Request) {
 
 export async function proxy(req: Request) {
   const url = new URL(req.url);
+
+  // Do not run the proxy/cache logic for API routes. This pattern can re-fetch
+  // the same /api URL and create the same runaway loop seen in the Vercel logs.
+  if (url.pathname.startsWith("/api/")) {
+    return (auth as any)(req);
+  }
+
   if (shouldCacheRequest(url, req)) {
     const cacheKey = url.toString();
     const cached = getCachedResponse(cacheKey);
@@ -43596,6 +44324,12 @@ export async function proxy(req: Request) {
 
   return (auth as any)(req);
 }
+
+export const config = {
+  matcher: [
+    "/((?!_next/static|_next/image|favicon.ico|public|api/).*)",
+  ],
+};
 
 
 
@@ -49328,9 +50062,15 @@ LOCATION: store\providers.tsx
 'use client'
 import { Provider } from "react-redux";
 import store from "@/store";
+import ClientApiCache from "@/components/ClientApiCache";
 
 export function Providers({ children } : { children: React.ReactNode }) {
-  return <Provider store={store}>{children}</Provider>;
+  return (
+    <Provider store={store}>
+      <ClientApiCache />
+      {children}
+    </Provider>
+  );
 }
 
 
@@ -50079,5 +50819,5 @@ export const normalizeDateTime = (dateTime?: string): string => {
 
 
 ================================================================================
-TOTAL FILES CONSOLIDATED: 395
+TOTAL FILES CONSOLIDATED: 410
 ================================================================================
