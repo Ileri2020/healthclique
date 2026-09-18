@@ -110,7 +110,10 @@ export function Tables({
   const [snEditableRows, setSnEditableRows] = useState<Record<number, boolean>>({})
 
   const addRow = () => {
-    updateRows([...activeRows, createBlankRow(columns)])
+    updateRows([
+      ...activeRows,
+      ...Array.from({ length: 5 }, () => createBlankRow(columns)),
+    ])
   }
 
   const footerTotals = useMemo(() => {
@@ -130,9 +133,10 @@ export function Tables({
   }, [activeRows, columns, showTotals])
 
   return (
-    <div className="w-full max-w-full overflow-x-auto touch-pan-x scrollbar-thin">
+    <div className="relative w-full max-w-full pb-14">
+      <div className="w-full max-w-full overflow-x-auto touch-pan-x scrollbar-thin">
       <div style={{ minWidth }}>
-        <Table>
+        <Table className="bg-foreground/10">
         <TableHeader>
           <TableRow>
             {columns.map((column) => (
@@ -261,7 +265,8 @@ export function Tables({
         </TableBody>
       </Table>
       </div>
-      {!readOnly && <div className="mt-4 flex justify-end">
+      </div>
+      {!readOnly && <div className="absolute bottom-2 right-2 z-20">
         <Button type="button" variant="secondary" onClick={addRow}>
           Add row
         </Button>
@@ -285,6 +290,37 @@ export function Tables({
                 />
               </div>
             ))}
+            {quantityDialog ? (() => {
+              const rowData = activeRows[quantityDialog.rowIndex] || {}
+              const isCarton = quantityDialog.column.key === "carton"
+              const isPack = quantityDialog.column.key === "pack"
+              const pCount = Number(rowData.pcsCount) || 1
+
+              if (isCarton) {
+                const cQty = Number(rowData.cartonQty) || 0
+                const ppc = Number(rowData.packsPerCarton) || 1
+                const totalPcsFromCarton = cQty * ppc * pCount
+                return (
+                  <div className="space-y-1.5 rounded-md border border-border/60 bg-muted/40 p-3">
+                    <Label className="text-xs font-semibold text-muted-foreground">Total Pcs from Cartons (Read-only)</Label>
+                    <div className="text-base font-bold text-foreground">{totalPcsFromCarton.toLocaleString()} Pcs</div>
+                  </div>
+                )
+              }
+
+              if (isPack) {
+                const pkQty = Number(rowData.packQty) || 0
+                const totalPcsFromPack = pkQty * pCount
+                return (
+                  <div className="space-y-1.5 rounded-md border border-border/60 bg-muted/40 p-3">
+                    <Label className="text-xs font-semibold text-muted-foreground">Total Pcs from Packs (Read-only)</Label>
+                    <div className="text-base font-bold text-foreground">{totalPcsFromPack.toLocaleString()} Pcs</div>
+                  </div>
+                )
+              }
+
+              return null
+            })() : null}
           </div>
           <DialogFooter>
             <Button type="button" onClick={() => setQuantityDialog(null)}>Done</Button>

@@ -35,6 +35,7 @@ export async function PUT(request: Request, { params }: { params: Promise<{ id: 
             carton: Boolean(row.carton), cartonQty: row.cartonQty === "" ? undefined : Number(row.cartonQty),
             packsPerCarton: row.packsPerCarton === "" ? undefined : Number(row.packsPerCarton), pack: Boolean(row.pack),
             pcsCount: row.pcsCount === "" ? undefined : Number(row.pcsCount), packQty: row.packQty === "" ? undefined : Number(row.packQty),
+            pcsQty: row.pcsQty === "" ? undefined : Number(row.pcsQty),
             totalPcs: Number(row.totalPcs) || 0, qty: row.packQty === "" ? undefined : Number(row.packQty), costPrice: Number(row.costPrice) || undefined,
             cartonCostPrice: Number(row.cartonCostPrice) || undefined, packCostPrice: Number(row.packCostPrice) || undefined, pcsCostPrice: Number(row.pcsCostPrice) || undefined,
             cartonSalesPrice: Number(row.wholesale ? (row.retailCartonSalesPrice || undefined) : (row.cartonSalesPrice || row.retailCartonSalesPrice || undefined)) || undefined,

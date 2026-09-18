@@ -34,12 +34,13 @@ const stockColumns: TableColumn[] = [
       { key: "pcsCount", label: "Pcs/Pack" },
     ],
   },
-  { key: "totalPcs", label: "Total Pcs", type: "number", className: "w-28" },
-  { key: "costPrice", label: "Purchase Cost", type: "number", className: "w-32" },
+  { key: "pcsQty", label: "Pcs Qty", type: "number", className: "min-w-[100px] w-28" },
+  { key: "totalPcs", label: "Total Pcs", type: "number", readOnly: true, className: "min-w-[100px] w-28" },
+  { key: "costPrice", label: "Purchase Cost", type: "number", className: "min-w-[100px] w-32" },
   { key: "wholesale", label: "Wholesale", type: "boolean", className: "w-24" },
-  { key: "cartonSalesPrice", label: "Carton Sales Price", type: "number", className: "w-36" },
-  { key: "packSalesPrice", label: "Pack Sales Price", type: "number", className: "w-36" },
-  { key: "pcsSalesPrice", label: "Pcs Sales Price", type: "number", className: "w-36" },
+  { key: "cartonSalesPrice", label: "Carton Sales Price", type: "number", className: "min-w-[100px] w-36" },
+  { key: "packSalesPrice", label: "Pack Sales Price", type: "number", className: "min-w-[100px] w-36" },
+  { key: "pcsSalesPrice", label: "Pcs Sales Price", type: "number", className: "min-w-[100px] w-36" },
 ]
 
 type InventoryProductName = string
@@ -53,6 +54,7 @@ const createBlankStockRow = () => ({
   pack: false,
   packQty: "",
   pcsCount: "",
+  pcsQty: "",
   totalPcs: "",
   costPrice: "",
   cartonCostPrice: "",
@@ -84,9 +86,9 @@ const StockPage = () => {
   const [companyName, setCompanyName] = useState("")
   const [repName, setRepName] = useState("")
   const [amountPaid, setAmountPaid] = useState("")
-  const [saveState, setSaveState] = useState<"idle" | "saving" | "saved" | "error">("idle")
   const [cachedProducts, setCachedProducts] = useState<InventoryProductName[]>([])
   const [loadingProducts, setLoadingProducts] = useState(false)
+  const [saveState, setSaveState] = useState<"idle" | "saving" | "saved" | "error">("idle")
 
   const productNames = useMemo(
     () => cachedProducts,
@@ -112,6 +114,8 @@ const StockPage = () => {
           return {
             ...stock,
             wholesale: isWs,
+            pcsQty: stock.pcsQty ?? "",
+            totalPcs: stock.totalPcs ?? "",
             cartonSalesPrice: isWs ? (stock.wholesaleCartonSalesPrice ?? stock.cartonSalesPrice ?? "") : (stock.cartonSalesPrice ?? ""),
             packSalesPrice: isWs ? (stock.wholesalePackSalesPrice ?? stock.packSalesPrice ?? "") : (stock.packSalesPrice ?? ""),
             pcsSalesPrice: isWs ? (stock.wholesalePcsSalesPrice ?? stock.pcsSalesPrice ?? "") : (stock.pcsSalesPrice ?? ""),
@@ -160,24 +164,28 @@ const StockPage = () => {
       const pkQty = row.packQty !== "" && row.packQty !== undefined && row.packQty !== null
         ? Number(row.packQty)
         : (row.qty !== "" && row.qty !== undefined && row.qty !== null ? Number(row.qty) : 0)
+      const pcQty = row.pcsQty !== "" && row.pcsQty !== undefined && row.pcsQty !== null ? Number(row.pcsQty) : 0
       const pCount = row.pcsCount !== "" && row.pcsCount !== undefined && row.pcsCount !== null ? Number(row.pcsCount) : 1
-      const totalPacks = (cQty * ppc) + pkQty
-      const calculatedPieces = totalPacks * pCount
-      const hasPackQuantity = totalPacks > 0
-      const manualPieces = row.totalPcs !== "" && row.totalPcs !== undefined && row.totalPcs !== null
-        ? Number(row.totalPcs)
-        : 0
-      const totalPieces = hasPackQuantity ? calculatedPieces : manualPieces
-      const computedTotalPcs = hasPackQuantity ? calculatedPieces : row.totalPcs
+
+      const cartonPieces = cQty * ppc * pCount
+      const packPieces = pkQty * pCount
+      const loosePieces = pcQty
+
+      const hasQuantity = cQty > 0 || pkQty > 0 || pcQty > 0
+      const calculatedTotalPcs = cartonPieces + packPieces + loosePieces
+      const computedTotalPcs = hasQuantity ? calculatedTotalPcs : (row.totalPcs !== "" && row.totalPcs !== undefined ? row.totalPcs : "")
+
+      const totalPacks = (cQty * ppc) + pkQty + (pCount > 0 ? pcQty / pCount : 0)
+      const totalPieces = hasQuantity ? calculatedTotalPcs : (Number(row.totalPcs) || 0)
 
       const costValue = row.costPrice === "" || row.costPrice === undefined || row.costPrice === null ? undefined : Number(row.costPrice)
-      const costPerPack = costValue !== undefined && !Number.isNaN(costValue) && totalPacks > 0
-        ? costValue / totalPacks
-        : undefined
       const costPerPiece = costValue !== undefined && !Number.isNaN(costValue) && totalPieces > 0
         ? costValue / totalPieces
         : undefined
-      const costPerCarton = costPerPack !== undefined && cQty > 0
+      const costPerPack = costPerPiece !== undefined
+        ? costPerPiece * pCount
+        : (costValue !== undefined && totalPacks > 0 ? costValue / totalPacks : undefined)
+      const costPerCarton = costPerPack !== undefined && ppc > 0
         ? costPerPack * ppc
         : undefined
 
@@ -189,7 +197,7 @@ const StockPage = () => {
       const suggestedWholesalePack = costPerPack !== undefined ? Number((costPerPack * 1.1).toFixed(2)) : ""
       const suggestedWholesalePcs = costPerPiece !== undefined ? Number((costPerPiece * 1.1).toFixed(2)) : ""
 
-      const quantityOrCostChanged = ["costPrice", "carton", "cartonQty", "packsPerCarton", "pack", "packQty", "pcsCount"].some(
+      const quantityOrCostChanged = ["costPrice", "carton", "cartonQty", "packsPerCarton", "pack", "packQty", "pcsCount", "pcsQty"].some(
         (key) => row[key] !== previousRow?.[key]
       )
 
@@ -224,26 +232,26 @@ const StockPage = () => {
       }
 
       if (quantityOrCostChanged) {
-        if (!retailCarton || row.costPrice !== previousRow?.costPrice) retailCarton = suggestedRetailCarton
-        if (!retailPack || row.costPrice !== previousRow?.costPrice) retailPack = suggestedRetailPack
-        if (!retailPcs || row.costPrice !== previousRow?.costPrice) retailPcs = suggestedRetailPcs
-
-        if (!wholesaleCarton || row.costPrice !== previousRow?.costPrice) wholesaleCarton = suggestedWholesaleCarton
-        if (!wholesalePack || row.costPrice !== previousRow?.costPrice) wholesalePack = suggestedWholesalePack
-        if (!wholesalePcs || row.costPrice !== previousRow?.costPrice) wholesalePcs = suggestedWholesalePcs
-      } else {
-        if (retailCarton === "") retailCarton = suggestedRetailCarton
-        if (retailPack === "") retailPack = suggestedRetailPack
-        if (retailPcs === "") retailPcs = suggestedRetailPcs
-
-        if (wholesaleCarton === "") wholesaleCarton = suggestedWholesaleCarton
-        if (wholesalePack === "") wholesalePack = suggestedWholesalePack
-        if (wholesalePcs === "") wholesalePcs = suggestedWholesalePcs
+        if (row.costPrice !== previousRow?.costPrice) {
+          retailCarton = suggestedRetailCarton
+          retailPack = suggestedRetailPack
+          retailPcs = suggestedRetailPcs
+          wholesaleCarton = suggestedWholesaleCarton
+          wholesalePack = suggestedWholesalePack
+          wholesalePcs = suggestedWholesalePcs
+        } else {
+          if (retailCarton === "") retailCarton = suggestedRetailCarton
+          if (retailPack === "") retailPack = suggestedRetailPack
+          if (retailPcs === "") retailPcs = suggestedRetailPcs
+          if (wholesaleCarton === "") wholesaleCarton = suggestedWholesaleCarton
+          if (wholesalePack === "") wholesalePack = suggestedWholesalePack
+          if (wholesalePcs === "") wholesalePcs = suggestedWholesalePcs
+        }
       }
 
-      const activeCarton = isWholesale ? (wholesaleCarton || suggestedWholesaleCarton) : (retailCarton || suggestedRetailCarton)
-      const activePack = isWholesale ? (wholesalePack || suggestedWholesalePack) : (retailPack || suggestedRetailPack)
-      const activePcs = isWholesale ? (wholesalePcs || suggestedWholesalePcs) : (retailPcs || suggestedRetailPcs)
+      const activeCarton = isWholesale ? wholesaleCarton : retailCarton
+      const activePack = isWholesale ? wholesalePack : retailPack
+      const activePcs = isWholesale ? wholesalePcs : retailPcs
 
       return {
         ...row,
@@ -322,7 +330,7 @@ const StockPage = () => {
         </div>
         <Dialog open={dateRangeOpen} onOpenChange={setDateRangeOpen}>
           <DialogTrigger asChild>
-            <Button variant="outline">View stocks</Button>
+            <Button className="max-w-52 font-semibold">View stocks</Button>
           </DialogTrigger>
           <DialogContent className="max-w-md">
             <DialogHeader>

@@ -141,13 +141,28 @@ export async function POST(req: Request) {
             const ppc = packsPerCarton || 1
             const pCount = pcsCount || 1
             const pkQty = packQty || 0
+            const pcQty = row.pcsQty !== "" && row.pcsQty !== undefined && row.pcsQty !== null ? Number(row.pcsQty) : 0
             const costPrice = row.costPrice === "" || row.costPrice === undefined ? undefined : Number(row.costPrice)
-            const totalPacks = (cQty * ppc) + pkQty
+
+            const cartonPieces = cQty * ppc * pCount
+            const packPieces = pkQty * pCount
+            const loosePieces = pcQty
+
+            const calculatedPcs = (cQty > 0 || pkQty > 0 || pcQty > 0)
+              ? (cartonPieces + packPieces + loosePieces)
+              : 0
             const enteredTotalPcs = row.totalPcs === "" || row.totalPcs === undefined || row.totalPcs === null ? 0 : Number(row.totalPcs)
-            const totalPieces = totalPacks > 0 ? totalPacks * pCount : enteredTotalPcs
-            const costPerPack = costPrice !== undefined && totalPacks > 0 ? costPrice / totalPacks : undefined
+            const totalPcs = calculatedPcs > 0 ? calculatedPcs : enteredTotalPcs
+
+            const totalPacks = (cQty * ppc) + pkQty + (pCount > 0 ? pcQty / pCount : 0)
+            const totalPieces = totalPcs
+
             const costPerPiece = costPrice !== undefined && totalPieces > 0 ? costPrice / totalPieces : undefined
-            const costPerCarton = costPerPack !== undefined && cQty > 0 ? costPerPack * ppc : undefined
+            const costPerPack = costPerPiece !== undefined
+              ? costPerPiece * pCount
+              : (costPrice !== undefined && totalPacks > 0 ? costPrice / totalPacks : undefined)
+            const costPerCarton = costPerPack !== undefined && ppc > 0 ? costPerPack * ppc : undefined
+
             const retailMarkup = 1.3
             const wholesaleMarkup = 1.1
             const isWs = Boolean(row.wholesale)
@@ -184,8 +199,6 @@ export async function POST(req: Request) {
             const wholesalePackSalesPrice = rawWholesalePack ?? (costPerPack !== undefined ? Number((costPerPack * wholesaleMarkup).toFixed(2)) : undefined)
             const wholesalePcsSalesPrice = rawWholesalePcs ?? (costPerPiece !== undefined ? Number((costPerPiece * wholesaleMarkup).toFixed(2)) : undefined)
 
-            const totalPcs = totalPacks > 0 ? totalPacks * pCount : enteredTotalPcs
-
             return {
               sn: row.sn === "" || row.sn === undefined ? undefined : Number(row.sn),
               productName: String(row.productName || ""),
@@ -197,6 +210,7 @@ export async function POST(req: Request) {
               pack,
               pcsCount,
               packQty,
+              pcsQty: pcQty || undefined,
               totalPcs,
               qty: packQty,
               costPrice,
