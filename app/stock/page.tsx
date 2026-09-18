@@ -2,6 +2,7 @@
 
 import { useEffect, useMemo, useState } from "react"
 import { useRouter, useSearchParams } from "next/navigation"
+import Link from "next/link"
 import { format } from "date-fns"
 import { Button } from "@/components/ui/button"
 import { Label } from "@/components/ui/label"
@@ -12,7 +13,7 @@ import { Check, Loader2, X } from "lucide-react"
 
 const stockColumns: TableColumn[] = [
   { key: "sn", label: "S/N", type: "number", required: true, className: "w-10" },
-  { key: "productName", label: "Product Name", type: "text", required: true },
+  { key: "productName", label: "Product Name", type: "text", required: true, className: "w-[300px] min-w-[260px]" },
   {
     key: "carton",
     label: "Carton",
@@ -328,7 +329,9 @@ const StockPage = () => {
           <h1 className="text-3xl font-bold">Stock</h1>
           <p className="text-sm text-muted-foreground">{editId ? "Edit saved stock purchase." : "Manage stock records with date or range."}</p>
         </div>
-        <Dialog open={dateRangeOpen} onOpenChange={setDateRangeOpen}>
+        <div className="flex items-center gap-2">
+          <Button variant="outline" asChild><Link href="/stock/products">Stock products</Link></Button>
+          <Dialog open={dateRangeOpen} onOpenChange={setDateRangeOpen}>
           <DialogTrigger asChild>
             <Button className="max-w-52 font-semibold">View stocks</Button>
           </DialogTrigger>
@@ -392,7 +395,8 @@ const StockPage = () => {
               }}>OK</Button>
             </DialogFooter>
           </DialogContent>
-        </Dialog>
+          </Dialog>
+        </div>
       </div>
 
       <div className="rounded-lg border bg-card p-2 sm:p-4 overflow-x-auto max-w-full">

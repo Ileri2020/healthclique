@@ -18,9 +18,18 @@ import { useAppContext } from "@/hooks/useAppContext";
 import { signOut } from "next-auth/react";
 import { Login, Signup } from "../myComponents/subs";
 
+const inventoryLinks = [
+    { path: "/stock", name: "Stock", title: "Stock entry" },
+    { path: "/sales", name: "Sales", title: "Sales entry" },
+    { path: "/stock/all", name: "Saved stocks", title: "Saved stock purchases" },
+    { path: "/stock/products", name: "Products", title: "Available stock products" },
+];
+
 const Sidenav = () => {
     const { user, setUser } = useAppContext();
     const pathname = usePathname();
+    const inventoryMode = pathname.startsWith("/stock/") || pathname.startsWith("/sales/") || pathname === "/stock" || pathname === "/sales";
+    const navigationLinks = inventoryMode ? inventoryLinks : Links.Links;
     const [categories, setCategories] = useState<any[]>([]);
     const [concerns, setConcerns] = useState<string[]>([]);
     const [open, setOpen] = useState(false);
@@ -84,21 +93,26 @@ const Sidenav = () => {
                     <div className="space-y-4">
                         <h3 className="text-xs font-black uppercase tracking-widest text-muted-foreground/60 px-2">Main Menu</h3>
                         <nav className="flex flex-col gap-1">
-                            {Links.Links.map((link, index) => (
+                            {navigationLinks.map((link, index) => (
+                                (() => {
+                                    const isActive = pathname === link.path || (link.path === "/stock" && pathname.startsWith("/stock/")) || (link.path === "/sales" && pathname.startsWith("/sales/"));
+                                    return (
                                 <Link 
                                     href={link.path} 
                                     key={index} 
                                     onClick={closeSheet}
-                                    className={`${link.path === pathname ? "bg-primary text-primary-foreground shadow-lg shadow-primary/20" : "text-foreground hover:bg-muted"} flex items-center justify-between p-4 rounded-2xl transition-all group`}
+                                    className={`${isActive ? "bg-primary text-primary-foreground shadow-lg shadow-primary/20" : "text-foreground hover:bg-muted"} flex items-center justify-between p-4 rounded-2xl transition-all group`}
                                 >
                                     <div className="flex items-center gap-4">
-                                        <div className={`p-2 rounded-xl border ${link.path === pathname ? "bg-white/20 border-white/30" : "bg-muted border-border group-hover:border-primary/30 group-hover:bg-primary/5"} transition-all`}>
+                                        <div className={`p-2 rounded-xl border ${isActive ? "bg-white/20 border-white/30" : "bg-muted border-border group-hover:border-primary/30 group-hover:bg-primary/5"} transition-all`}>
                                             <span className="text-xl shrink-0">{link.name}</span>
                                         </div>
                                         <span className="font-bold tracking-tight">{link.title}</span>
                                     </div>
-                                    <ChevronRight className={`w-5 h-5 transition-all ${link.path === pathname ? "opacity-100 translate-x-0" : "opacity-0 -translate-x-2 group-hover:opacity-100 group-hover:translate-x-0"}`} />
+                                    <ChevronRight className={`w-5 h-5 transition-all ${isActive ? "opacity-100 translate-x-0" : "opacity-0 -translate-x-2 group-hover:opacity-100 group-hover:translate-x-0"}`} />
                                 </Link>
+                                    );
+                                })()
                             ))}
                         </nav>
                     </div>
