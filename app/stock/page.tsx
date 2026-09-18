@@ -112,10 +112,19 @@ const StockPage = () => {
         if (purchase.date) setEntryDate(new Date(purchase.date))
         setTableRows(purchase.stocks.map((stock: TableRow) => {
           const isWs = Boolean(stock.wholesale)
+          const hasCartonQty = Boolean(stock.cartonQty) && Number(stock.cartonQty) > 0
+          const hasPackQty = Boolean(stock.packQty) && Number(stock.packQty) > 0
+          const hasPcsQty = stock.pcsQty !== null && stock.pcsQty !== undefined && stock.pcsQty !== ""
+
+          let derivedPcsQty = stock.pcsQty ?? ""
+          if (!hasPcsQty && !hasCartonQty && !hasPackQty && stock.totalPcs) {
+            derivedPcsQty = stock.totalPcs
+          }
+
           return {
             ...stock,
             wholesale: isWs,
-            pcsQty: stock.pcsQty ?? "",
+            pcsQty: derivedPcsQty,
             totalPcs: stock.totalPcs ?? "",
             cartonSalesPrice: isWs ? (stock.wholesaleCartonSalesPrice ?? stock.cartonSalesPrice ?? "") : (stock.cartonSalesPrice ?? ""),
             packSalesPrice: isWs ? (stock.wholesalePackSalesPrice ?? stock.packSalesPrice ?? "") : (stock.packSalesPrice ?? ""),
