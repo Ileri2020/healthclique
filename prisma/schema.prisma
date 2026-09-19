@@ -202,6 +202,7 @@ model InventoryStock {
   pack            Boolean   @default(false)
   pcsCount        Int?
   packQty         Int?
+  pcsQty          Int?
   totalPcs        Int?
   qty             Int?
   costPrice       Float?

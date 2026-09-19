@@ -18,7 +18,6 @@ export async function GET() {
           cartonQty: true,
           packsPerCarton: true,
           packQty: true,
-          pcsQty: true,
           pcsCount: true,
           totalPcs: true,
         },
@@ -54,9 +53,9 @@ export async function GET() {
       const balance = getBalance(productName)
       const packsPerCarton = stock.packsPerCarton || 1
       const piecesPerPack = stock.pcsCount || 1
-      if (packsPerCarton > 1) balance.packsPerCarton = packsPerCarton
-      if (piecesPerPack > 1) balance.piecesPerPack = piecesPerPack
-      const derivedPieces = (stock.cartonQty || 0) * packsPerCarton * piecesPerPack + (stock.packQty || 0) * piecesPerPack + (stock.pcsQty || 0)
+      balance.packsPerCarton = packsPerCarton
+      balance.piecesPerPack = piecesPerPack
+      const derivedPieces = (stock.cartonQty || 0) * packsPerCarton * piecesPerPack + (stock.packQty || 0) * piecesPerPack
       balance.availablePieces += stock.totalPcs ?? derivedPieces
     })
 
@@ -70,26 +69,13 @@ export async function GET() {
     })
 
     return NextResponse.json([...balances.values()]
-      .map((balance) => {
-        const totalAvail = Math.max(balance.availablePieces, 0)
-        const pcsPerCarton = balance.packsPerCarton > 1 && balance.piecesPerPack > 0
-          ? balance.packsPerCarton * balance.piecesPerPack
-          : 0
-
-        const cartons = pcsPerCarton > 0 ? Math.floor(totalAvail / pcsPerCarton) : 0
-        const remAfterCartons = pcsPerCarton > 0 ? totalAvail % pcsPerCarton : totalAvail
-
-        const packs = balance.piecesPerPack > 1 ? Math.floor(remAfterCartons / balance.piecesPerPack) : 0
-        const pieces = balance.piecesPerPack > 1 ? remAfterCartons % balance.piecesPerPack : remAfterCartons
-
-        return {
-          ...balance,
-          availablePieces: totalAvail,
-          cartons,
-          packs,
-          pieces,
-        }
-      })
+      .map((balance) => ({
+        ...balance,
+        availablePieces: Math.max(balance.availablePieces, 0),
+        cartons: Math.floor(Math.max(balance.availablePieces, 0) / (balance.packsPerCarton * balance.piecesPerPack)),
+        packs: Math.floor((Math.max(balance.availablePieces, 0) % (balance.packsPerCarton * balance.piecesPerPack)) / balance.piecesPerPack),
+        pieces: Math.max(balance.availablePieces, 0) % balance.piecesPerPack,
+      }))
       .sort((left, right) => left.productName.localeCompare(right.productName)))
   } catch (error) {
     console.error(error)
