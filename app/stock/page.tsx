@@ -13,7 +13,7 @@ import { Check, Loader2, X } from "lucide-react"
 
 const stockColumns: TableColumn[] = [
   { key: "sn", label: "S/N", type: "number", required: true, className: "w-10" },
-  { key: "productName", label: "Product Name", type: "text", required: true, className: "w-[300px] min-w-[260px]" },
+  { key: "productName", label: "Product Name", type: "text", required: true },
   {
     key: "carton",
     label: "Carton",
@@ -112,19 +112,10 @@ const StockPage = () => {
         if (purchase.date) setEntryDate(new Date(purchase.date))
         setTableRows(purchase.stocks.map((stock: TableRow) => {
           const isWs = Boolean(stock.wholesale)
-          const hasCartonQty = Boolean(stock.cartonQty) && Number(stock.cartonQty) > 0
-          const hasPackQty = Boolean(stock.packQty) && Number(stock.packQty) > 0
-          const hasPcsQty = stock.pcsQty !== null && stock.pcsQty !== undefined && stock.pcsQty !== ""
-
-          let derivedPcsQty = stock.pcsQty ?? ""
-          if (!hasPcsQty && !hasCartonQty && !hasPackQty && stock.totalPcs) {
-            derivedPcsQty = stock.totalPcs
-          }
-
           return {
             ...stock,
             wholesale: isWs,
-            pcsQty: derivedPcsQty,
+            pcsQty: stock.pcsQty ?? "",
             totalPcs: stock.totalPcs ?? "",
             cartonSalesPrice: isWs ? (stock.wholesaleCartonSalesPrice ?? stock.cartonSalesPrice ?? "") : (stock.cartonSalesPrice ?? ""),
             packSalesPrice: isWs ? (stock.wholesalePackSalesPrice ?? stock.packSalesPrice ?? "") : (stock.packSalesPrice ?? ""),

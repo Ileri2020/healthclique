@@ -103,6 +103,10 @@ export function Tables({
       row[column.key] = value
     }
 
+    if (column.key === "salesPrice") {
+      row._salesPriceManual = true
+    }
+
     newRows[rowIndex] = row
     updateRows(newRows)
   }
@@ -140,7 +144,12 @@ export function Tables({
         <TableHeader>
           <TableRow>
             {columns.map((column) => (
-              <TableHead key={column.key} className={`${column.key === "productName" ? "w-[300px] min-w-[260px]" : ""} ${column.className ?? ""}`}>{column.label}</TableHead>
+              <TableHead
+                key={column.key}
+                className={`${column.key === "productName" ? "w-[300px] min-w-[260px]" : ""} ${column.type === "boolean" ? "w-[50px] max-w-[50px] min-w-[50px]" : ""} ${column.className ?? ""}`}
+              >
+                {column.label}
+              </TableHead>
             ))}
           </TableRow>
         </TableHeader>
@@ -160,9 +169,12 @@ export function Tables({
                   : String(value)
 
                 return (
-                  <TableCell key={column.key} className={`align-top py-2 ${column.key === "productName" ? "w-[300px] min-w-[260px]" : ""} ${column.className ?? ""}`}>
+                  <TableCell
+                    key={column.key}
+                    className={`align-top py-2 ${column.key === "productName" ? "w-[300px] min-w-[260px]" : ""} ${column.type === "boolean" ? "w-[50px] max-w-[50px] min-w-[50px]" : ""} ${column.type === "number" ? "max-w-[120px]" : ""} ${column.className ?? ""}`}
+                  >
                     {column.type === "boolean" ? (
-                      <div className="flex items-center gap-2 whitespace-nowrap">
+                      <div className="flex w-[50px] max-w-[50px] items-center justify-center gap-2 whitespace-nowrap">
                         <Checkbox
                           checked={Boolean(value)}
                           disabled={readOnly}
@@ -202,6 +214,7 @@ export function Tables({
                       <div className="relative space-y-1">
                         <Input
                           type={column.type === "number" ? "number" : "text"}
+                          className={column.type === "number" ? "max-w-[120px]" : undefined}
                           value={displayValue}
                           placeholder={column.label}
                           onFocus={() => {

@@ -13,6 +13,10 @@ model Inventory {
   date      DateTime?
   rangeFrom DateTime?
   rangeTo   DateTime?
+  paymentMethod String?
+  cashPaid Float?
+  posPayment Float?
+  change Float?
   sales     InventorySale[]
   stocks    InventoryStock[]
   createdAt DateTime         @default(now())
@@ -29,8 +33,13 @@ model InventorySale {
   inventoryId    String    @db.ObjectId
   sn             Int?
   customerSn     Int?
+  customerName   String?
   productName    String
+  carton         Boolean   @default(false)
+  cartonQty      Int?
+  packsPerCarton Int?
   pack           Boolean   @default(false)
+  wholesale      Boolean   @default(false)
   pcsCount       Int?
   packQty        Int?
   pcsQty         Int?

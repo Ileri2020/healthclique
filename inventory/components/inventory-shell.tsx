@@ -24,19 +24,19 @@ export function InventoryShell({ mode, columns }: Props) {
   const customerCount = useMemo(() => new Set(rows.map((row) => row.customerSn).filter(Boolean)).size, [rows])
   const updateRows = (nextRows: InventoryRow[]) => setRows(nextRows.map((row) => {
     const cartonQty = asNumber(row.cartonQty), packsPerCarton = asNumber(row.packsPerCarton) || 1, packQty = asNumber(row.packQty), pcsCount = asNumber(row.pcsCount) || 1, pcsQty = asNumber(row.pcsQty)
-    const totalPcs = mode === "stock" ? cartonQty * packsPerCarton * pcsCount + packQty * pcsCount + pcsQty : packQty * pcsCount + pcsQty
+    const totalPcs = cartonQty * packsPerCarton * pcsCount + packQty * pcsCount + pcsQty
     const cost = asNumber(row.costPrice), salePrice = Number((cost + .3).toFixed(2))
     const next: InventoryRow = { ...row, totalPcs }
     if (cost > 0 && row.packSalesPrice === "" && (Boolean(row.pack) || packQty > 0)) next.packSalesPrice = salePrice
     if (cost > 0 && row.pcsSalesPrice === "" && (pcsCount > 0 || pcsQty > 0)) next.pcsSalesPrice = salePrice
-    next.total = mode === "stock" ? Number((cost * (cartonQty || packQty || pcsQty)).toFixed(2)) : Number((packQty * asNumber(row.packSalesPrice) + pcsQty * asNumber(row.pcsSalesPrice)).toFixed(2))
+    next.total = mode === "stock" ? Number((cost * (cartonQty || packQty || pcsQty)).toFixed(2)) : Number((asNumber(row.salesPrice) * totalPcs).toFixed(2))
     return next
   }))
   const blankRows = () => Array.from({ length: 4 }, () => Object.fromEntries(columns.map((column) => [column.key, column.type === "boolean" ? false : ""])))
   const save = async () => {
     const valid = rows.filter((row) => row.productName && (mode === "stock" || row.customerSn))
     if (!valid.length) return toast.error(mode === "sales" ? "Add a product and customer number first." : "Add at least one product first.")
-    if (valid.some((row) => !asNumber(row.costPrice) || (!asNumber(row.packSalesPrice) && !asNumber(row.pcsSalesPrice)))) return toast.error("Each row needs a cost price and a sales price.")
+    if (valid.some((row) => !asNumber(row.costPrice) || !asNumber(row.salesPrice))) return toast.error("Each row needs a cost price and a sales price.")
     setSaving(true)
     try {
       const response = await fetch(`/api/inventory/${mode}`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ date: rangeFrom && rangeTo ? { from: rangeFrom, to: rangeTo } : { date: selectedDate }, rows: valid }) })
