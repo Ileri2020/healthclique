@@ -40,7 +40,7 @@ export default function StockPurchasePage({ params }: { params: Promise<{ id: st
       <Button onClick={() => router.push(`/stock?edit=${purchase.id}`)}>Edit</Button>
     </div>
     <div className="flex flex-wrap gap-4 text-sm"><span>Total: ₦{purchase.total.toLocaleString()}</span><span>Amount paid: ₦{purchase.amountPaid.toLocaleString()}</span><span>Balance: {purchase.amountPaid >= purchase.total ? "✓ Paid in full" : `₦${(purchase.total - purchase.amountPaid).toLocaleString()}`}</span></div>
-    <div className="rounded-lg border bg-card p-2 sm:p-4 overflow-x-auto max-w-full">
+    <div className="rounded-lg border bg-card p-2 sm:p-4 max-w-full">
       <Tables columns={stockColumns} rows={purchase.stocks} showTotals minWidth="1050px" readOnly />
     </div>
   </main>

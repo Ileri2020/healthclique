@@ -217,6 +217,7 @@ export async function POST(req: Request) {
               wholesaleCartonSalesPrice,
               wholesalePackSalesPrice,
               wholesalePcsSalesPrice,
+              expiry: row.expiry ? new Date(`${row.expiry}T00:00:00.000Z`) : undefined,
             }
           }),
         },

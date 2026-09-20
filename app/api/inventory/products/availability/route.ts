@@ -3,6 +3,7 @@ import { prisma } from "@/lib/prisma"
 
 type ProductBalance = {
   productName: string
+  expiry: Date | null
   availablePieces: number
   packsPerCarton: number
   piecesPerPack: number
@@ -48,6 +49,7 @@ export async function GET() {
       if (existing) return existing
       const balance: ProductBalance = {
         productName,
+        expiry: null,
         availablePieces: 0,
         packsPerCarton: 0,
         piecesPerPack: 0,
@@ -62,6 +64,7 @@ export async function GET() {
       const productName = stock.productName?.trim()
       if (!productName) return
       const balance = getBalance(productName)
+      if (!balance.expiry && stock.expiry) balance.expiry = stock.expiry
       const packsPerCarton = stock.packsPerCarton || 0
       const piecesPerPack = stock.pcsCount || 0
 
@@ -148,6 +151,7 @@ export async function GET() {
 
         return {
           productName: balance.productName,
+          expiry: balance.expiry,
           availablePieces: netPieces,
           cartons,
           packs,

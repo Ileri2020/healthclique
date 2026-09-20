@@ -13,6 +13,7 @@ import { toast } from "sonner"
 
 type ProductAvailability = {
   productName: string
+  expiry?: string | null
   availablePieces: number
   cartons: number
   packs: number
@@ -99,6 +100,24 @@ export default function StockProductsPage() {
     ? `${format(new Date(entry.rangeFrom), "MMM d, yyyy")} - ${format(new Date(entry.rangeTo), "MMM d, yyyy")}`
     : "-"
 
+  const updateStockExpiry = async (stockId: string, expiry: string) => {
+    const response = await fetch(`/api/inventory/stock/${stockId}`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ expiry }),
+    })
+    if (!response.ok) throw new Error("Unable to update expiry")
+    setHistory((current) => ({
+      ...current,
+      stocks: current.stocks.map((entry) => ({
+        ...entry,
+        rows: entry.rows.map((row) => String(row.id) === stockId ? { ...row, expiry: expiry || null } : row),
+      })),
+    }))
+    const availabilityResponse = await fetch("/api/inventory/products/availability")
+    if (availabilityResponse.ok) setProducts(await availabilityResponse.json())
+  }
+
   const renameSuggestions = renameTo.replace(/[^a-zA-Z]/g, "").length >= 4
     ? productNames.filter((name) => name.toLowerCase().includes(renameTo.toLowerCase())).slice(0, 8)
     : []
@@ -133,13 +152,14 @@ export default function StockProductsPage() {
       </div>
       <div className="overflow-x-auto rounded-lg border">
         <Table className="bg-foreground/20 max-w-xl mx-auto rounded-lg">
-          <TableHeader><TableRow><TableHead className="w-12">S/N</TableHead><TableHead className="w-[200px] min-w-[200px] max-w-[200px]">Product name</TableHead><TableHead>Available quantity</TableHead><TableHead className="max-w-[100px]">Total pieces</TableHead></TableRow></TableHeader>
+          <TableHeader><TableRow><TableHead className="w-12">S/N</TableHead><TableHead className="w-[200px] min-w-[200px] max-w-[200px]">Product name</TableHead><TableHead>Available quantity</TableHead><TableHead className="max-w-[100px]">Total pieces</TableHead><TableHead>Expiry</TableHead></TableRow></TableHeader>
           <TableBody>
-            {loading ? <TableRow><TableCell colSpan={4}>Loading stock products...</TableCell></TableRow> : error ? <TableRow><TableCell colSpan={4}>{error}</TableCell></TableRow> : filteredProducts.length === 0 ? <TableRow><TableCell colSpan={4}>No stock products found.</TableCell></TableRow> : visibleProducts.map((product, index) => <TableRow key={product.productName} className="cursor-pointer hover:bg-muted/50" onClick={() => setSelectedProduct(product.productName)}>
+            {loading ? <TableRow><TableCell colSpan={5}>Loading stock products...</TableCell></TableRow> : error ? <TableRow><TableCell colSpan={5}>{error}</TableCell></TableRow> : filteredProducts.length === 0 ? <TableRow><TableCell colSpan={5}>No stock products found.</TableCell></TableRow> : visibleProducts.map((product, index) => <TableRow key={product.productName} className="cursor-pointer hover:bg-muted/50" onClick={() => setSelectedProduct(product.productName)}>
               <TableCell>{(currentPage - 1) * pageSize + index + 1}</TableCell>
               <TableCell className="w-[200px] min-w-[200px] max-w-[200px] font-medium"><div className="flex items-center gap-1"><span className="truncate">{product.productName}</span><Button type="button" variant="ghost" size="icon" className="h-7 w-7 shrink-0" title={`Edit ${product.productName}`} onClick={(event) => { event.stopPropagation(); setRenameFrom(product.productName); setRenameTo(product.productName); setRenameOpen(true) }}><Pencil className="h-3.5 w-3.5" /></Button></div></TableCell>
               <TableCell>{product.cartons} carton{product.cartons === 1 ? "" : "s"}, {product.packs} pack{product.packs === 1 ? "" : "s"}, {product.pieces} pcs</TableCell>
               <TableCell className="max-w-[100px] truncate">{product.availablePieces.toLocaleString()}</TableCell>
+              <TableCell>{product.expiry ? format(new Date(product.expiry), "MMM d, yyyy") : "-"}</TableCell>
             </TableRow>)}
           </TableBody>
         </Table>
@@ -161,7 +181,7 @@ export default function StockProductsPage() {
         <DialogHeader><DialogTitle>{selectedProduct}</DialogTitle><DialogDescription>Saved stock and sales records for this product.</DialogDescription></DialogHeader>
         <Tabs defaultValue="stock">
           <TabsList><TabsTrigger value="stock">Stock</TabsTrigger><TabsTrigger value="sales">Sales</TabsTrigger></TabsList>
-          <TabsContent value="stock"><HistoryList entries={history.stocks} loading={historyLoading} type="stock" productName={selectedProduct ?? ""} historyDate={historyDate} /></TabsContent>
+          <TabsContent value="stock"><HistoryList entries={history.stocks} loading={historyLoading} type="stock" productName={selectedProduct ?? ""} historyDate={historyDate} onExpiryChange={updateStockExpiry} /></TabsContent>
           <TabsContent value="sales"><HistoryList entries={history.sales} loading={historyLoading} type="sale" productName={selectedProduct ?? ""} historyDate={historyDate} /></TabsContent>
         </Tabs>
       </DialogContent>
@@ -176,9 +196,38 @@ export default function StockProductsPage() {
   </main>
 }
 
-function HistoryList({ entries, loading, type, productName, historyDate }: { entries: ProductHistoryEntry[]; loading: boolean; type: "stock" | "sale"; productName: string; historyDate: (entry: ProductHistoryEntry) => string }) {
+function HistoryList({ entries, loading, type, productName, historyDate, onExpiryChange }: { entries: ProductHistoryEntry[]; loading: boolean; type: "stock" | "sale"; productName: string; historyDate: (entry: ProductHistoryEntry) => string; onExpiryChange?: (stockId: string, expiry: string) => Promise<void> }) {
   if (loading) return <p className="py-6 text-sm text-muted-foreground">Loading history...</p>
   if (!entries.length) return <p className="py-6 text-sm text-muted-foreground">No saved {type} records for this product.</p>
-  if (type === "stock") return <div className="overflow-x-auto pt-3"><Table><TableHeader><TableRow><TableHead>Date</TableHead><TableHead>Company</TableHead><TableHead>Representative</TableHead><TableHead>Rows</TableHead><TableHead>Action</TableHead></TableRow></TableHeader><TableBody>{entries.map((entry) => <TableRow key={entry.id}><TableCell>{historyDate(entry)}</TableCell><TableCell>{entry.companyName || "-"}</TableCell><TableCell>{entry.repName || "-"}</TableCell><TableCell>{entry.rows.length}</TableCell><TableCell><Link href={`/stock?edit=${entry.id}&product=${encodeURIComponent(productName)}`} className="font-medium hover:underline">Edit</Link></TableCell></TableRow>)}</TableBody></Table></div>
+  if (type === "stock") return <StockHistoryTable entries={entries} historyDate={historyDate} onExpiryChange={onExpiryChange} />
   return <div className="space-y-2 pt-3">{entries.map((entry) => <Link key={entry.id} href={`/sales?edit=${entry.id}&product=${encodeURIComponent(productName)}`} className="flex items-center justify-between rounded-md border p-3 text-sm hover:bg-muted/50"><span>{historyDate(entry)}</span><span>{entry.rows.length} row{entry.rows.length === 1 ? "" : "s"}</span><span className="font-medium">Edit</span></Link>)}</div>
+}
+
+function StockHistoryTable({ entries, historyDate, onExpiryChange }: { entries: ProductHistoryEntry[]; historyDate: (entry: ProductHistoryEntry) => string; onExpiryChange?: (stockId: string, expiry: string) => Promise<void> }) {
+  const [savingRowId, setSavingRowId] = useState<string | null>(null)
+  const stockRows = entries.flatMap((entry) => entry.rows.map((row) => ({ entry, row })))
+
+  const expiryValue = (value: string | number | boolean | null | undefined) => {
+    if (!value) return ""
+    const date = new Date(String(value))
+    return Number.isNaN(date.getTime()) ? "" : date.toISOString().slice(0, 10)
+  }
+
+  const saveExpiry = async (stockId: string, expiry: string) => {
+    if (!onExpiryChange) return
+    setSavingRowId(stockId)
+    try {
+      await onExpiryChange(stockId, expiry)
+      toast.success("Expiry date updated")
+    } catch {
+      toast.error("Unable to update expiry date")
+    } finally {
+      setSavingRowId(null)
+    }
+  }
+
+  return <div className="overflow-x-auto pt-3"><Table><TableHeader><TableRow><TableHead>Date</TableHead><TableHead>Company</TableHead><TableHead>Representative</TableHead><TableHead>Quantity</TableHead><TableHead>Expiry</TableHead><TableHead>Action</TableHead></TableRow></TableHeader><TableBody>{stockRows.map(({ entry, row }) => {
+    const stockId = String(row.id)
+    return <TableRow key={stockId}><TableCell>{historyDate(entry)}</TableCell><TableCell>{entry.companyName || "-"}</TableCell><TableCell>{entry.repName || "-"}</TableCell><TableCell>{String(row.totalPcs ?? row.qty ?? "-")}</TableCell><TableCell><Input type="date" defaultValue={expiryValue(row.expiry)} disabled={savingRowId === stockId} onBlur={(event) => { if (event.currentTarget.value !== expiryValue(row.expiry)) void saveExpiry(stockId, event.currentTarget.value) }} className="min-w-[145px]" /></TableCell><TableCell><Link href={`/stock?edit=${entry.id}&product=${encodeURIComponent(String(row.productName ?? ""))}`} className="font-medium hover:underline">Edit</Link></TableCell></TableRow>
+  })}</TableBody></Table></div>
 }

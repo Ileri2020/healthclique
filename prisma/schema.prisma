@@ -221,6 +221,7 @@ model InventoryStock {
   wholesaleCartonSalesPrice Float?
   wholesalePackSalesPrice   Float?
   wholesalePcsSalesPrice    Float?
+  expiry          DateTime?
   createdAt       DateTime  @default(now())
   updatedAt       DateTime  @updatedAt
 }

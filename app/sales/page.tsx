@@ -463,7 +463,7 @@ const SalesPage = () => {
           </label>
         </div>
 
-        <div className="rounded-lg border bg-card p-2 sm:p-4 overflow-x-auto max-w-full">
+        <div className="rounded-lg border bg-card p-2 sm:p-4 max-w-full">
           <Tables
             columns={salesColumns}
             defaultRowCount={4}

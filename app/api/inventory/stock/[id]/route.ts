@@ -58,6 +58,7 @@ export async function PUT(request: Request, { params }: { params: Promise<{ id: 
               wholesaleCartonSalesPrice: carton ? (row.wholesaleCartonSalesPrice ? Number(row.wholesaleCartonSalesPrice) : (isWs && row.cartonSalesPrice ? Number(row.cartonSalesPrice) : undefined)) : undefined,
               wholesalePackSalesPrice: pack ? (row.wholesalePackSalesPrice ? Number(row.wholesalePackSalesPrice) : (isWs && row.packSalesPrice ? Number(row.packSalesPrice) : undefined)) : undefined,
               wholesalePcsSalesPrice: row.wholesalePcsSalesPrice ? Number(row.wholesalePcsSalesPrice) : (isWs && row.pcsSalesPrice ? Number(row.pcsSalesPrice) : undefined),
+              expiry: row.expiry ? new Date(`${row.expiry}T00:00:00.000Z`) : undefined,
             }
           }),
         },
@@ -68,6 +69,32 @@ export async function PUT(request: Request, { params }: { params: Promise<{ id: 
   } catch (error) {
     console.error(error)
     return NextResponse.json({ error: "Unable to update stock" }, { status: 500 })
+  }
+}
+
+export async function PATCH(request: Request, { params }: { params: Promise<{ id: string }> }) {
+  try {
+    const { id } = await params
+    if (!/^[a-f\d]{24}$/i.test(id)) {
+      return NextResponse.json({ error: "Invalid stock row id" }, { status: 400 })
+    }
+
+    const body = await request.json()
+    const expiry = typeof body.expiry === "string" && body.expiry
+      ? new Date(`${body.expiry}T00:00:00.000Z`)
+      : null
+    if (expiry && Number.isNaN(expiry.getTime())) {
+      return NextResponse.json({ error: "Invalid expiry date" }, { status: 400 })
+    }
+
+    const stock = await prisma.inventoryStock.update({
+      where: { id },
+      data: { expiry },
+    })
+    return NextResponse.json(stock)
+  } catch (error) {
+    console.error(error)
+    return NextResponse.json({ error: "Unable to update stock expiry" }, { status: 500 })
   }
 }
 

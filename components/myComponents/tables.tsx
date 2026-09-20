@@ -18,7 +18,7 @@ import {
 export type TableColumn = {
   key: string
   label: string
-  type: "text" | "number" | "boolean"
+  type: "text" | "number" | "boolean" | "date"
   required?: boolean
   className?: string
   readOnly?: boolean
@@ -162,7 +162,7 @@ export function Tables({
 
   return (
     <div className="relative w-full max-w-full pb-14">
-      <div className="w-full max-w-full overflow-x-auto touch-pan-x scrollbar-thin [webkit-overflow-scrolling:touch] [overscroll-behavior-x:contain]">
+      <div className="w-full max-w-full overflow-x-auto touch-pan-x touch-pan-y scrollbar-thin [webkit-overflow-scrolling:touch] [overscroll-behavior-x:contain]">
       <div style={{ minWidth }}>
         <Table className="bg-foreground/10">
         <TableHeader>
@@ -238,7 +238,7 @@ export function Tables({
                       <div className="relative space-y-1">
                         <Input
                           id={`cell-${rowIndex}-${column.key}`}
-                          type={column.type === "number" ? "number" : "text"}
+                          type={column.type === "number" ? "number" : column.type === "date" ? "date" : "text"}
                           className={column.type === "number" ? "max-w-[120px]" : undefined}
                           value={displayValue}
                           placeholder={column.label}

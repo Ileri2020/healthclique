@@ -42,6 +42,7 @@ const stockColumns: TableColumn[] = [
   { key: "cartonSalesPrice", label: "Carton Sales Price", type: "number", className: "min-w-[100px] w-36" },
   { key: "packSalesPrice", label: "Pack Sales Price", type: "number", className: "min-w-[100px] w-36" },
   { key: "pcsSalesPrice", label: "Pcs Sales Price", type: "number", className: "min-w-[100px] w-36" },
+  { key: "expiry", label: "Expiry", type: "date", className: "min-w-[150px] w-40" },
 ]
 
 type InventoryProductName = string
@@ -71,6 +72,7 @@ const createBlankStockRow = () => ({
   retailCartonSalesPrice: "",
   retailPackSalesPrice: "",
   retailPcsSalesPrice: "",
+  expiry: "",
 })
 
 const StockPage = () => {
@@ -436,7 +438,7 @@ const StockPage = () => {
         </div>
       </div>
 
-      <div className="rounded-lg border bg-card p-2 sm:p-4 overflow-x-auto max-w-full">
+      <div className="rounded-lg border bg-card p-2 sm:p-4 max-w-full">
         <div className="mb-4 grid gap-3 grid-cols-1 md:grid-cols-2 max-w-lg mx-auto">
           <div className="relative">
             <Label htmlFor="company-name">Company name</Label>
