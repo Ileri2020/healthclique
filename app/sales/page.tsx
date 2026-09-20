@@ -1,6 +1,7 @@
 "use client"
 
 import { useEffect, useMemo, useState } from "react"
+import { useRouter, useSearchParams } from "next/navigation"
 import { format } from "date-fns"
 import { Button } from "@/components/ui/button"
 import { Label } from "@/components/ui/label"
@@ -65,12 +66,19 @@ const SalesPage = () => {
   const [posPayment, setPosPayment] = useState("")
   const [change, setChange] = useState("")
   const [dateRangeOpen, setDateRangeOpen] = useState(false)
+  const [viewDate, setViewDate] = useState<Date>(new Date())
+  const [viewRange, setViewRange] = useState<{ from: Date | undefined; to: Date | undefined }>({ from: undefined, to: undefined })
   const [selectedDate, setSelectedDate] = useState<Date>(new Date())
   const [dateMode, setDateMode] = useState<"single" | "range">("single")
   const [selectedRange, setSelectedRange] = useState<{ from: Date | undefined; to: Date | undefined }>({ from: undefined, to: undefined })
   const [cachedProducts, setCachedProducts] = useState<InventoryProductName[]>([])
   const [stockPricing, setStockPricing] = useState<Record<string, { costPrice?: number; cartonSalesPrice?: number; packSalesPrice?: number; pcsSalesPrice?: number; wholesaleCartonSalesPrice?: number; wholesalePackSalesPrice?: number; wholesalePcsSalesPrice?: number }>>({})
   const [loadingProducts, setLoadingProducts] = useState(false)
+  const [saveState, setSaveState] = useState<"idle" | "saving" | "saved" | "error">("idle")
+  const [focusRowIndex, setFocusRowIndex] = useState<number | undefined>(undefined)
+  const router = useRouter()
+  const searchParams = useSearchParams()
+  const editId = searchParams.get("edit")
 
   const productNames = useMemo(() => cachedProducts, [cachedProducts])
 
@@ -78,6 +86,45 @@ const SalesPage = () => {
     loadInventoryProducts()
     loadStockPricing()
   }, [])
+
+  useEffect(() => {
+    if (!editId) return
+    fetch(`/api/inventory/sales/${editId}`)
+      .then((response) => response.json())
+      .then((sale) => {
+        if (!sale?.sales) return
+        setCustomerName(sale.sales[0]?.customerName ?? "")
+        setPaymentMethod(sale.paymentMethod ?? "")
+        setCashPaid(sale.cashPaid == null ? "" : String(sale.cashPaid))
+        setPosPayment(sale.posPayment == null ? "" : String(sale.posPayment))
+        setChange(sale.change == null ? "" : String(sale.change))
+        if (sale.date) {
+          setSelectedDate(new Date(sale.date))
+          setViewDate(new Date(sale.date))
+          setDateMode("single")
+          setSelectedRange({ from: undefined, to: undefined })
+        } else if (sale.rangeFrom && sale.rangeTo) {
+          setSelectedRange({ from: new Date(sale.rangeFrom), to: new Date(sale.rangeTo) })
+          setDateMode("range")
+        }
+        setTableRows(sale.sales.map((row: TableRow) => ({
+          ...row,
+          carton: Boolean(row.carton),
+          cartonQty: row.cartonQty ?? "",
+          packsPerCarton: row.packsPerCarton ?? "",
+          pack: Boolean(row.pack),
+          packQty: row.packQty ?? "",
+          pcsCount: row.pcsCount ?? "",
+          pcsQty: row.pcsQty ?? "",
+          totalPcs: row.totalPcs ?? "",
+          salesPrice: row.price ?? row.packSalesPrice ?? row.pcsSalesPrice ?? "",
+          total: row.total ?? "",
+        })))
+        const productName = searchParams.get("product")
+        if (productName) setFocusRowIndex(sale.sales.findIndex((row: TableRow) => row.productName === productName))
+      })
+      .catch(() => toast.error("Unable to load saved sales"))
+  }, [editId])
 
   const loadInventoryProducts = async () => {
     setLoadingProducts(true)
@@ -126,6 +173,17 @@ const SalesPage = () => {
     return customerSet.size
   }, [customerName])
 
+  const totalSalesAmount = useMemo(
+    () => tableRows.reduce((sum, row) => sum + (Number(row.total) || 0), 0),
+    [tableRows]
+  )
+
+  useEffect(() => {
+    const total = totalSalesAmount ? String(Number(totalSalesAmount.toFixed(2))) : ""
+    if (paymentMethod === "cash") setCashPaid(total)
+    if (paymentMethod === "pos") setPosPayment(total)
+  }, [paymentMethod, totalSalesAmount])
+
   const currentLabel = useMemo(() => {
     if (dateMode === "range" && selectedRange.from && selectedRange.to) {
       return `${format(selectedRange.from, "PPP")} - ${format(selectedRange.to, "PPP")}`
@@ -134,6 +192,7 @@ const SalesPage = () => {
   }, [dateMode, selectedDate, selectedRange])
 
   const handleRowChange = (rows: TableRow[], wholesaleOverride = globalWholesale) => {
+    setSaveState((current) => current === "saving" ? current : "idle")
     const normalizedRows = rows.map((row, rowIndex) => {
       const productName = typeof row.productName === "string" ? row.productName : ""
       const stockInfo = productName ? stockPricing[productName] : undefined
@@ -189,6 +248,7 @@ const SalesPage = () => {
   }
 
   const handleSubmit = async () => {
+    if (saveState === "saving") return
     const validRows = tableRows.filter((row) => row.productName)
     const invalidRow = validRows.find(
       (row) =>
@@ -223,25 +283,32 @@ const SalesPage = () => {
       rows: validRows.map((row) => ({ ...row, customerName: customerName.trim(), wholesale: Boolean(row.wholesale) || globalWholesale })),
     }
 
+    setSaveState("saving")
     try {
-      const result = await fetch("/api/inventory/sales", {
-        method: "POST",
+      const result = await fetch(editId ? `/api/inventory/sales/${editId}` : "/api/inventory/sales", {
+        method: editId ? "PUT" : "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(payload),
       })
       if (!result.ok) {
         throw new Error("Failed to save sales")
       }
-      toast.success("Sales saved")
+      toast.success(editId ? "Sales updated" : "Sales saved")
+      setSaveState("saved")
       setTableRows(Array.from({ length: 4 }, createBlankSalesRow))
       setCustomerName("")
       setGlobalWholesale(false)
       setPaymentMethod("")
+      setPaymentDialogOpen(false)
       setCashPaid("")
       setPosPayment("")
       setChange("")
+      if (editId) {
+        router.push("/sales")
+      }
     } catch (error) {
       console.error(error)
+      setSaveState("error")
       toast.error("Unable to save sales")
     }
   }
@@ -255,12 +322,12 @@ const SalesPage = () => {
         </div>
         <Dialog open={dateRangeOpen} onOpenChange={setDateRangeOpen}>
           <DialogTrigger asChild>
-            <Button variant="outline">Select Date / Range</Button>
+            <Button variant="outline">View sales</Button>
           </DialogTrigger>
           <DialogContent className="max-w-md">
             <DialogHeader>
-              <DialogTitle>Select date or date range</DialogTitle>
-              <DialogDescription>Default is today.</DialogDescription>
+              <DialogTitle>View saved sales</DialogTitle>
+              <DialogDescription>Select a date or date range to view saved sales entries.</DialogDescription>
             </DialogHeader>
             <div className="grid gap-4 py-4">
               <div>
@@ -269,11 +336,10 @@ const SalesPage = () => {
                   id="single-date"
                   type="date"
                   className="mt-2 w-full rounded border bg-transparent px-3 py-2 text-sm"
-                  value={format(selectedDate, "yyyy-MM-dd")}
+                  value={format(viewDate, "yyyy-MM-dd")}
                   onChange={(event) => {
-                    setDateMode("single")
-                    setSelectedDate(new Date(event.target.value))
-                    setSelectedRange({ from: undefined, to: undefined })
+                    setViewDate(new Date(`${event.target.value}T00:00:00`))
+                    setViewRange({ from: undefined, to: undefined })
                   }}
                 />
               </div>
@@ -283,10 +349,9 @@ const SalesPage = () => {
                   id="range-from"
                   type="date"
                   className="mt-2 w-full rounded border bg-transparent px-3 py-2 text-sm"
-                  value={selectedRange.from ? format(selectedRange.from, "yyyy-MM-dd") : ""}
+                  value={viewRange.from ? format(viewRange.from, "yyyy-MM-dd") : ""}
                   onChange={(event) => {
-                    setDateMode("range")
-                    setSelectedRange((prev) => ({ ...prev, from: event.target.value ? new Date(event.target.value) : undefined }))
+                    setViewRange((prev) => ({ ...prev, from: event.target.value ? new Date(`${event.target.value}T00:00:00`) : undefined }))
                   }}
                 />
               </div>
@@ -296,16 +361,21 @@ const SalesPage = () => {
                   id="range-to"
                   type="date"
                   className="mt-2 w-full rounded border bg-transparent px-3 py-2 text-sm"
-                  value={selectedRange.to ? format(selectedRange.to, "yyyy-MM-dd") : ""}
+                  value={viewRange.to ? format(viewRange.to, "yyyy-MM-dd") : ""}
                   onChange={(event) => {
-                    setDateMode("range")
-                    setSelectedRange((prev) => ({ ...prev, to: event.target.value ? new Date(event.target.value) : undefined }))
+                    setViewRange((prev) => ({ ...prev, to: event.target.value ? new Date(`${event.target.value}T00:00:00`) : undefined }))
                   }}
                 />
               </div>
             </div>
             <DialogFooter>
-              <Button onClick={() => setDateRangeOpen(false)}>Close</Button>
+              <Button variant="outline" onClick={() => { router.push("/sales/all"); setDateRangeOpen(false) }}>All</Button>
+              <Button onClick={() => {
+                const from = viewRange.from ? format(viewRange.from, "yyyy-MM-dd") : ""
+                const to = viewRange.to ? format(viewRange.to, "yyyy-MM-dd") : ""
+                router.push(from && to ? `/sales/${from}_to_${to}` : `/sales/${format(viewDate, "yyyy-MM-dd")}`)
+                setDateRangeOpen(false)
+              }}>OK</Button>
             </DialogFooter>
           </DialogContent>
         </Dialog>
@@ -361,6 +431,7 @@ const SalesPage = () => {
             autocomplete={{ productName: productNames }}
             showTotals
             minWidth="1300px"
+            focusRowIndex={focusRowIndex}
           />
         </div>
       </div>
@@ -388,7 +459,7 @@ const SalesPage = () => {
       </Dialog>
 
       <div className="flex flex-wrap items-end gap-3">
-        <Button onClick={handleSubmit}>Save sales</Button>
+        <Button onClick={handleSubmit} disabled={saveState === "saving"}>{saveState === "saving" ? "Saving..." : editId ? "Update sales" : "Save sales"}</Button>
         <div className="flex items-center gap-3">
           {(["cash", "pos", "cash&pos"] as const).map((method) => (
             <label key={method} className="flex items-center gap-2 text-sm">
@@ -401,6 +472,8 @@ const SalesPage = () => {
                     return
                   }
                   setPaymentMethod(method)
+                  if (method === "cash") setCashPaid(totalSalesAmount ? String(Number(totalSalesAmount.toFixed(2))) : "")
+                  if (method === "pos") setPosPayment(totalSalesAmount ? String(Number(totalSalesAmount.toFixed(2))) : "")
                   if (method === "cash&pos") setPaymentDialogOpen(true)
                 }}
               />

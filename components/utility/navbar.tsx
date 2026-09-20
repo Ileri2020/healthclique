@@ -24,11 +24,14 @@ import { NotificationBell } from "../myComponents/subs/NotificationUI";
 import { useSession } from "next-auth/react";
 import { useAppContext } from "@/hooks/useAppContext";
 import { useEffect } from "react";
+import { usePathname } from "next/navigation";
 import { initializeAffiliateTracking } from "@/lib/affiliate-tracking";
 
 const Navbar = (): JSX.Element => {
   const { setUser, user } = useAppContext();
   const { data: session, status, update } = useSession();
+  const pathname = usePathname();
+  const inventoryMode = pathname.startsWith("/stock") || pathname.startsWith("/sales") || pathname.startsWith("/expenses");
 
   useEffect(() => {
     if (status === "authenticated" && session?.user && user.email === "nil") {
@@ -60,7 +63,7 @@ const Navbar = (): JSX.Element => {
             <Image src={logo} alt="" className="w-[100px] h-auto" />
           </Link>
 
-          <div className="flex items-center gap-2 lg:hidden">
+          {!inventoryMode && <div className="flex items-center gap-2 lg:hidden">
             <Dialog>
               <DialogTrigger asChild>
                 <Button
@@ -77,14 +80,14 @@ const Navbar = (): JSX.Element => {
             </Dialog>
             <Cart />
             <NotificationBell />
-          </div>
+          </div>}
 
-          <div className="hidden lg:block flex-1 max-w-md mx-4">
+          {!inventoryMode && <div className="hidden lg:block flex-1 max-w-md mx-4">
             <GlobalSearch
               placeholder="Search medications..."
               className="h-10"
             />
-          </div>
+          </div>}
 
           <div className="hidden lg:flex items-center gap-8">
             <Nav />
@@ -98,7 +101,7 @@ const Navbar = (): JSX.Element => {
             <ModeToggle />
           </div>
         </div>
-        <Advert />
+        {!inventoryMode && <Advert />}
       </header>
     </div>
   );

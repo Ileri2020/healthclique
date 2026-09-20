@@ -2,15 +2,20 @@
 import React from "react";
 import { Facebook, Instagram, Linkedin, Twitter, Users } from "lucide-react";
 import Link from "next/link";
+import { usePathname } from "next/navigation";
 import { SEO_CONFIG } from "../../../app/layout";
 import { cn } from "@/lib/utils"
 import { Button } from "@/components/ui/button";
 import { AffiliateDialog } from "./AffiliateDialog";
 
 export function Footer({ className }: { className?: string }) {
+  const pathname = usePathname();
   const [categories, setCategories] = React.useState<{ id: string, name: string }[]>([]);
 
+  const inventoryMode = pathname.startsWith("/stock") || pathname.startsWith("/sales") || pathname.startsWith("/expenses");
+
   React.useEffect(() => {
+    if (inventoryMode) return;
     const fetchCategories = async () => {
       try {
         const res = await fetch("/api/dbhandler?model=category");
@@ -21,7 +26,9 @@ export function Footer({ className }: { className?: string }) {
       }
     };
     fetchCategories();
-  }, []);
+  }, [inventoryMode]);
+
+  if (inventoryMode) return null;
 
   const socialMediaLinks = [
     { href: "#", icon: <Facebook className="h-4 w-4" />, label: "Facebook" },

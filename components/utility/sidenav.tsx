@@ -8,7 +8,7 @@ import { usePathname } from 'next/navigation';
 import { GlobalSearch } from "../myComponents/subs/GlobalSearch"
 import { useEffect, useState } from "react"
 import axios from "axios"
-import { ChevronRight, LayoutGrid, Stethoscope, Tag, ShoppingCart, MessageSquare, Camera, LogOut } from "lucide-react"
+import { Archive, ChevronRight, ClipboardList, DollarSign, LayoutGrid, Package, Stethoscope, Tag, ShoppingCart, MessageSquare, Camera, LogOut } from "lucide-react"
 import { Cart } from "../myComponents/subs/cart"
 import { Button } from "../ui/button";
 import { SnapPrescription } from "../myComponents/subs/SnapPrescription";
@@ -19,16 +19,18 @@ import { signOut } from "next-auth/react";
 import { Login, Signup } from "../myComponents/subs";
 
 const inventoryLinks = [
-    { path: "/stock", name: "Stock", title: "Stock entry" },
-    { path: "/sales", name: "Sales", title: "Sales entry" },
-    { path: "/stock/all", name: "Saved stocks", title: "Saved stock purchases" },
-    { path: "/stock/products", name: "Products", title: "Available stock products" },
+    { path: "/stock", name: "Stock", title: "Stock", icon: Package },
+    { path: "/sales", name: "Sales", title: "Sales", icon: ShoppingCart },
+    { path: "/stock/all", name: "All stock", title: "All stock", icon: Archive },
+    { path: "/sales/all", name: "All sales", title: "All sales", icon: ClipboardList },
+    { path: "/stock/products", name: "Products", title: "Products", icon: LayoutGrid },
+    { path: "/expenses", name: "Expenses", title: "Expenses", icon: DollarSign },
 ];
 
 const Sidenav = () => {
     const { user, setUser } = useAppContext();
     const pathname = usePathname();
-    const inventoryMode = pathname.startsWith("/stock/") || pathname.startsWith("/sales/") || pathname === "/stock" || pathname === "/sales";
+    const inventoryMode = pathname.startsWith("/stock/") || pathname.startsWith("/sales/") || pathname.startsWith("/expenses") || pathname === "/stock" || pathname === "/sales";
     const navigationLinks = inventoryMode ? inventoryLinks : Links.Links;
     const [categories, setCategories] = useState<any[]>([]);
     const [concerns, setConcerns] = useState<string[]>([]);
@@ -37,6 +39,7 @@ const Sidenav = () => {
     const [showAllConcerns, setShowAllConcerns] = useState(false);
 
     useEffect(() => {
+        if (inventoryMode) return;
         const fetchData = async () => {
             try {
                 const [catRes, concernRes] = await Promise.all([
@@ -50,7 +53,7 @@ const Sidenav = () => {
             }
         };
         fetchData();
-    }, []);
+    }, [inventoryMode]);
 
     const closeSheet = () => setOpen(false);
 
@@ -82,12 +85,12 @@ const Sidenav = () => {
                     </div>
 
                     {/* Search Section */}
-                    <div className="space-y-1 bg-muted/30 p-2 rounded-3xl border border-border/50">
+                    {!inventoryMode && <div className="space-y-1 bg-muted/30 p-2 rounded-3xl border border-border/50">
                         <h3 className="text-xs font-black uppercase tracking-widest text-muted-foreground/60 flex items-center gap-2">
                              Quick Find
                         </h3>
                         <GlobalSearch placeholder="Find meds..." className="h-12 rounded-2xl border-none shadow-sm focus-visible:ring-primary" />
-                    </div>
+                    </div>}
 
                     {/* Navigation Links */}
                     <div className="space-y-4">
@@ -95,7 +98,7 @@ const Sidenav = () => {
                         <nav className="flex flex-col gap-1">
                             {navigationLinks.map((link, index) => (
                                 (() => {
-                                    const isActive = pathname === link.path || (link.path === "/stock" && pathname.startsWith("/stock/")) || (link.path === "/sales" && pathname.startsWith("/sales/"));
+                                    const isActive = pathname === link.path || (link.path === "/stock" && pathname.startsWith("/stock/")) || (link.path === "/sales" && pathname.startsWith("/sales/")) || (link.path === "/expenses" && pathname.startsWith("/expenses"));
                                     return (
                                 <Link 
                                     href={link.path} 
@@ -105,7 +108,7 @@ const Sidenav = () => {
                                 >
                                     <div className="flex items-center gap-4">
                                         <div className={`p-2 rounded-xl border ${isActive ? "bg-white/20 border-white/30" : "bg-muted border-border group-hover:border-primary/30 group-hover:bg-primary/5"} transition-all`}>
-                                            <span className="text-xl shrink-0">{link.name}</span>
+                                            <link.icon className="h-5 w-5 shrink-0" aria-hidden="true" />
                                         </div>
                                         <span className="font-bold tracking-tight">{link.title}</span>
                                     </div>
@@ -118,7 +121,7 @@ const Sidenav = () => {
                     </div>
 
                     {/* Categories Section */}
-                    {categories.length > 0 && (
+                    {!inventoryMode && categories.length > 0 && (
                         <div className="space-y-4">
                             <h3 className="text-xs font-black uppercase tracking-widest text-muted-foreground/60 flex items-center gap-2 px-2">
                                 <LayoutGrid className="w-4 h-4" />
@@ -151,7 +154,7 @@ const Sidenav = () => {
                     )}
 
                     {/* Health Concerns Section */}
-                    {concerns.length > 0 && (
+                    {!inventoryMode && concerns.length > 0 && (
                         <div className="space-y-4">
                             <h3 className="text-xs font-black uppercase tracking-widest text-muted-foreground/60 flex items-center gap-2 px-2">
                                 <Stethoscope className="w-4 h-4" />

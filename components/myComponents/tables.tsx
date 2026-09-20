@@ -40,6 +40,7 @@ interface TablesProps {
   showTotals?: boolean
   minWidth?: string
   readOnly?: boolean
+  focusRowIndex?: number
 }
 
 function createBlankRow(columns: TableColumn[]) {
@@ -58,6 +59,7 @@ export function Tables({
   showTotals = false,
   minWidth = "1100px",
   readOnly = false,
+  focusRowIndex,
 }: TablesProps) {
   const [activeSuggestion, setActiveSuggestion] = useState<{ rowIndex: number; columnKey: string } | null>(null)
   const [quantityDialog, setQuantityDialog] = useState<{ rowIndex: number; column: TableColumn } | null>(null)
@@ -215,6 +217,7 @@ export function Tables({
                         <Input
                           type={column.type === "number" ? "number" : "text"}
                           className={column.type === "number" ? "max-w-[120px]" : undefined}
+                          autoFocus={column.key === "productName" && rowIndex === focusRowIndex}
                           value={displayValue}
                           placeholder={column.label}
                           onFocus={() => {

@@ -15,6 +15,7 @@ export function VisitTracker() {
 
   useEffect(() => {
     if (!pathname) return;
+    if (pathname.startsWith("/stock") || pathname.startsWith("/sales") || pathname.startsWith("/expenses")) return;
 
     // Get or create browser ID
     let browserId = localStorage.getItem("health-clique-browser-id");

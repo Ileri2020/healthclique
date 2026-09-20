@@ -90,6 +90,7 @@ const StockPage = () => {
   const [cachedProducts, setCachedProducts] = useState<InventoryProductName[]>([])
   const [loadingProducts, setLoadingProducts] = useState(false)
   const [saveState, setSaveState] = useState<"idle" | "saving" | "saved" | "error">("idle")
+  const [focusRowIndex, setFocusRowIndex] = useState<number | undefined>(undefined)
 
   const productNames = useMemo(
     () => cachedProducts,
@@ -128,6 +129,8 @@ const StockPage = () => {
             wholesalePcsSalesPrice: stock.wholesalePcsSalesPrice ?? "",
           }
         }))
+        const productName = searchParams.get("product")
+        if (productName) setFocusRowIndex(purchase.stocks.findIndex((stock: TableRow) => stock.productName === productName))
       })
       .catch(() => toast.error("Unable to load stock purchase"))
   }, [editId])
@@ -429,6 +432,7 @@ const StockPage = () => {
           restrictToOptions={["productName"]}
           showTotals
           minWidth="1050px"
+          focusRowIndex={focusRowIndex}
         />
       </div>
 
