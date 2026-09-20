@@ -138,9 +138,31 @@ export function Tables({
     }, {} as Record<string, number>)
   }, [activeRows, columns, showTotals])
 
+  useEffect(() => {
+    if (focusRowIndex !== undefined && focusRowIndex >= 0) {
+      const targetId = `cell-${focusRowIndex}-productName`
+      const timer = setTimeout(() => {
+        const element = document.getElementById(targetId)
+        if (element) {
+          element.focus({ preventScroll: true })
+        }
+      }, 100)
+      return () => clearTimeout(timer)
+    }
+  }, [focusRowIndex])
+
+  const filteredSuggestions = useMemo(() => {
+    if (!activeSuggestion) return []
+    const { rowIndex, columnKey } = activeSuggestion
+    const val = String(activeRows[rowIndex]?.[columnKey] ?? "").toLowerCase()
+    if (val.length < 4) return []
+    const list = autocomplete?.[columnKey] ?? []
+    return list.filter((item) => item.toLowerCase().includes(val)).slice(0, 10)
+  }, [activeSuggestion, activeRows, autocomplete])
+
   return (
     <div className="relative w-full max-w-full pb-14">
-      <div className="w-full max-w-full overflow-x-auto touch-pan-x scrollbar-thin">
+      <div className="w-full max-w-full overflow-x-auto touch-pan-x scrollbar-thin [webkit-overflow-scrolling:touch] [overscroll-behavior-x:contain]">
       <div style={{ minWidth }}>
         <Table className="bg-foreground/10">
         <TableHeader>
@@ -160,8 +182,6 @@ export function Tables({
             <TableRow key={rowIndex}>
               {columns.map((column) => {
                 const value = row[column.key]
-                const suggestions = autocomplete?.[column.key] ?? []
-
                 const isSn = column.key === "sn"
                 const isSnEditable = Boolean(snEditableRows[rowIndex])
                 const displayValue = isSn
@@ -169,6 +189,8 @@ export function Tables({
                   : value === undefined || value === null
                   ? ""
                   : String(value)
+
+                const isCurrentSuggestionActive = activeSuggestion?.rowIndex === rowIndex && activeSuggestion?.columnKey === column.key
 
                 return (
                   <TableCell
@@ -215,9 +237,9 @@ export function Tables({
                     ) : (
                       <div className="relative space-y-1">
                         <Input
+                          id={`cell-${rowIndex}-${column.key}`}
                           type={column.type === "number" ? "number" : "text"}
                           className={column.type === "number" ? "max-w-[120px]" : undefined}
-                          autoFocus={column.key === "productName" && rowIndex === focusRowIndex}
                           value={displayValue}
                           placeholder={column.label}
                           onFocus={() => {
@@ -244,9 +266,9 @@ export function Tables({
                             window.setTimeout(() => setActiveSuggestion(null), 150)
                           }}
                         />
-                        {activeSuggestion?.rowIndex === rowIndex && activeSuggestion.columnKey === column.key && displayValue.length >= 4 ? (
+                        {isCurrentSuggestionActive && filteredSuggestions.length > 0 ? (
                           <div className="absolute left-0 right-0 top-full z-50 mt-1 max-h-48 overflow-y-auto rounded-md border bg-popover p-1 text-popover-foreground shadow-md">
-                            {suggestions.filter((item) => item.toLowerCase().includes(displayValue.toLowerCase())).slice(0, 12).map((item) => (
+                            {filteredSuggestions.map((item) => (
                               <button
                                 key={item}
                                 type="button"
