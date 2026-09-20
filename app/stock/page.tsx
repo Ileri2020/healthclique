@@ -113,19 +113,27 @@ const StockPage = () => {
         if (purchase.date) setEntryDate(new Date(purchase.date))
         setTableRows(purchase.stocks.map((stock: TableRow) => {
           const isWs = Boolean(stock.wholesale)
+          const isCarton = Boolean(stock.carton)
+          const isPack = Boolean(stock.pack)
           return {
             ...stock,
+            carton: isCarton,
+            pack: isPack,
             wholesale: isWs,
+            cartonQty: isCarton ? (stock.cartonQty ?? "") : "",
+            packsPerCarton: isCarton ? (stock.packsPerCarton ?? "") : "",
+            packQty: isPack ? (stock.packQty ?? "") : "",
+            pcsCount: (isCarton || isPack) ? (stock.pcsCount ?? "") : "",
             pcsQty: stock.pcsQty ?? "",
             totalPcs: stock.totalPcs ?? "",
-            cartonSalesPrice: isWs ? (stock.wholesaleCartonSalesPrice ?? stock.cartonSalesPrice ?? "") : (stock.cartonSalesPrice ?? ""),
-            packSalesPrice: isWs ? (stock.wholesalePackSalesPrice ?? stock.packSalesPrice ?? "") : (stock.packSalesPrice ?? ""),
+            cartonSalesPrice: isCarton ? (isWs ? (stock.wholesaleCartonSalesPrice ?? stock.cartonSalesPrice ?? "") : (stock.cartonSalesPrice ?? "")) : "",
+            packSalesPrice: isPack ? (isWs ? (stock.wholesalePackSalesPrice ?? stock.packSalesPrice ?? "") : (stock.packSalesPrice ?? "")) : "",
             pcsSalesPrice: isWs ? (stock.wholesalePcsSalesPrice ?? stock.pcsSalesPrice ?? "") : (stock.pcsSalesPrice ?? ""),
-            retailCartonSalesPrice: stock.cartonSalesPrice ?? "",
-            retailPackSalesPrice: stock.packSalesPrice ?? "",
+            retailCartonSalesPrice: isCarton ? (stock.cartonSalesPrice ?? "") : "",
+            retailPackSalesPrice: isPack ? (stock.packSalesPrice ?? "") : "",
             retailPcsSalesPrice: stock.pcsSalesPrice ?? "",
-            wholesaleCartonSalesPrice: stock.wholesaleCartonSalesPrice ?? "",
-            wholesalePackSalesPrice: stock.wholesalePackSalesPrice ?? "",
+            wholesaleCartonSalesPrice: isCarton ? (stock.wholesaleCartonSalesPrice ?? "") : "",
+            wholesalePackSalesPrice: isPack ? (stock.wholesalePackSalesPrice ?? "") : "",
             wholesalePcsSalesPrice: stock.wholesalePcsSalesPrice ?? "",
           }
         }))
@@ -163,80 +171,83 @@ const StockPage = () => {
       const isWholesale = Boolean(row.wholesale)
       const modeChanged = isWholesale !== wasWholesale
 
-      const cQty = row.cartonQty !== "" && row.cartonQty !== undefined && row.cartonQty !== null ? Number(row.cartonQty) : 0
-      const ppc = row.packsPerCarton !== "" && row.packsPerCarton !== undefined && row.packsPerCarton !== null ? Number(row.packsPerCarton) : 1
-      const pkQty = row.packQty !== "" && row.packQty !== undefined && row.packQty !== null
-        ? Number(row.packQty)
-        : (row.qty !== "" && row.qty !== undefined && row.qty !== null ? Number(row.qty) : 0)
-      const pcQty = row.pcsQty !== "" && row.pcsQty !== undefined && row.pcsQty !== null ? Number(row.pcsQty) : 0
-      const pCount = row.pcsCount !== "" && row.pcsCount !== undefined && row.pcsCount !== null ? Number(row.pcsCount) : 1
+      const isCarton = Boolean(row.carton)
+      const isPack = Boolean(row.pack)
 
-      const cartonPieces = cQty * ppc * pCount
-      const packPieces = pkQty * pCount
+      const cQty = isCarton && row.cartonQty !== "" && row.cartonQty !== undefined && row.cartonQty !== null ? Number(row.cartonQty) : 0
+      const ppc = isCarton && row.packsPerCarton !== "" && row.packsPerCarton !== undefined && row.packsPerCarton !== null ? Number(row.packsPerCarton) : 1
+      const pkQty = isPack && row.packQty !== "" && row.packQty !== undefined && row.packQty !== null
+        ? Number(row.packQty)
+        : (isPack && row.qty !== "" && row.qty !== undefined && row.qty !== null ? Number(row.qty) : 0)
+      const pcQty = row.pcsQty !== "" && row.pcsQty !== undefined && row.pcsQty !== null ? Number(row.pcsQty) : 0
+      const pCount = (isCarton || isPack) && row.pcsCount !== "" && row.pcsCount !== undefined && row.pcsCount !== null ? Number(row.pcsCount) : 1
+
+      const cartonPieces = isCarton ? cQty * ppc * pCount : 0
+      const packPieces = isPack ? pkQty * pCount : 0
       const loosePieces = pcQty
 
-      const hasQuantity = cQty > 0 || pkQty > 0 || pcQty > 0
+      const hasQuantity = (isCarton && cQty > 0) || (isPack && pkQty > 0) || pcQty > 0
       const calculatedTotalPcs = cartonPieces + packPieces + loosePieces
       const computedTotalPcs = hasQuantity ? calculatedTotalPcs : (row.totalPcs !== "" && row.totalPcs !== undefined ? row.totalPcs : "")
 
-      const totalPacks = (cQty * ppc) + pkQty + (pCount > 0 ? pcQty / pCount : 0)
+      const totalPacks = (isCarton ? cQty * ppc : 0) + (isPack ? pkQty : 0) + ((isCarton || isPack) && pCount > 0 ? pcQty / pCount : 0)
       const totalPieces = hasQuantity ? calculatedTotalPcs : (Number(row.totalPcs) || 0)
 
       const costValue = row.costPrice === "" || row.costPrice === undefined || row.costPrice === null ? undefined : Number(row.costPrice)
       const costPerPiece = costValue !== undefined && !Number.isNaN(costValue) && totalPieces > 0
         ? costValue / totalPieces
         : undefined
-      const costPerPack = costPerPiece !== undefined
+      const costPerPack = isPack && costPerPiece !== undefined
         ? costPerPiece * pCount
-        : (costValue !== undefined && totalPacks > 0 ? costValue / totalPacks : undefined)
-      const costPerCarton = costPerPack !== undefined && ppc > 0
+        : (isPack && costValue !== undefined && totalPacks > 0 ? costValue / totalPacks : undefined)
+      const costPerCarton = isCarton && costPerPack !== undefined && ppc > 0
         ? costPerPack * ppc
         : undefined
 
-      const suggestedRetailCarton = costPerCarton !== undefined ? Number((costPerCarton * 1.3).toFixed(2)) : ""
-      const suggestedRetailPack = costPerPack !== undefined ? Number((costPerPack * 1.3).toFixed(2)) : ""
+      const suggestedRetailCarton = isCarton && costPerCarton !== undefined ? Number((costPerCarton * 1.3).toFixed(2)) : ""
+      const suggestedRetailPack = isPack && costPerPack !== undefined ? Number((costPerPack * 1.3).toFixed(2)) : ""
       const suggestedRetailPcs = costPerPiece !== undefined ? Number((costPerPiece * 1.3).toFixed(2)) : ""
 
-      const suggestedWholesaleCarton = costPerCarton !== undefined ? Number((costPerCarton * 1.1).toFixed(2)) : ""
-      const suggestedWholesalePack = costPerPack !== undefined ? Number((costPerPack * 1.1).toFixed(2)) : ""
+      const suggestedWholesaleCarton = isCarton && costPerCarton !== undefined ? Number((costPerCarton * 1.1).toFixed(2)) : ""
+      const suggestedWholesalePack = isPack && costPerPack !== undefined ? Number((costPerPack * 1.1).toFixed(2)) : ""
       const suggestedWholesalePcs = costPerPiece !== undefined ? Number((costPerPiece * 1.1).toFixed(2)) : ""
 
       const quantityOrCostChanged = ["costPrice", "carton", "cartonQty", "packsPerCarton", "pack", "packQty", "pcsCount", "pcsQty"].some(
         (key) => row[key] !== previousRow?.[key]
       )
 
-      let retailCarton = row.retailCartonSalesPrice ?? previousRow?.retailCartonSalesPrice ?? ""
-      let retailPack = row.retailPackSalesPrice ?? previousRow?.retailPackSalesPrice ?? ""
+      let retailCarton = isCarton ? (row.retailCartonSalesPrice ?? previousRow?.retailCartonSalesPrice ?? "") : ""
+      let retailPack = isPack ? (row.retailPackSalesPrice ?? previousRow?.retailPackSalesPrice ?? "") : ""
       let retailPcs = row.retailPcsSalesPrice ?? previousRow?.retailPcsSalesPrice ?? ""
 
-      let wholesaleCarton = row.wholesaleCartonSalesPrice ?? previousRow?.wholesaleCartonSalesPrice ?? ""
-      let wholesalePack = row.wholesalePackSalesPrice ?? previousRow?.wholesalePackSalesPrice ?? ""
+      let wholesaleCarton = isCarton ? (row.wholesaleCartonSalesPrice ?? previousRow?.wholesaleCartonSalesPrice ?? "") : ""
+      let wholesalePack = isPack ? (row.wholesalePackSalesPrice ?? previousRow?.wholesalePackSalesPrice ?? "") : ""
       let wholesalePcs = row.wholesalePcsSalesPrice ?? previousRow?.wholesalePcsSalesPrice ?? ""
 
       if (modeChanged) {
         if (isWholesale) {
-          retailCarton = row.cartonSalesPrice !== "" && row.cartonSalesPrice !== undefined ? row.cartonSalesPrice : (retailCarton || suggestedRetailCarton)
-          retailPack = row.packSalesPrice !== "" && row.packSalesPrice !== undefined ? row.packSalesPrice : (retailPack || suggestedRetailPack)
+          retailCarton = isCarton ? (row.cartonSalesPrice !== "" && row.cartonSalesPrice !== undefined ? row.cartonSalesPrice : (retailCarton || suggestedRetailCarton)) : ""
+          retailPack = isPack ? (row.packSalesPrice !== "" && row.packSalesPrice !== undefined ? row.packSalesPrice : (retailPack || suggestedRetailPack)) : ""
           retailPcs = row.pcsSalesPrice !== "" && row.pcsSalesPrice !== undefined ? row.pcsSalesPrice : (retailPcs || suggestedRetailPcs)
-          wholesaleCarton = wholesaleCarton || suggestedWholesaleCarton
-          wholesalePack = wholesalePack || suggestedWholesalePack
+          wholesaleCarton = isCarton ? (wholesaleCarton || suggestedWholesaleCarton) : ""
+          wholesalePack = isPack ? (wholesalePack || suggestedWholesalePack) : ""
           wholesalePcs = wholesalePcs || suggestedWholesalePcs
         } else {
-          wholesaleCarton = row.cartonSalesPrice !== "" && row.cartonSalesPrice !== undefined ? row.cartonSalesPrice : (wholesaleCarton || suggestedWholesaleCarton)
-          wholesalePack = row.packSalesPrice !== "" && row.packSalesPrice !== undefined ? row.packSalesPrice : (wholesalePack || suggestedWholesalePack)
+          wholesaleCarton = isCarton ? (row.cartonSalesPrice !== "" && row.cartonSalesPrice !== undefined ? row.cartonSalesPrice : (wholesaleCarton || suggestedWholesaleCarton)) : ""
+          wholesalePack = isPack ? (row.packSalesPrice !== "" && row.packSalesPrice !== undefined ? row.packSalesPrice : (wholesalePack || suggestedWholesalePack)) : ""
           wholesalePcs = row.pcsSalesPrice !== "" && row.pcsSalesPrice !== undefined ? row.pcsSalesPrice : (wholesalePcs || suggestedWholesalePcs)
-          retailCarton = retailCarton || suggestedRetailCarton
-          retailPack = retailPack || suggestedRetailPack
+          retailCarton = isCarton ? (retailCarton || suggestedRetailCarton) : ""
+          retailPack = isPack ? (retailPack || suggestedRetailPack) : ""
           retailPcs = retailPcs || suggestedRetailPcs
         }
       } else {
         if (isWholesale) {
-          if (row.cartonSalesPrice !== previousRow?.cartonSalesPrice) wholesaleCarton = row.cartonSalesPrice
-          if (row.packSalesPrice !== previousRow?.packSalesPrice) wholesalePack = row.packSalesPrice
+          if (isCarton && row.cartonSalesPrice !== previousRow?.cartonSalesPrice) wholesaleCarton = row.cartonSalesPrice
+          if (isPack && row.packSalesPrice !== previousRow?.packSalesPrice) wholesalePack = row.packSalesPrice
           if (row.pcsSalesPrice !== previousRow?.pcsSalesPrice) wholesalePcs = row.pcsSalesPrice
         } else {
-          if (row.cartonSalesPrice !== previousRow?.cartonSalesPrice) retailCarton = row.cartonSalesPrice
-          if (row.packSalesPrice !== previousRow?.packSalesPrice) retailPack = row.packSalesPrice
+          if (isCarton && row.cartonSalesPrice !== previousRow?.cartonSalesPrice) retailCarton = row.cartonSalesPrice
+          if (isPack && row.packSalesPrice !== previousRow?.packSalesPrice) retailPack = row.packSalesPrice
           if (row.pcsSalesPrice !== previousRow?.pcsSalesPrice) retailPcs = row.pcsSalesPrice
         }
       }
@@ -250,33 +261,39 @@ const StockPage = () => {
           wholesalePack = suggestedWholesalePack
           wholesalePcs = suggestedWholesalePcs
         } else {
-          if (retailCarton === "") retailCarton = suggestedRetailCarton
-          if (retailPack === "") retailPack = suggestedRetailPack
+          if (isCarton && retailCarton === "") retailCarton = suggestedRetailCarton
+          if (isPack && retailPack === "") retailPack = suggestedRetailPack
           if (retailPcs === "") retailPcs = suggestedRetailPcs
-          if (wholesaleCarton === "") wholesaleCarton = suggestedWholesaleCarton
-          if (wholesalePack === "") wholesalePack = suggestedWholesalePack
+          if (isCarton && wholesaleCarton === "") wholesaleCarton = suggestedWholesaleCarton
+          if (isPack && wholesalePack === "") wholesalePack = suggestedWholesalePack
           if (wholesalePcs === "") wholesalePcs = suggestedWholesalePcs
         }
       }
 
-      const activeCarton = isWholesale ? wholesaleCarton : retailCarton
-      const activePack = isWholesale ? wholesalePack : retailPack
+      const activeCarton = isCarton ? (isWholesale ? wholesaleCarton : retailCarton) : ""
+      const activePack = isPack ? (isWholesale ? wholesalePack : retailPack) : ""
       const activePcs = isWholesale ? wholesalePcs : retailPcs
 
       return {
         ...row,
+        carton: isCarton,
+        pack: isPack,
+        cartonQty: isCarton ? row.cartonQty : "",
+        packsPerCarton: isCarton ? row.packsPerCarton : "",
+        packQty: isPack ? row.packQty : "",
+        pcsCount: (isCarton || isPack) ? row.pcsCount : "",
         totalPcs: computedTotalPcs,
-        cartonCostPrice: costPerCarton !== undefined ? Number(costPerCarton.toFixed(2)) : "",
-        packCostPrice: costPerPack !== undefined ? Number(costPerPack.toFixed(2)) : "",
+        cartonCostPrice: isCarton && costPerCarton !== undefined ? Number(costPerCarton.toFixed(2)) : "",
+        packCostPrice: isPack && costPerPack !== undefined ? Number(costPerPack.toFixed(2)) : "",
         pcsCostPrice: costPerPiece !== undefined ? Number(costPerPiece.toFixed(2)) : "",
         cartonSalesPrice: activeCarton,
         packSalesPrice: activePack,
         pcsSalesPrice: activePcs,
-        retailCartonSalesPrice: retailCarton,
-        retailPackSalesPrice: retailPack,
+        retailCartonSalesPrice: isCarton ? retailCarton : "",
+        retailPackSalesPrice: isPack ? retailPack : "",
         retailPcsSalesPrice: retailPcs,
-        wholesaleCartonSalesPrice: wholesaleCarton,
-        wholesalePackSalesPrice: wholesalePack,
+        wholesaleCartonSalesPrice: isCarton ? wholesaleCarton : "",
+        wholesalePackSalesPrice: isPack ? wholesalePack : "",
         wholesalePcsSalesPrice: wholesalePcs,
       }
     })
@@ -287,18 +304,17 @@ const StockPage = () => {
   const handleSubmit = async () => {
     if (saveState === "saving") return
     const validRows = tableRows.filter((row) => row.productName)
-    const invalidRow = validRows.find(
-      (row) =>
-        row.costPrice === "" ||
-        row.costPrice === undefined ||
-        Number.isNaN(Number(row.costPrice)) ||
-        ((row.packSalesPrice === "" || row.packSalesPrice === undefined || row.packSalesPrice === null) &&
-          (row.pcsSalesPrice === "" || row.pcsSalesPrice === undefined || row.pcsSalesPrice === null))
-    )
+    const invalidRow = validRows.find((row) => {
+      if (row.costPrice === "" || row.costPrice === undefined || Number.isNaN(Number(row.costPrice))) return true
+      const hasCartonPrice = row.carton && (row.cartonSalesPrice !== "" && row.cartonSalesPrice !== undefined && row.cartonSalesPrice !== null)
+      const hasPackPrice = row.pack && (row.packSalesPrice !== "" && row.packSalesPrice !== undefined && row.packSalesPrice !== null)
+      const hasPcsPrice = row.pcsSalesPrice !== "" && row.pcsSalesPrice !== undefined && row.pcsSalesPrice !== null
+      return !hasCartonPrice && !hasPackPrice && !hasPcsPrice
+    })
 
     if (invalidRow) {
       setSaveState("error")
-      toast.error("Each stock row requires cost price plus either pack sales price or pcs sales price.")
+      toast.error("Each stock row requires cost price plus sales price for your selected units.")
       return
     }
 

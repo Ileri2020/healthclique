@@ -29,22 +29,37 @@ export async function PUT(request: Request, { params }: { params: Promise<{ id: 
         amountPaid,
         stocks: {
           deleteMany: {},
-          create: rows.map((row: any) => ({
-            sn: row.sn === "" ? undefined : Number(row.sn), productName: String(row.productName || ""),
-            companyName: body.companyName ? String(body.companyName) : undefined, repName: body.repName ? String(body.repName) : undefined,
-            carton: Boolean(row.carton), cartonQty: row.cartonQty === "" ? undefined : Number(row.cartonQty),
-            packsPerCarton: row.packsPerCarton === "" ? undefined : Number(row.packsPerCarton), pack: Boolean(row.pack),
-            pcsCount: row.pcsCount === "" ? undefined : Number(row.pcsCount), packQty: row.packQty === "" ? undefined : Number(row.packQty),
-            pcsQty: row.pcsQty === "" ? undefined : Number(row.pcsQty),
-            totalPcs: Number(row.totalPcs) || 0, qty: row.packQty === "" ? undefined : Number(row.packQty), costPrice: Number(row.costPrice) || undefined,
-            cartonCostPrice: Number(row.cartonCostPrice) || undefined, packCostPrice: Number(row.packCostPrice) || undefined, pcsCostPrice: Number(row.pcsCostPrice) || undefined,
-            cartonSalesPrice: Number(row.retailCartonSalesPrice || (!row.wholesale ? row.cartonSalesPrice : undefined) || undefined) || undefined,
-            packSalesPrice: Number(row.retailPackSalesPrice || (!row.wholesale ? row.packSalesPrice : undefined) || undefined) || undefined,
-            pcsSalesPrice: Number(row.retailPcsSalesPrice || (!row.wholesale ? row.pcsSalesPrice : undefined) || undefined) || undefined,
-            wholesaleCartonSalesPrice: Number(row.wholesaleCartonSalesPrice || (row.wholesale ? row.cartonSalesPrice : undefined) || undefined) || undefined,
-            wholesalePackSalesPrice: Number(row.wholesalePackSalesPrice || (row.wholesale ? row.packSalesPrice : undefined) || undefined) || undefined,
-            wholesalePcsSalesPrice: Number(row.wholesalePcsSalesPrice || (row.wholesale ? row.pcsSalesPrice : undefined) || undefined) || undefined,
-          })),
+          create: rows.map((row: any) => {
+            const carton = Boolean(row.carton)
+            const pack = Boolean(row.pack)
+            const isWs = Boolean(row.wholesale)
+
+            return {
+              sn: row.sn === "" || row.sn === undefined || row.sn === null ? undefined : Number(row.sn),
+              productName: String(row.productName || ""),
+              companyName: body.companyName ? String(body.companyName) : undefined,
+              repName: body.repName ? String(body.repName) : undefined,
+              carton,
+              cartonQty: carton && row.cartonQty !== "" && row.cartonQty !== undefined && row.cartonQty !== null ? Number(row.cartonQty) : undefined,
+              packsPerCarton: carton && row.packsPerCarton !== "" && row.packsPerCarton !== undefined && row.packsPerCarton !== null ? Number(row.packsPerCarton) : undefined,
+              pack,
+              pcsCount: (carton || pack) && row.pcsCount !== "" && row.pcsCount !== undefined && row.pcsCount !== null ? Number(row.pcsCount) : undefined,
+              packQty: pack && row.packQty !== "" && row.packQty !== undefined && row.packQty !== null ? Number(row.packQty) : undefined,
+              pcsQty: row.pcsQty === "" || row.pcsQty === undefined || row.pcsQty === null ? undefined : Number(row.pcsQty),
+              totalPcs: Number(row.totalPcs) || 0,
+              qty: pack ? (row.packQty === "" || row.packQty === undefined || row.packQty === null ? undefined : Number(row.packQty)) : undefined,
+              costPrice: row.costPrice === "" || row.costPrice === undefined || row.costPrice === null ? undefined : Number(row.costPrice),
+              cartonCostPrice: carton && row.cartonCostPrice !== "" && row.cartonCostPrice !== undefined && row.cartonCostPrice !== null ? Number(row.cartonCostPrice) : undefined,
+              packCostPrice: pack && row.packCostPrice !== "" && row.packCostPrice !== undefined && row.packCostPrice !== null ? Number(row.packCostPrice) : undefined,
+              pcsCostPrice: row.pcsCostPrice === "" || row.pcsCostPrice !== undefined && row.pcsCostPrice !== null ? Number(row.pcsCostPrice) : undefined,
+              cartonSalesPrice: carton ? (row.retailCartonSalesPrice ? Number(row.retailCartonSalesPrice) : (!isWs && row.cartonSalesPrice ? Number(row.cartonSalesPrice) : undefined)) : undefined,
+              packSalesPrice: pack ? (row.retailPackSalesPrice ? Number(row.retailPackSalesPrice) : (!isWs && row.packSalesPrice ? Number(row.packSalesPrice) : undefined)) : undefined,
+              pcsSalesPrice: row.retailPcsSalesPrice ? Number(row.retailPcsSalesPrice) : (!isWs && row.pcsSalesPrice ? Number(row.pcsSalesPrice) : undefined),
+              wholesaleCartonSalesPrice: carton ? (row.wholesaleCartonSalesPrice ? Number(row.wholesaleCartonSalesPrice) : (isWs && row.cartonSalesPrice ? Number(row.cartonSalesPrice) : undefined)) : undefined,
+              wholesalePackSalesPrice: pack ? (row.wholesalePackSalesPrice ? Number(row.wholesalePackSalesPrice) : (isWs && row.packSalesPrice ? Number(row.packSalesPrice) : undefined)) : undefined,
+              wholesalePcsSalesPrice: row.wholesalePcsSalesPrice ? Number(row.wholesalePcsSalesPrice) : (isWs && row.pcsSalesPrice ? Number(row.pcsSalesPrice) : undefined),
+            }
+          }),
         },
       },
       include: { stocks: true },
