@@ -169,15 +169,15 @@ export async function POST(req: Request) {
 
             const rawWholesaleCarton = row.wholesaleCartonSalesPrice !== "" && row.wholesaleCartonSalesPrice !== undefined
               ? Number(row.wholesaleCartonSalesPrice)
-              : (isWs && row.cartonSalesPrice !== "" && row.cartonSalesPrice !== undefined ? Number(row.cartonSalesPrice) : undefined)
+              : undefined
 
             const rawWholesalePack = row.wholesalePackSalesPrice !== "" && row.wholesalePackSalesPrice !== undefined
               ? Number(row.wholesalePackSalesPrice)
-              : (isWs && row.packSalesPrice !== "" && row.packSalesPrice !== undefined ? Number(row.packSalesPrice) : undefined)
+              : undefined
 
             const rawWholesalePcs = row.wholesalePcsSalesPrice !== "" && row.wholesalePcsSalesPrice !== undefined
               ? Number(row.wholesalePcsSalesPrice)
-              : (isWs && row.pcsSalesPrice !== "" && row.pcsSalesPrice !== undefined ? Number(row.pcsSalesPrice) : undefined)
+              : undefined
 
             const cartonSalesPrice = rawRetailCarton ?? (costPerCarton !== undefined ? Number((costPerCarton * retailMarkup).toFixed(2)) : undefined)
             const finalPackSalesPrice = rawRetailPack ?? (costPerPack !== undefined ? Number((costPerPack * retailMarkup).toFixed(2)) : undefined)

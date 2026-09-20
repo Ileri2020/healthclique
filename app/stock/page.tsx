@@ -218,10 +218,16 @@ const StockPage = () => {
           retailCarton = row.cartonSalesPrice !== "" && row.cartonSalesPrice !== undefined ? row.cartonSalesPrice : (retailCarton || suggestedRetailCarton)
           retailPack = row.packSalesPrice !== "" && row.packSalesPrice !== undefined ? row.packSalesPrice : (retailPack || suggestedRetailPack)
           retailPcs = row.pcsSalesPrice !== "" && row.pcsSalesPrice !== undefined ? row.pcsSalesPrice : (retailPcs || suggestedRetailPcs)
+          wholesaleCarton = wholesaleCarton || suggestedWholesaleCarton
+          wholesalePack = wholesalePack || suggestedWholesalePack
+          wholesalePcs = wholesalePcs || suggestedWholesalePcs
         } else {
           wholesaleCarton = row.cartonSalesPrice !== "" && row.cartonSalesPrice !== undefined ? row.cartonSalesPrice : (wholesaleCarton || suggestedWholesaleCarton)
           wholesalePack = row.packSalesPrice !== "" && row.packSalesPrice !== undefined ? row.packSalesPrice : (wholesalePack || suggestedWholesalePack)
           wholesalePcs = row.pcsSalesPrice !== "" && row.pcsSalesPrice !== undefined ? row.pcsSalesPrice : (wholesalePcs || suggestedWholesalePcs)
+          retailCarton = retailCarton || suggestedRetailCarton
+          retailPack = retailPack || suggestedRetailPack
+          retailPcs = retailPcs || suggestedRetailPcs
         }
       } else {
         if (isWholesale) {
