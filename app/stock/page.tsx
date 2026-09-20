@@ -91,6 +91,8 @@ const StockPage = () => {
   const [loadingProducts, setLoadingProducts] = useState(false)
   const [saveState, setSaveState] = useState<"idle" | "saving" | "saved" | "error">("idle")
   const [focusRowIndex, setFocusRowIndex] = useState<number | undefined>(undefined)
+  const [companies, setCompanies] = useState<Array<{ companyName: string; repName: string }>>([])
+  const [companyDropdownOpen, setCompanyDropdownOpen] = useState(false)
 
   const productNames = useMemo(
     () => cachedProducts,
@@ -99,7 +101,17 @@ const StockPage = () => {
 
   useEffect(() => {
     loadInventoryProducts()
+    fetch("/api/inventory/companies")
+      .then((res) => res.json())
+      .then((data) => setCompanies(Array.isArray(data) ? data : []))
+      .catch(() => setCompanies([]))
   }, [])
+
+  const filteredCompanies = useMemo(() => {
+    const query = companyName.trim().toLowerCase()
+    if (query.length < 3) return []
+    return companies.filter((c) => c.companyName.toLowerCase().includes(query)).slice(0, 8)
+  }, [companyName, companies])
 
   useEffect(() => {
     if (!editId) return
@@ -426,9 +438,52 @@ const StockPage = () => {
 
       <div className="rounded-lg border bg-card p-2 sm:p-4 overflow-x-auto max-w-full">
         <div className="mb-4 grid gap-3 grid-cols-1 md:grid-cols-2 max-w-lg mx-auto">
-          <div>
+          <div className="relative">
             <Label htmlFor="company-name">Company name</Label>
-            <input id="company-name" className="mt-1 w-full rounded border bg-transparent px-3 py-2 text-sm" value={companyName} onChange={(event) => { setSaveState("idle"); setCompanyName(event.target.value) }} placeholder="Supplier company" />
+            <input
+              id="company-name"
+              className="mt-1 w-full rounded border bg-transparent px-3 py-2 text-sm"
+              value={companyName}
+              onFocus={() => {
+                if (companyName.trim().length >= 3) setCompanyDropdownOpen(true)
+              }}
+              onChange={(event) => {
+                setSaveState("idle")
+                const val = event.target.value
+                setCompanyName(val)
+                setCompanyDropdownOpen(val.trim().length >= 3)
+                const match = companies.find((c) => c.companyName.toLowerCase() === val.trim().toLowerCase())
+                if (match?.repName && !repName) {
+                  setRepName(match.repName)
+                }
+              }}
+              onBlur={() => {
+                window.setTimeout(() => setCompanyDropdownOpen(false), 150)
+              }}
+              placeholder="Supplier company"
+            />
+            {companyDropdownOpen && filteredCompanies.length > 0 ? (
+              <div className="absolute left-0 right-0 top-full z-50 mt-1 max-h-48 overflow-y-auto rounded-md border bg-popover p-1 text-popover-foreground shadow-md">
+                {filteredCompanies.map((c) => (
+                  <button
+                    key={c.companyName}
+                    type="button"
+                    className="flex w-full items-center justify-between rounded px-2 py-1.5 text-left text-sm hover:bg-accent"
+                    onMouseDown={(event) => {
+                      event.preventDefault()
+                      setCompanyName(c.companyName)
+                      if (c.repName) {
+                        setRepName(c.repName)
+                      }
+                      setCompanyDropdownOpen(false)
+                    }}
+                  >
+                    <span className="font-medium">{c.companyName}</span>
+                    {c.repName ? <span className="text-xs text-muted-foreground">Rep: {c.repName}</span> : null}
+                  </button>
+                ))}
+              </div>
+            ) : null}
           </div>
           <div>
             <Label htmlFor="rep-name">Rep name</Label>

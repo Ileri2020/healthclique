@@ -80,12 +80,25 @@ const SalesPage = () => {
   const searchParams = useSearchParams()
   const editId = searchParams.get("edit")
 
+  const [customerList, setCustomerList] = useState<string[]>([])
+  const [customerDropdownOpen, setCustomerDropdownOpen] = useState(false)
+
   const productNames = useMemo(() => cachedProducts, [cachedProducts])
 
   useEffect(() => {
     loadInventoryProducts()
     loadStockPricing()
+    fetch("/api/inventory/customers")
+      .then((res) => res.json())
+      .then((data) => setCustomerList(Array.isArray(data) ? data : []))
+      .catch(() => setCustomerList([]))
   }, [])
+
+  const filteredCustomers = useMemo(() => {
+    const query = customerName.trim().toLowerCase()
+    if (query.length < 3) return []
+    return customerList.filter((name) => name.toLowerCase().includes(query)).slice(0, 8)
+  }, [customerName, customerList])
 
   useEffect(() => {
     if (!editId) return
@@ -383,16 +396,44 @@ const SalesPage = () => {
 
       <div className="rounded-lg border bg-card p-4">
         <div className="mb-4 flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
-          <div className="flex flex-1 flex-col gap-2 md:max-w-sm">
+          <div className="relative flex flex-1 flex-col gap-2 md:max-w-sm">
             <Label htmlFor="customer-name">Customer name</Label>
             <input
               id="customer-name"
               type="text"
               className="w-full rounded border bg-transparent px-3 py-2 text-sm"
               value={customerName}
-              onChange={(event) => setCustomerName(event.target.value)}
+              onFocus={() => {
+                if (customerName.trim().length >= 3) setCustomerDropdownOpen(true)
+              }}
+              onChange={(event) => {
+                const val = event.target.value
+                setCustomerName(val)
+                setCustomerDropdownOpen(val.trim().length >= 3)
+              }}
+              onBlur={() => {
+                window.setTimeout(() => setCustomerDropdownOpen(false), 150)
+              }}
               placeholder="Enter customer name"
             />
+            {customerDropdownOpen && filteredCustomers.length > 0 ? (
+              <div className="absolute left-0 right-0 top-full z-50 mt-1 max-h-48 overflow-y-auto rounded-md border bg-popover p-1 text-popover-foreground shadow-md">
+                {filteredCustomers.map((name) => (
+                  <button
+                    key={name}
+                    type="button"
+                    className="block w-full rounded px-2 py-1.5 text-left text-sm font-medium hover:bg-accent"
+                    onMouseDown={(event) => {
+                      event.preventDefault()
+                      setCustomerName(name)
+                      setCustomerDropdownOpen(false)
+                    }}
+                  >
+                    {name}
+                  </button>
+                ))}
+              </div>
+            ) : null}
           </div>
           <div className="flex flex-col gap-2 md:max-w-xs">
             <Label htmlFor="sales-date">Date</Label>
