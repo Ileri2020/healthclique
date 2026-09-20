@@ -150,7 +150,7 @@ export function Tables({
                 key={column.key}
                 className={`${column.key === "productName" ? "w-[300px] min-w-[260px]" : ""} ${column.type === "boolean" ? "w-[50px] max-w-[50px] min-w-[50px]" : ""} ${column.className ?? ""}`}
               >
-                {column.label}
+                <div className="flex items-center justify-center text-center">{column.label}</div>
               </TableHead>
             ))}
           </TableRow>

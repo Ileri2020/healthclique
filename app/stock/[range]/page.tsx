@@ -51,7 +51,7 @@ export default function StockHistoryPage({ params }: { params: Promise<{ range: 
       </div>
       <div className="overflow-x-auto rounded-lg border">
         <Table>
-          <TableHeader><TableRow><TableHead>Date</TableHead><TableHead className="min-w-[200px]">Company name</TableHead><TableHead className="min-w-[200px]">Rep name</TableHead><TableHead>Total</TableHead><TableHead>Amount paid</TableHead><TableHead>Balance</TableHead><TableHead>Delete</TableHead></TableRow></TableHeader>
+          <TableHeader><TableRow><TableHead><div className="flex items-center justify-center text-center">Date</div></TableHead><TableHead className="min-w-[200px]"><div className="flex items-center justify-center text-center">Company name</div></TableHead><TableHead className="min-w-[200px]"><div className="flex items-center justify-center text-center">Rep name</div></TableHead><TableHead><div className="flex items-center justify-center text-center">Total</div></TableHead><TableHead><div className="flex items-center justify-center text-center">Amount paid</div></TableHead><TableHead><div className="flex items-center justify-center text-center">Balance</div></TableHead><TableHead><div className="flex items-center justify-center text-center">Delete</div></TableHead></TableRow></TableHeader>
           <TableBody>
             {loading ? <TableRow><TableCell colSpan={7}>Loading stocks...</TableCell></TableRow> : stocks.length === 0 ? <TableRow><TableCell colSpan={7}>No stock purchases found.</TableCell></TableRow> : stocks.map((stock, index) => {
               const id = String(stock.id)
