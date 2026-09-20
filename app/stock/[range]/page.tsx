@@ -1,6 +1,6 @@
 "use client"
 
-import { use, useEffect, useState } from "react"
+import { use, useEffect, useMemo, useState } from "react"
 import { format } from "date-fns"
 import { Button } from "@/components/ui/button"
 import Link from "next/link"
@@ -21,6 +21,11 @@ export default function StockHistoryPage({ params }: { params: Promise<{ range: 
       .then((data) => setStocks(Array.isArray(data) ? data : []))
       .finally(() => setLoading(false))
   }, [from, to])
+
+  const totalStock = useMemo(() =>
+    stocks.reduce((sum, stock) => sum + Number(stock.total || 0), 0),
+    [stocks],
+  )
 
   const deletePurchase = async (id: string) => {
     if (!window.confirm("Delete this saved stock purchase?")) return
@@ -63,6 +68,14 @@ export default function StockHistoryPage({ params }: { params: Promise<{ range: 
           </TableBody>
         </Table>
       </div>
+      {!loading && stocks.length > 0 && (
+        <div className="flex justify-end">
+          <div className="rounded-lg border bg-muted/30 px-4 py-3 text-right">
+            <p className="text-sm text-muted-foreground">Total stock for this range</p>
+            <p className="text-xl font-semibold">₦{totalStock.toLocaleString()}</p>
+          </div>
+        </div>
+      )}
     </main>
   )
 }

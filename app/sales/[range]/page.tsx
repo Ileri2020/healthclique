@@ -1,6 +1,6 @@
 "use client"
 
-import { use, useEffect, useState } from "react"
+import { use, useEffect, useMemo, useState } from "react"
 import { format } from "date-fns"
 import { Button } from "@/components/ui/button"
 import Link from "next/link"
@@ -33,6 +33,11 @@ export default function SalesHistoryPage({ params }: { params: Promise<{ range: 
       .then((data) => setSales(Array.isArray(data) ? data : []))
       .finally(() => setLoading(false))
   }, [from, to])
+
+  const totalSales = useMemo(() =>
+    sales.reduce((sum, sale) => sum + Number(sale.total || 0), 0),
+    [sales],
+  )
 
   const deleteSale = async (id: string) => {
     if (!window.confirm("Delete this saved sale?")) return
@@ -80,6 +85,14 @@ export default function SalesHistoryPage({ params }: { params: Promise<{ range: 
           </TableBody>
         </Table>
       </div>
+      {!loading && sales.length > 0 && (
+        <div className="flex justify-end">
+          <div className="rounded-lg border bg-muted/30 px-4 py-3 text-right">
+            <p className="text-sm text-muted-foreground">Total sales for this range</p>
+            <p className="text-xl font-semibold">₦{totalSales.toLocaleString()}</p>
+          </div>
+        </div>
+      )}
     </main>
   )
 }

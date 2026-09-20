@@ -4,12 +4,10 @@ import { prisma } from "@/lib/prisma"
 type ProductBalance = {
   productName: string
   availablePieces: number
-  cartons: number
-  packs: number
-  pieces: number
   packsPerCarton: number
   piecesPerPack: number
-  conversionSet: boolean
+  cartonEnabled: boolean
+  packEnabled: boolean
 }
 
 export async function GET() {
@@ -19,8 +17,10 @@ export async function GET() {
         orderBy: { createdAt: "desc" },
         select: {
           productName: true,
+          carton: true,
           cartonQty: true,
           packsPerCarton: true,
+          pack: true,
           packQty: true,
           pcsQty: true,
           pcsCount: true,
@@ -30,8 +30,10 @@ export async function GET() {
       prisma.inventorySale.findMany({
         select: {
           productName: true,
+          carton: true,
           cartonQty: true,
           packsPerCarton: true,
+          pack: true,
           packQty: true,
           pcsQty: true,
           pcsCount: true,
@@ -47,63 +49,113 @@ export async function GET() {
       const balance: ProductBalance = {
         productName,
         availablePieces: 0,
-        cartons: 0,
-        packs: 0,
-        pieces: 0,
-        packsPerCarton: 1,
-        piecesPerPack: 1,
-        conversionSet: false,
+        packsPerCarton: 0,
+        piecesPerPack: 0,
+        cartonEnabled: false,
+        packEnabled: false,
       }
       balances.set(productName, balance)
       return balance
     }
 
     stocks.forEach((stock) => {
-      const productName = stock.productName.trim()
+      const productName = stock.productName?.trim()
       if (!productName) return
       const balance = getBalance(productName)
-      const packsPerCarton = stock.packsPerCarton || 1
-      const piecesPerPack = stock.pcsCount || 1
-      if (!balance.conversionSet) {
-        balance.packsPerCarton = packsPerCarton
-        balance.piecesPerPack = piecesPerPack
-        balance.conversionSet = true
-      }
+      const packsPerCarton = stock.packsPerCarton || 0
+      const piecesPerPack = stock.pcsCount || 0
+
+      if (stock.carton || packsPerCarton > 0 || (stock.cartonQty || 0) > 0) balance.cartonEnabled = true
+      if (stock.pack || piecesPerPack > 0 || (stock.packQty || 0) > 0) balance.packEnabled = true
+
+      if (packsPerCarton > 0 && !balance.packsPerCarton) balance.packsPerCarton = packsPerCarton
+      if (piecesPerPack > 0 && !balance.piecesPerPack) balance.piecesPerPack = piecesPerPack
+
       const cartonQty = stock.cartonQty || 0
       const packQty = stock.packQty || 0
-      const piecesQty = stock.pcsQty ?? (cartonQty === 0 && packQty === 0 ? (stock.totalPcs || 0) : 0)
-      const derivedPieces = cartonQty * packsPerCarton * piecesPerPack + packQty * piecesPerPack + piecesQty
+      const pcsQty = stock.pcsQty ?? (cartonQty === 0 && packQty === 0 ? (stock.totalPcs || 0) : 0)
+
+      let derivedPieces = 0
+      if (cartonQty > 0) {
+        const ppc = packsPerCarton || balance.packsPerCarton || 1
+        const pCount = piecesPerPack || balance.piecesPerPack || 1
+        derivedPieces += cartonQty * ppc * pCount
+      }
+      if (packQty > 0) {
+        const pCount = piecesPerPack || balance.piecesPerPack || 1
+        derivedPieces += packQty * pCount
+      }
+      derivedPieces += pcsQty
+
+      if (derivedPieces === 0 && (stock.totalPcs || 0) > 0) {
+        derivedPieces = stock.totalPcs || 0
+      }
+
       balance.availablePieces += derivedPieces
-      balance.cartons += cartonQty
-      balance.packs += packQty
-      balance.pieces += piecesQty
     })
 
     sales.forEach((sale) => {
-      const productName = sale.productName.trim()
+      const productName = sale.productName?.trim()
       if (!productName) return
       const balance = getBalance(productName)
-      const piecesPerPack = sale.pcsCount || balance.piecesPerPack || 1
+      const packsPerCarton = sale.packsPerCarton || balance.packsPerCarton || 0
+      const piecesPerPack = sale.pcsCount || balance.piecesPerPack || 0
+
       const cartonQty = sale.cartonQty || 0
       const packQty = sale.packQty || 0
-      const piecesQty = sale.pcsQty ?? (cartonQty === 0 && packQty === 0 ? (sale.totalPcs || 0) : 0)
-      const soldPieces = cartonQty * (sale.packsPerCarton || balance.packsPerCarton || 1) * piecesPerPack
-        + packQty * piecesPerPack
-        + piecesQty
+      const pcsQty = sale.pcsQty ?? (cartonQty === 0 && packQty === 0 ? (sale.totalPcs || 0) : 0)
+
+      let soldPieces = 0
+      if (cartonQty > 0) {
+        const ppc = packsPerCarton || 1
+        const pCount = piecesPerPack || 1
+        soldPieces += cartonQty * ppc * pCount
+      }
+      if (packQty > 0) {
+        const pCount = piecesPerPack || 1
+        soldPieces += packQty * pCount
+      }
+      soldPieces += pcsQty
+
+      if (soldPieces === 0 && (sale.totalPcs || 0) > 0) {
+        soldPieces = sale.totalPcs || 0
+      }
+
       balance.availablePieces -= soldPieces
-      balance.cartons -= cartonQty
-      balance.packs -= packQty
-      balance.pieces -= piecesQty
     })
 
     return NextResponse.json([...balances.values()]
-      .map((balance) => ({
-        ...balance,
-        availablePieces: Math.max(balance.availablePieces, 0),
-        cartons: Math.max(balance.cartons, 0),
-        packs: Math.max(balance.packs, 0),
-        pieces: Math.max(balance.pieces, 0),
-      }))
+      .map((balance) => {
+        const netPieces = Math.max(balance.availablePieces, 0)
+        let remaining = netPieces
+        let cartons = 0
+        let packs = 0
+
+        const ppc = balance.packsPerCarton
+        const pCount = balance.piecesPerPack
+
+        if (balance.cartonEnabled && ppc > 0 && pCount > 0) {
+          cartons = Math.floor(remaining / (ppc * pCount))
+          remaining = remaining % (ppc * pCount)
+        }
+
+        if (balance.packEnabled && pCount > 0) {
+          packs = Math.floor(remaining / pCount)
+          remaining = remaining % pCount
+        }
+
+        const pieces = remaining
+
+        return {
+          productName: balance.productName,
+          availablePieces: netPieces,
+          cartons,
+          packs,
+          pieces,
+          packsPerCarton: ppc,
+          piecesPerPack: pCount,
+        }
+      })
       .sort((left, right) => left.productName.localeCompare(right.productName)))
   } catch (error) {
     console.error(error)
