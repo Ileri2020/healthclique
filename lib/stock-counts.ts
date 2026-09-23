@@ -36,8 +36,8 @@ const piecesFor = (row: { totalPcs: number | null; cartonQty: number | null; pac
   return (row.cartonQty || 0) * packsPerCarton * pcsCount + (row.packQty || 0) * pcsCount + (row.pcsQty || 0)
 }
 
-export async function getCountProducts() {
-  const [stocks, sales, normalizedLines] = await Promise.all([
+export async function getCountProducts(asOfDate?: Date) {
+  const [stocks, sales, normalizedLines, shelfLines] = await Promise.all([
     prisma.inventoryStock.findMany({
       include: { inventory: { select: { date: true, rangeFrom: true, createdAt: true } } },
       orderBy: { createdAt: "asc" },
@@ -47,9 +47,14 @@ export async function getCountProducts() {
       orderBy: { createdAt: "asc" },
     }),
     prisma.stockCountLine.findMany({
-      where: { normalizedPcs: { not: null } },
+      where: { normalizedPcs: { not: null }, ...(asOfDate ? { count: { date: { lte: asOfDate } } } : {}) },
       orderBy: { normalizedAt: "desc" },
       include: { count: { select: { date: true } } },
+    }),
+    prisma.stockCountLine.findMany({
+      where: asOfDate ? { count: { date: { lte: asOfDate } } } : undefined,
+      orderBy: { createdAt: "desc" },
+      select: { productName: true, count: { select: { shelf: { select: { name: true } } } } },
     }),
   ])
 
@@ -71,9 +76,16 @@ export async function getCountProducts() {
     const key = keyFor(line.productName)
     if (!latestNormalized.has(key)) latestNormalized.set(key, { normalizedPcs: line.normalizedPcs ?? 0, expiry: line.expiry, date: line.count.date })
   })
+  const latestShelves = new Map<string, string>()
+  shelfLines.forEach((line) => {
+    const key = keyFor(line.productName)
+    if (!latestShelves.has(key) && line.count.shelf?.name) latestShelves.set(key, line.count.shelf.name)
+  })
 
-  return [...stockGroups.entries()].map(([key, productStocks]) => {
-    const productSales = saleGroups.get(key) ?? []
+  return [...stockGroups.entries()].map(([key, allProductStocks]) => {
+    const productStocks = asOfDate ? allProductStocks.filter((stock) => eventDate(stock) <= asOfDate) : allProductStocks
+    const productSales = (saleGroups.get(key) ?? []).filter((sale) => !asOfDate || eventDate(sale) <= asOfDate)
+    if (!productStocks.length) return null
     const lots = productStocks.map((stock) => ({ stock, remaining: piecesFor(stock) }))
     const sortedSales = [...productSales].sort((left, right) => eventDate(left).getTime() - eventDate(right).getTime())
     sortedSales.forEach((sale) => {
@@ -107,6 +119,7 @@ export async function getCountProducts() {
       packsPerCarton: latestStock?.packsPerCarton ?? 0,
       pcsCount: latestStock?.pcsCount ?? 0,
       salesPrice: latestStock?.pcsSalesPrice ?? latestStock?.packSalesPrice ?? latestStock?.cartonSalesPrice ?? null,
+      shelfName: latestShelves.get(key) ?? null,
     }
-  }).sort((left, right) => left.productName.localeCompare(right.productName))
+  }).filter((product): product is NonNullable<typeof product> => product !== null).sort((left, right) => left.productName.localeCompare(right.productName))
 }

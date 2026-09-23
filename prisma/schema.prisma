@@ -278,6 +278,8 @@ model StockCountLine {
   countedPcs      Int?
   differencePcs   Int?
   expiry          DateTime?
+  packsPerCarton  Int?
+  piecesPerPack   Int?
   normalizedPcs   Int?
   normalizedAt    DateTime?
   normalizedById  String?

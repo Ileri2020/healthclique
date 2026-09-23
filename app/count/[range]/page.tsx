@@ -25,6 +25,7 @@ import {
 } from "@/components/ui/table"
 import { Calendar as CalendarIcon, CheckCircle2, Loader2, ShieldCheck, ArrowLeft } from "lucide-react"
 import { toast } from "sonner"
+import { useIsAdmin } from "@/hooks/useIsAdmin"
 
 type CountLine = {
   id: string
@@ -36,6 +37,8 @@ type CountLine = {
   expiry?: string | null
   normalizedPcs?: number | null
   normalizedAt?: string | null
+  packsPerCarton?: number | null
+  piecesPerPack?: number | null
 }
 
 type StockCountSession = {
@@ -47,9 +50,31 @@ type StockCountSession = {
   lines: CountLine[]
 }
 
-function formatDiffToUnits(pcs: number): string {
+function formatDiffToUnits(pcs: number, packsPerCarton?: number | null, piecesPerPack?: number | null): string {
   const absPcs = Math.abs(pcs)
   const prefix = pcs < 0 ? "-" : pcs > 0 ? "+" : ""
+  const ppc = packsPerCarton && packsPerCarton > 0 ? packsPerCarton : 0
+  const pip = piecesPerPack && piecesPerPack > 0 ? piecesPerPack : 0
+
+  if (ppc > 0 && pip > 0) {
+    const cartons = Math.floor(absPcs / (ppc * pip))
+    const rem1 = absPcs % (ppc * pip)
+    const packs = Math.floor(rem1 / pip)
+    const pcs2 = rem1 % pip
+    const parts: string[] = []
+    if (cartons > 0) parts.push(`${cartons} carton${cartons === 1 ? "" : "s"}`)
+    if (packs > 0) parts.push(`${packs} pack${packs === 1 ? "" : "s"}`)
+    if (pcs2 > 0 || parts.length === 0) parts.push(`${pcs2} pcs`)
+    return `${prefix}${parts.join(", ")}`
+  }
+  if (pip > 0) {
+    const packs = Math.floor(absPcs / pip)
+    const pcs2 = absPcs % pip
+    const parts: string[] = []
+    if (packs > 0) parts.push(`${packs} pack${packs === 1 ? "" : "s"}`)
+    if (pcs2 > 0 || parts.length === 0) parts.push(`${pcs2} pcs`)
+    return `${prefix}${parts.join(", ")}`
+  }
   return `${prefix}${absPcs} pcs`
 }
 
@@ -59,8 +84,7 @@ export default function StockCountRangePage({ params }: { params: Promise<{ rang
   const [sessions, setSessions] = useState<StockCountSession[]>([])
   const [loading, setLoading] = useState(true)
 
-  // Admin state toggle (can be tied to user context / role)
-  const [isAdmin, setIsAdmin] = useState(true)
+  const isAdmin = useIsAdmin()
   const [normalizing, setNormalizing] = useState<string | null>(null)
   const [normalizingAll, setNormalizingAll] = useState(false)
 
@@ -172,15 +196,7 @@ export default function StockCountRangePage({ params }: { params: Promise<{ rang
             <CalendarIcon className="mr-1.5 h-4 w-4" />
             Change date / range
           </Button>
-          <Button
-            variant={isAdmin ? "secondary" : "outline"}
-            type="button"
-            onClick={() => setIsAdmin(!isAdmin)}
-            title="Toggle Admin Normalization Controls"
-          >
-            <ShieldCheck className="mr-1.5 h-4 w-4 text-emerald-500" />
-            {isAdmin ? "Admin mode: Enabled" : "Enable admin mode"}
-          </Button>
+          {isAdmin ? <span className="inline-flex items-center gap-1 rounded border px-3 py-2 text-sm"><ShieldCheck className="h-4 w-4 text-emerald-500" />Admin controls</span> : null}
           <Button variant="outline" asChild>
             <Link href="/count">Back to count</Link>
           </Button>
@@ -245,9 +261,16 @@ export default function StockCountRangePage({ params }: { params: Promise<{ rang
                     const isLower = diff !== null && diff < 0
                     const isExceeded = diff !== null && diff > 0
                     const isNormalized = line.normalizedPcs !== null && line.normalizedPcs !== undefined
+                    const rowColorClass = diff === null
+                      ? ""
+                      : isLower
+                      ? "text-danger hover:text-danger"
+                      : isExceeded
+                      ? "text-accent hover:text-accent"
+                      : "text-foreground"
 
                     return (
-                      <TableRow key={line.id}>
+                      <TableRow key={line.id} className={rowColorClass}>
                         <TableCell>{index + 1}</TableCell>
                         <TableCell className="font-medium">{line.productName}</TableCell>
                         <TableCell>{line.shelfName || "-"}</TableCell>
@@ -258,8 +281,8 @@ export default function StockCountRangePage({ params }: { params: Promise<{ rang
                           {diff === null ? (
                             <span className="text-muted-foreground">-</span>
                           ) : (
-                            <span className={isLower ? "text-red-500 font-bold" : isExceeded ? "text-emerald-500 font-bold text-accent" : "text-foreground font-medium"}>
-                              {formatDiffToUnits(diff)}
+                            <span className={isLower ? "text-danger font-bold" : isExceeded ? "text-accent font-bold" : "text-foreground font-medium"}>
+                              {formatDiffToUnits(diff, line.packsPerCarton, line.piecesPerPack)}
                             </span>
                           )}
                         </TableCell>

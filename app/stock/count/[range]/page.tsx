@@ -18,7 +18,7 @@ const differenceLabel = (difference: number, packsPerCarton = 0, pcsCount = 0) =
   remaining %= cartonSize
   const packs = Math.floor(remaining / Math.max(1, pcsCount))
   const pieces = remaining % Math.max(1, pcsCount)
-  return { text: `${difference > 0 ? "+" : difference < 0 ? "-" : ""}${cartons} carton${cartons === 1 ? "" : "s"}, ${packs} pack${packs === 1 ? "" : "s"}, ${pieces} pcs`, className: difference < 0 ? "text-destructive" : difference > 0 ? "text-accent" : "text-foreground" }
+  return { text: `${difference > 0 ? "+" : difference < 0 ? "-" : ""}${cartons} carton${cartons === 1 ? "" : "s"}, ${packs} pack${packs === 1 ? "" : "s"}, ${pieces} pcs`, className: difference < 0 ? "text-danger" : difference > 0 ? "text-accent" : "text-foreground" }
 }
 
 export default function StockCountHistoryPage({ params }: { params: Promise<{ range: string }> }) {

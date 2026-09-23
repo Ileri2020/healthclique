@@ -1,8 +1,32 @@
 import { NextResponse } from "next/server"
+import { auth } from "@/auth"
 import { prisma } from "@/lib/prisma"
+import { getCountProducts } from "@/lib/stock-counts"
 
-export async function GET() {
+export async function GET(req: Request) {
   try {
+    const requestedDate = new URL(req.url).searchParams.get("date")
+    const asOfDate = requestedDate ? new Date(requestedDate) : undefined
+    const calculatedProducts = await getCountProducts(asOfDate)
+    const shelves = await prisma.shelf.findMany({ orderBy: { name: "asc" } })
+    return NextResponse.json({
+      products: calculatedProducts.map((product) => ({
+        productName: product.productName,
+        availablePieces: product.expectedPcs,
+        shortestExpiry: product.expiry,
+        shelfId: null,
+        shelfName: product.shelfName,
+        packsPerCarton: product.packsPerCarton,
+        piecesPerPack: product.pcsCount,
+        cartonEnabled: product.packsPerCarton > 0,
+        packEnabled: product.pcsCount > 0,
+        pcsSalesPrice: product.salesPrice,
+        packSalesPrice: product.salesPrice,
+        cartonSalesPrice: product.salesPrice,
+      })),
+      shelves,
+    })
+    /*
     const [stocks, sales, productShelves, shelves] = await Promise.all([
       prisma.inventoryStock.findMany({
         orderBy: { createdAt: "asc" },
@@ -158,6 +182,7 @@ export async function GET() {
     }).sort((a, b) => a.productName.localeCompare(b.productName))
 
     return NextResponse.json({ products, shelves })
+    */
   } catch (error) {
     console.error(error)
     return NextResponse.json({ error: "Unable to load count data" }, { status: 500 })
@@ -166,6 +191,8 @@ export async function GET() {
 
 export async function POST(req: Request) {
   try {
+    const session = await auth()
+    if (session?.user?.role !== "admin") return NextResponse.json({ error: "Admin access required" }, { status: 403 })
     const body = await req.json()
     const { date, shelfId, shelfName, note, lines } = body
 
@@ -206,6 +233,8 @@ export async function POST(req: Request) {
               ? Number(line.countedPcs) - (Number(line.expectedPcs) || 0)
               : null,
             expiry: line.expiry ? new Date(line.expiry) : null,
+            packsPerCarton: line.packsPerCarton ? Number(line.packsPerCarton) : null,
+            piecesPerPack: line.piecesPerPack ? Number(line.piecesPerPack) : null,
           })),
         },
       },

@@ -18,6 +18,7 @@ type CountProduct = {
   packsPerCarton: number
   pcsCount: number
   salesPrice?: number | null
+  shelfName?: string | null
   countedPcs?: number | null
 }
 
@@ -31,7 +32,7 @@ const differenceLabel = (difference: number, packsPerCarton: number, pcsCount: n
   remaining %= cartonSize
   const packs = Math.floor(remaining / Math.max(1, pcsCount))
   const pieces = remaining % Math.max(1, pcsCount)
-  return { text: `${sign}${cartons} carton${cartons === 1 ? "" : "s"}, ${packs} pack${packs === 1 ? "" : "s"}, ${pieces} pcs`, className: difference < 0 ? "text-destructive" : difference > 0 ? "text-accent" : "text-foreground" }
+  return { text: `${sign}${cartons} carton${cartons === 1 ? "" : "s"}, ${packs} pack${packs === 1 ? "" : "s"}, ${pieces} pcs`, className: difference < 0 ? "text-danger" : difference > 0 ? "text-accent" : "text-foreground" }
 }
 
 export default function StockCountPage() {
@@ -48,17 +49,21 @@ export default function StockCountPage() {
   const [mergeSource, setMergeSource] = useState<CountProduct | null>(null)
   const [mergeSearch, setMergeSearch] = useState("")
   const [mergeTarget, setMergeTarget] = useState<CountProduct | null>(null)
+  const [viewStockOpen, setViewStockOpen] = useState(false)
+  const [viewStockDate, setViewStockDate] = useState(format(new Date(), "yyyy-MM-dd"))
+  const [viewStockFrom, setViewStockFrom] = useState("")
+  const [viewStockTo, setViewStockTo] = useState("")
 
-  const loadProducts = () => {
+  const loadProducts = (date = countDate) => {
     setLoading(true)
-    fetch("/api/inventory/stock-counts?mode=products")
+    fetch(`/api/inventory/stock-counts?mode=products&date=${date}`)
       .then((response) => response.json())
       .then((data) => { setProducts(data.products ?? []); setShelves(data.shelves ?? []) })
       .catch(() => toast.error("Unable to load count products"))
       .finally(() => setLoading(false))
   }
 
-  useEffect(() => { loadProducts() }, [])
+  useEffect(() => { loadProducts() }, [countDate])
 
   const suggestions = useMemo(() => {
     const query = search.trim().toLowerCase()
@@ -77,7 +82,7 @@ export default function StockCountPage() {
       }
       if (sortBy === "name") return left.productName.localeCompare(right.productName)
       if (sortBy === "price") return Number(right.salesPrice || 0) - Number(left.salesPrice || 0)
-      if (sortBy === "shelf") return left.productName.localeCompare(right.productName)
+      if (sortBy === "shelf") return String(left.shelfName || "").localeCompare(String(right.shelfName || "")) || left.productName.localeCompare(right.productName)
       return 0
     })
   }, [products, search, sortBy])
@@ -128,10 +133,11 @@ export default function StockCountPage() {
       <div><Label htmlFor="count-date">Count date</Label><Input id="count-date" type="date" value={countDate} onChange={(event) => setCountDate(event.target.value)} /></div>
       <div><Label htmlFor="count-shelf">Shelf</Label><select id="count-shelf" className="h-10 rounded-md border bg-background px-3 text-sm" value={shelfId} onChange={(event) => setShelfId(event.target.value)}><option value="">No shelf</option>{shelves.map((shelf) => <option key={shelf.id} value={shelf.id}>{shelf.name}{shelf.number ? ` (${shelf.number})` : ""}</option>)}</select></div>
       <div><Label htmlFor="count-sort">Sort by</Label><select id="count-sort" className="h-10 rounded-md border bg-background px-3 text-sm" value={sortBy} onChange={(event) => setSortBy(event.target.value)}><option value="count">Uncounted first</option><option value="name">Name</option><option value="price">Sales price</option><option value="shelf">Shelf</option></select></div>
-      <Button variant="outline" asChild><Link href="/stock/products">View stock</Link></Button>
+      <Button variant="outline" onClick={() => setViewStockOpen(true)}>View stock</Button>
     </div>
-    <div className="overflow-x-auto rounded-lg border"><Table><TableHeader><TableRow><TableHead>Product</TableHead><TableHead>Expected stock</TableHead><TableHead>Expiry</TableHead><TableHead>Sales price</TableHead><TableHead>Count</TableHead><TableHead>Difference</TableHead><TableHead>Merge</TableHead></TableRow></TableHeader><TableBody>{loading ? <TableRow><TableCell colSpan={7}>Loading products...</TableCell></TableRow> : visibleProducts.length === 0 ? <TableRow><TableCell colSpan={7}>No products found.</TableCell></TableRow> : visibleProducts.map((product) => { const count = product.countedPcs == null ? null : Number(product.countedPcs); const difference = count == null ? 0 : count - product.expectedPcs; const diff = differenceLabel(difference, product.packsPerCarton, product.pcsCount); return <TableRow key={product.productKey}><TableCell className="font-medium">{product.productName}</TableCell><TableCell>{product.expectedPcs.toLocaleString()} pcs</TableCell><TableCell><Input type="date" value={product.expiry ? new Date(product.expiry).toISOString().slice(0, 10) : ""} onChange={(event) => updateProduct(product.productKey, { expiry: event.target.value || null })} /></TableCell><TableCell>₦{Number(product.salesPrice || 0).toLocaleString()}</TableCell><TableCell><Input type="number" min="0" value={product.countedPcs == null ? "" : product.countedPcs} onChange={(event) => updateProduct(product.productKey, { countedPcs: event.target.value === "" ? null : Number(event.target.value) })} /></TableCell><TableCell className={count == null ? "text-muted-foreground" : diff.className}>{count == null ? "Not counted" : diff.text}</TableCell><TableCell><input type="checkbox" aria-label={`Merge ${product.productName}`} checked={mergeSource?.productKey === product.productKey} onChange={() => { setMergeSource(product); setMergeTarget(null); setMergeSearch("") }} /></TableCell></TableRow> })}</TableBody></Table></div>
+    <div className="overflow-x-auto rounded-lg border"><Table><TableHeader><TableRow><TableHead>Product</TableHead><TableHead>Shelf</TableHead><TableHead>Expected stock</TableHead><TableHead>Expiry</TableHead><TableHead>Sales price</TableHead><TableHead>Count</TableHead><TableHead>Difference</TableHead><TableHead>Merge</TableHead></TableRow></TableHeader><TableBody>{loading ? <TableRow><TableCell colSpan={8}>Loading products...</TableCell></TableRow> : visibleProducts.length === 0 ? <TableRow><TableCell colSpan={8}>No products found.</TableCell></TableRow> : visibleProducts.map((product) => { const count = product.countedPcs == null ? null : Number(product.countedPcs); const difference = count == null ? 0 : count - product.expectedPcs; const diff = differenceLabel(difference, product.packsPerCarton, product.pcsCount); return <TableRow key={product.productKey}><TableCell className="font-medium">{product.productName}</TableCell><TableCell>{product.shelfName || "-"}</TableCell><TableCell>{product.expectedPcs.toLocaleString()} pcs</TableCell><TableCell><Input type="date" value={product.expiry ? new Date(product.expiry).toISOString().slice(0, 10) : ""} onChange={(event) => updateProduct(product.productKey, { expiry: event.target.value || null })} /></TableCell><TableCell>₦{Number(product.salesPrice || 0).toLocaleString()}</TableCell><TableCell><Input type="number" min="0" value={product.countedPcs == null ? "" : product.countedPcs} onChange={(event) => updateProduct(product.productKey, { countedPcs: event.target.value === "" ? null : Number(event.target.value) })} /></TableCell><TableCell className={count == null ? "text-muted-foreground" : diff.className}>{count == null ? "Not counted" : diff.text}</TableCell><TableCell><input type="checkbox" aria-label={`Merge ${product.productName}`} checked={mergeSource?.productKey === product.productKey} onChange={() => { setMergeSource(product); setMergeTarget(null); setMergeSearch("") }} /></TableCell></TableRow> })}</TableBody></Table></div>
     <Dialog open={mergeSource !== null} onOpenChange={(open) => !open && setMergeSource(null)}><DialogContent><DialogHeader><DialogTitle>Merge product</DialogTitle><DialogDescription>Choose the product that should keep the saved stock and sales history.</DialogDescription></DialogHeader><div className="space-y-3"><p className="text-sm">Source: <strong>{mergeSource?.productName}</strong></p><Input value={mergeSearch} onChange={(event) => setMergeSearch(event.target.value)} placeholder="Search target product" />{mergeSearch.trim().length >= 3 ? <div className="max-h-48 overflow-y-auto rounded border p-1">{products.filter((product) => product.productKey !== mergeSource?.productKey && product.productName.toLowerCase().includes(mergeSearch.toLowerCase())).map((product) => <button key={product.productKey} type="button" className="block w-full rounded px-2 py-1.5 text-left text-sm hover:bg-accent" onClick={() => setMergeTarget(product)}>{product.productName}</button>)}</div> : null}{mergeTarget ? <p className="text-sm">Target: <strong>{mergeTarget.productName}</strong></p> : null}</div><DialogFooter><Button variant="outline" onClick={() => setMergeSource(null)}>Cancel</Button><Button disabled={!mergeTarget} onClick={mergeProduct}>Confirm merge</Button></DialogFooter></DialogContent></Dialog>
+    <Dialog open={viewStockOpen} onOpenChange={setViewStockOpen}><DialogContent className="max-w-md"><DialogHeader><DialogTitle>View saved stocks</DialogTitle><DialogDescription>Select a date, range, or all saved stock entries.</DialogDescription></DialogHeader><div className="grid gap-3 py-3"><div><Label htmlFor="view-stock-date">Single date</Label><Input id="view-stock-date" type="date" value={viewStockDate} onChange={(event) => { setViewStockDate(event.target.value); setViewStockFrom(""); setViewStockTo("") }} /></div><div><Label htmlFor="view-stock-from">Range from</Label><Input id="view-stock-from" type="date" value={viewStockFrom} onChange={(event) => setViewStockFrom(event.target.value)} /></div><div><Label htmlFor="view-stock-to">Range to</Label><Input id="view-stock-to" type="date" value={viewStockTo} onChange={(event) => setViewStockTo(event.target.value)} /></div></div><DialogFooter><Button variant="outline" onClick={() => { window.location.href = "/stock/all" }}>All</Button><Button onClick={() => { window.location.href = viewStockFrom && viewStockTo ? `/stock/${viewStockFrom}_to_${viewStockTo}` : `/stock/${viewStockDate}` }}>View</Button></DialogFooter></DialogContent></Dialog>
     <Dialog open={shelfOpen} onOpenChange={setShelfOpen}><DialogContent><DialogHeader><DialogTitle>Create shelf</DialogTitle><DialogDescription>Define a shelf name, number, and optional row and column range.</DialogDescription></DialogHeader><div className="grid gap-3 py-3">{([['name','Shelf name'],['number','Shelf number'],['rowFrom','Row from'],['rowTo','Row to'],['columnFrom','Column from'],['columnTo','Column to']] as const).map(([key, label]) => <div key={key}><Label htmlFor={`shelf-${key}`}>{label}</Label><Input id={`shelf-${key}`} type={key === 'name' || key === 'number' ? 'text' : 'number'} value={shelfForm[key]} onChange={(event) => setShelfForm((current) => ({ ...current, [key]: event.target.value }))} /></div>)}</div><DialogFooter><Button variant="outline" onClick={() => setShelfOpen(false)}>Cancel</Button><Button onClick={saveShelf}>Create shelf</Button></DialogFooter></DialogContent></Dialog>
   </main>
 }

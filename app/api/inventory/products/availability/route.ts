@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server"
 import { prisma } from "@/lib/prisma"
+import { getCountProducts } from "@/lib/stock-counts"
 
 type ProductBalance = {
   productName: string
@@ -13,7 +14,7 @@ type ProductBalance = {
 
 export async function GET() {
   try {
-    const [stocks, sales] = await Promise.all([
+    const [stocks, sales, normalizedProducts] = await Promise.all([
       prisma.inventoryStock.findMany({
         orderBy: { createdAt: "desc" },
         select: {
@@ -41,7 +42,9 @@ export async function GET() {
           totalPcs: true,
         },
       }),
+      getCountProducts(),
     ])
+    const normalizedByProduct = new Map(normalizedProducts.map((product) => [product.productName.replace(/\s+/g, " ").trim().toLowerCase(), product.expectedPcs]))
 
     const balances = new Map<string, ProductBalance>()
     const getBalance = (productName: string) => {
@@ -129,7 +132,8 @@ export async function GET() {
 
     return NextResponse.json([...balances.values()]
       .map((balance) => {
-        const netPieces = Math.max(balance.availablePieces, 0)
+        const normalizedPieces = normalizedByProduct.get(balance.productName.replace(/\s+/g, " ").trim().toLowerCase())
+        const netPieces = Math.max(normalizedPieces ?? balance.availablePieces, 0)
         let remaining = netPieces
         let cartons = 0
         let packs = 0

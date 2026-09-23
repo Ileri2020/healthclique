@@ -248,6 +248,8 @@ export default function StockCountPage() {
           expectedPcs: p.availablePieces,
           countedPcs: cVal,
           expiry: p.expiryInput ? new Date(p.expiryInput).toISOString() : undefined,
+          packsPerCarton: p.packsPerCarton || undefined,
+          piecesPerPack: p.piecesPerPack || undefined,
         }
       })
 
