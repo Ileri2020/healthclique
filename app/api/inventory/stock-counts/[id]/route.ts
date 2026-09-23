@@ -53,7 +53,7 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ id
     const updates = await prisma.$transaction(lineIds.map((lineId) => {
       const line = count.lines.find((item) => item.id === lineId)
       if (!line) throw new Error("Count line not found")
-      const normalizedPcs = line.countedPcs ?? line.expectedPcs
+      const normalizedPcs = line.countedPcs == null || Number(line.countedPcs) <= 0 ? 0 : Number(line.countedPcs)
       return prisma.stockCountLine.update({ where: { id: lineId }, data: { normalizedPcs, normalizedAt: now, normalizedById: session.user?.id } })
     }))
     return NextResponse.json({ updated: updates.length })

@@ -9,6 +9,8 @@ type StockRow = {
   cartonQty: number | null
   packQty: number | null
   pcsQty: number | null
+  carton: boolean
+  pack: boolean
   cartonSalesPrice: number | null
   packSalesPrice: number | null
   pcsSalesPrice: number | null
@@ -118,6 +120,8 @@ export async function getCountProducts(asOfDate?: Date) {
       expiry: normalized?.expiry ?? expiry,
       packsPerCarton: latestStock?.packsPerCarton ?? 0,
       pcsCount: latestStock?.pcsCount ?? 0,
+      cartonEnabled: productStocks.some((stock) => stock.carton || (stock.packsPerCarton || 0) > 0),
+      packEnabled: productStocks.some((stock) => stock.pack || (stock.pcsCount || 0) > 0),
       salesPrice: latestStock?.pcsSalesPrice ?? latestStock?.packSalesPrice ?? latestStock?.cartonSalesPrice ?? null,
       shelfName: latestShelves.get(key) ?? null,
     }

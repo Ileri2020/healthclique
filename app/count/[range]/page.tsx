@@ -1,6 +1,6 @@
 "use client"
 
-import { use, useEffect, useState } from "react"
+import { use, useCallback, useEffect, useState } from "react"
 import { useRouter } from "next/navigation"
 import Link from "next/link"
 import { format } from "date-fns"
@@ -93,11 +93,7 @@ export default function StockCountRangePage({ params }: { params: Promise<{ rang
   const [viewDate, setViewDate] = useState<Date>(new Date())
   const [viewRange, setViewRange] = useState<{ from: Date | undefined; to: Date | undefined }>({ from: undefined, to: undefined })
 
-  useEffect(() => {
-    loadSessions()
-  }, [range])
-
-  const loadSessions = async () => {
+  const loadSessions = useCallback(async () => {
     setLoading(true)
     try {
       let url = "/api/inventory/count/range?"
@@ -131,7 +127,11 @@ export default function StockCountRangePage({ params }: { params: Promise<{ rang
     } finally {
       setLoading(false)
     }
-  }
+  }, [range])
+
+  useEffect(() => {
+    loadSessions()
+  }, [loadSessions])
 
   const handleNormalizeRow = async (countId: string, lineId: string) => {
     setNormalizing(lineId)
@@ -227,8 +227,9 @@ export default function StockCountRangePage({ params }: { params: Promise<{ rang
                 <p className="text-xs text-muted-foreground">{session.lines?.length || 0} product lines recorded</p>
               </div>
 
-              {isAdmin ? (
-                <Button
+              <div className="flex items-center gap-2">
+                <Button variant="outline" asChild><Link href={`/count?edit=${session.id}`}>Edit</Link></Button>
+                {isAdmin ? <Button
                   size="sm"
                   variant={session.normalized ? "outline" : "default"}
                   onClick={() => handleNormalizeAll(session.id)}
@@ -236,8 +237,8 @@ export default function StockCountRangePage({ params }: { params: Promise<{ rang
                 >
                   {normalizingAll ? <Loader2 className="mr-1.5 h-4 w-4 animate-spin" /> : <ShieldCheck className="mr-1.5 h-4 w-4" />}
                   {session.normalized ? "Re-normalize all" : "Normalize all"}
-                </Button>
-              ) : null}
+                </Button> : null}
+              </div>
             </div>
 
             <div className="w-full max-w-full overflow-x-auto touch-pan-x touch-pan-y scrollbar-thin [webkit-overflow-scrolling:touch] [overscroll-behavior-x:contain]">

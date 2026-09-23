@@ -5,7 +5,14 @@ import { getCountProducts } from "@/lib/stock-counts"
 
 export async function GET(req: Request) {
   try {
-    const requestedDate = new URL(req.url).searchParams.get("date")
+    const url = new URL(req.url)
+    const countId = url.searchParams.get("id")
+    if (countId) {
+      const count = await prisma.stockCount.findUnique({ where: { id: countId }, include: { lines: true, shelf: true } })
+      if (!count) return NextResponse.json({ error: "Stock count not found" }, { status: 404 })
+      return NextResponse.json(count)
+    }
+    const requestedDate = url.searchParams.get("date")
     const asOfDate = requestedDate ? new Date(requestedDate) : undefined
     const calculatedProducts = await getCountProducts(asOfDate)
     const shelves = await prisma.shelf.findMany({ orderBy: { name: "asc" } })
@@ -18,8 +25,8 @@ export async function GET(req: Request) {
         shelfName: product.shelfName,
         packsPerCarton: product.packsPerCarton,
         piecesPerPack: product.pcsCount,
-        cartonEnabled: product.packsPerCarton > 0,
-        packEnabled: product.pcsCount > 0,
+        cartonEnabled: product.cartonEnabled,
+        packEnabled: product.packEnabled,
         pcsSalesPrice: product.salesPrice,
         packSalesPrice: product.salesPrice,
         cartonSalesPrice: product.salesPrice,
@@ -186,6 +193,42 @@ export async function GET(req: Request) {
   } catch (error) {
     console.error(error)
     return NextResponse.json({ error: "Unable to load count data" }, { status: 500 })
+  }
+}
+
+export async function PUT(req: Request) {
+  try {
+    const session = await auth()
+    if (session?.user?.role !== "admin") return NextResponse.json({ error: "Admin access required" }, { status: 403 })
+    const body = await req.json()
+    const id = String(body.id || "")
+    if (!id || !Array.isArray(body.lines) || body.lines.length === 0) return NextResponse.json({ error: "Count id and lines are required" }, { status: 400 })
+    const updated = await prisma.stockCount.update({
+      where: { id },
+      data: {
+        date: body.date ? new Date(body.date) : undefined,
+        shelfId: body.shelfId || undefined,
+        shelfName: body.shelfName || undefined,
+        lines: {
+          deleteMany: {},
+          create: body.lines.map((line: any) => ({
+            productName: String(line.productName || ""),
+            shelfName: line.shelfName || undefined,
+            expectedPcs: Number(line.expectedPcs) || 0,
+            countedPcs: line.countedPcs === "" || line.countedPcs == null ? null : Number(line.countedPcs),
+            differencePcs: line.countedPcs === "" || line.countedPcs == null ? null : Number(line.countedPcs) - (Number(line.expectedPcs) || 0),
+            expiry: line.expiry ? new Date(line.expiry) : null,
+            packsPerCarton: line.packsPerCarton ? Number(line.packsPerCarton) : null,
+            piecesPerPack: line.piecesPerPack ? Number(line.piecesPerPack) : null,
+          })),
+        },
+      },
+      include: { lines: true, shelf: true },
+    })
+    return NextResponse.json(updated)
+  } catch (error) {
+    console.error(error)
+    return NextResponse.json({ error: "Unable to update stock count" }, { status: 500 })
   }
 }
 

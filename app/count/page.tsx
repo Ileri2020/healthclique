@@ -1,7 +1,7 @@
 "use client"
 
-import { useEffect, useMemo, useState } from "react"
-import { useRouter } from "next/navigation"
+import { useEffect, useMemo, useRef, useState } from "react"
+import { useRouter, useSearchParams } from "next/navigation"
 import Link from "next/link"
 import { format } from "date-fns"
 import { Button } from "@/components/ui/button"
@@ -83,6 +83,8 @@ function formatPcsToUnits(pcs: number, ppc: number, pCount: number, cartonEnable
 
 export default function StockCountPage() {
   const router = useRouter()
+  const searchParams = useSearchParams()
+  const editId = searchParams.get("edit")
   const [products, setProducts] = useState<ProductCountItem[]>([])
   const [shelves, setShelves] = useState<ShelfItem[]>([])
   const [loading, setLoading] = useState(true)
@@ -117,24 +119,45 @@ export default function StockCountPage() {
   const [dateRangeOpen, setDateRangeOpen] = useState(false)
   const [viewDate, setViewDate] = useState<Date>(new Date())
   const [viewRange, setViewRange] = useState<{ from: Date | undefined; to: Date | undefined }>({ from: undefined, to: undefined })
+  const [currentPage, setCurrentPage] = useState(1)
+  const productsPerPage = 75
+  const tableTopRef = useRef<HTMLDivElement>(null)
 
-  useEffect(() => {
-    loadCountData()
-  }, [])
+  useEffect(() => { loadCountData() }, [editId, countDate])
 
   const loadCountData = async () => {
     setLoading(true)
     try {
-      const response = await fetch("/api/inventory/count")
+      const response = await fetch(`/api/inventory/count?date=${format(countDate, "yyyy-MM-dd")}`)
       if (!response.ok) throw new Error("Unable to load count data")
       const data = await response.json()
-      setProducts(
-        (data.products || []).map((p: any) => ({
+      let nextProducts = (data.products || []).map((p: any) => ({
           ...p,
           countedPcs: "",
           expiryInput: p.shortestExpiry ? p.shortestExpiry.split("T")[0] : "",
         }))
-      )
+      if (editId) {
+        const savedResponse = await fetch(`/api/inventory/count?id=${editId}`)
+        if (savedResponse.ok) {
+          const saved = await savedResponse.json()
+          const savedDate = new Date(saved.date)
+          if (format(countDate, "yyyy-MM-dd") !== format(savedDate, "yyyy-MM-dd")) setCountDate(savedDate)
+          nextProducts = saved.lines.map((line: any) => ({
+            productName: line.productName,
+            availablePieces: line.expectedPcs,
+            shortestExpiry: line.expiry,
+            shelfId: null,
+            shelfName: line.shelfName || saved.shelfName || null,
+            packsPerCarton: line.packsPerCarton || 0,
+            piecesPerPack: line.piecesPerPack || 0,
+            cartonEnabled: Boolean(line.packsPerCarton),
+            packEnabled: Boolean(line.piecesPerPack),
+            countedPcs: line.countedPcs == null ? "" : line.countedPcs,
+            expiryInput: line.expiry ? line.expiry.split("T")[0] : "",
+          }))
+        }
+      }
+      setProducts(nextProducts)
       setShelves(data.shelves || [])
     } catch {
       toast.error("Unable to load stock products")
@@ -222,14 +245,17 @@ export default function StockCountPage() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ sourceProductName: mergeSource, targetProductName: mergeTarget.trim() }),
       })
-      if (!response.ok) throw new Error()
+      if (!response.ok) {
+        const error = await response.json().catch(() => null)
+        throw new Error(error?.error || "Unable to merge products")
+      }
       toast.success(`Merged '${mergeSource}' into '${mergeTarget.trim()}'`)
       setMergeDialogOpen(false)
       setMergeSource(null)
       setMergeTarget("")
       loadCountData()
-    } catch {
-      toast.error("Unable to merge products")
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "Unable to merge products")
     } finally {
       setMerging(false)
     }
@@ -253,10 +279,11 @@ export default function StockCountPage() {
         }
       })
 
-      const response = await fetch("/api/inventory/count", {
-        method: "POST",
+      const response = await fetch(editId ? "/api/inventory/count" : "/api/inventory/count", {
+        method: editId ? "PUT" : "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
+          id: editId || undefined,
           date: countDate.toISOString(),
           shelfName: selectedShelfFilter !== "all" ? selectedShelfFilter : undefined,
           lines,
@@ -266,6 +293,7 @@ export default function StockCountPage() {
       if (!response.ok) throw new Error()
       setSaveState("saved")
       toast.success("Stock count session saved successfully")
+      if (editId) router.push(`/count/${format(countDate, "yyyy-MM-dd")}`)
     } catch {
       setSaveState("error")
       toast.error("Unable to save stock count session")
@@ -327,12 +355,24 @@ export default function StockCountPage() {
     return list
   }, [products, searchTerm, selectedShelfFilter, sortBy])
 
+  const paginatedProducts = useMemo(() => {
+    const start = (currentPage - 1) * productsPerPage
+    return filteredProducts.slice(start, start + productsPerPage)
+  }, [filteredProducts, currentPage])
+  const totalPages = Math.max(1, Math.ceil(filteredProducts.length / productsPerPage))
+  const pageNumbers = useMemo(() => {
+    const firstPage = Math.max(1, currentPage - 3)
+    const lastPage = Math.min(totalPages, currentPage + 3)
+    return Array.from({ length: lastPage - firstPage + 1 }, (_, index) => firstPage + index)
+  }, [currentPage, totalPages])
+  useEffect(() => { setCurrentPage(1) }, [searchTerm, selectedShelfFilter, sortBy])
+
   return (
     <main className="space-y-6 p-6">
       <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
         <div>
           <p className="text-sm text-muted-foreground">Inventory physical audit</p>
-          <h1 className="text-3xl font-bold">Stock count</h1>
+          <h1 className="text-3xl font-bold">{editId ? "Edit stock count" : "Stock count"}</h1>
           <p className="text-sm text-muted-foreground">Record shelf counts, verify expiry dates, and analyze stock differences.</p>
         </div>
         <div className="flex flex-wrap items-center gap-2">
@@ -426,7 +466,7 @@ export default function StockCountPage() {
       </div>
 
       {/* Action & Date Controls */}
-      <div className="flex flex-wrap items-center justify-between gap-3 rounded-lg border bg-card p-4">
+      <div className="sticky top-2 z-30 flex flex-wrap items-center justify-between gap-3 rounded-lg border bg-card/95 p-4 shadow-md backdrop-blur">
         <div className="flex items-center gap-3">
           <Label htmlFor="count-date" className="whitespace-nowrap text-sm font-semibold">Count date:</Label>
           <input
@@ -440,22 +480,22 @@ export default function StockCountPage() {
         </div>
         <Button onClick={handleSaveStockCount} disabled={saving || saveState === "saved"}>
           {saving ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Check className="mr-2 h-4 w-4" />}
-          {saveState === "saved" ? "Saved" : "Save stock count"}
+          {saveState === "saved" ? "Saved" : editId ? "Update stock count" : "Save stock count"}
         </Button>
       </div>
 
       {/* Main Table */}
-      <div className="w-full max-w-full overflow-x-auto touch-pan-x touch-pan-y scrollbar-thin [webkit-overflow-scrolling:touch] [overscroll-behavior-x:contain] rounded-lg border">
+      <div ref={tableTopRef} className="w-full max-w-full overflow-x-auto touch-pan-x touch-pan-y scrollbar-thin [webkit-overflow-scrolling:touch] [overscroll-behavior-x:contain] rounded-lg border">
         <Table className="bg-foreground/10 min-w-[1100px]">
           <TableHeader>
             <TableRow>
               <TableHead className="w-12">S/N</TableHead>
-              <TableHead className="w-16 text-center">Merge</TableHead>
               <TableHead className="w-[240px]">Product name</TableHead>
+              <TableHead className="w-[120px]">Count (Pcs)</TableHead>
+              <TableHead className="w-16 text-center">Merge</TableHead>
               <TableHead className="w-[160px]">Shelf</TableHead>
               <TableHead className="w-[150px]">Shortest expiry</TableHead>
               <TableHead className="w-[220px]">Expected quantity</TableHead>
-              <TableHead className="w-[120px]">Count (Pcs)</TableHead>
               <TableHead className="w-[220px]">Difference</TableHead>
               <TableHead className="w-[120px]">Sales price</TableHead>
             </TableRow>
@@ -474,7 +514,7 @@ export default function StockCountPage() {
                 </TableCell>
               </TableRow>
             ) : (
-              filteredProducts.map((p, index) => {
+              paginatedProducts.map((p, index) => {
                 const hasCount = p.countedPcs !== "" && p.countedPcs !== undefined && p.countedPcs !== null
                 const countNum = hasCount ? Number(p.countedPcs) : null
                 const diffPcs = countNum !== null ? countNum - p.availablePieces : null
@@ -487,7 +527,18 @@ export default function StockCountPage() {
 
                 return (
                   <TableRow key={p.productName} className={hasCount ? "bg-muted/30" : "hover:bg-muted/40"}>
-                    <TableCell>{index + 1}</TableCell>
+                    <TableCell>{(currentPage - 1) * productsPerPage + index + 1}</TableCell>
+                    <TableCell className="font-medium">{p.productName}</TableCell>
+                    <TableCell>
+                      <Input
+                        type="number"
+                        min="0"
+                        placeholder="Count pcs"
+                        className="h-8 text-xs font-semibold"
+                        value={p.countedPcs ?? ""}
+                        onChange={(e) => handleCountChange(p.productName, e.target.value)}
+                      />
+                    </TableCell>
                     <TableCell className="text-center">
                       <input
                         type="checkbox"
@@ -503,7 +554,6 @@ export default function StockCountPage() {
                         }}
                       />
                     </TableCell>
-                    <TableCell className="font-medium">{p.productName}</TableCell>
                     <TableCell>
                       <select
                         className="w-full rounded border bg-transparent px-2 py-1 text-xs"
@@ -530,16 +580,6 @@ export default function StockCountPage() {
                       <div>{expectedFormatted}</div>
                       <div className="text-[11px] text-muted-foreground">({p.availablePieces.toLocaleString()} Pcs total)</div>
                     </TableCell>
-                    <TableCell>
-                      <Input
-                        type="number"
-                        min="0"
-                        placeholder="Count pcs"
-                        className="h-8 text-xs font-semibold"
-                        value={p.countedPcs ?? ""}
-                        onChange={(e) => handleCountChange(p.productName, e.target.value)}
-                      />
-                    </TableCell>
                     <TableCell className="text-xs font-medium">
                       {diffPcs === null ? (
                         <span className="text-muted-foreground">-</span>
@@ -559,6 +599,7 @@ export default function StockCountPage() {
           </TableBody>
         </Table>
       </div>
+      {totalPages > 1 ? <div className="flex flex-wrap items-center justify-center gap-2"><Button variant="outline" onClick={() => { setCurrentPage((page) => Math.max(1, page - 1)); tableTopRef.current?.scrollIntoView({ behavior: "smooth", block: "start" }) }} disabled={currentPage === 1}>Previous</Button>{pageNumbers.map((page) => <Button key={page} type="button" variant={page === currentPage ? "default" : "outline"} className="h-9 w-9 p-0" onClick={() => { setCurrentPage(page); tableTopRef.current?.scrollIntoView({ behavior: "smooth", block: "start" }) }}>{page}</Button>)}<Button variant="outline" onClick={() => { setCurrentPage((page) => Math.min(totalPages, page + 1)); tableTopRef.current?.scrollIntoView({ behavior: "smooth", block: "start" }) }} disabled={currentPage === totalPages}>Next</Button><span className="ml-1 text-sm text-muted-foreground">Page {currentPage} of {totalPages}</span></div> : null}
 
       {/* Modal 1: Create Shelf */}
       <Dialog open={createShelfOpen} onOpenChange={setCreateShelfOpen}>

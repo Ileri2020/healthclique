@@ -20,25 +20,17 @@ export async function POST(req: Request) {
       return NextResponse.json({ error: "Source and target product names must be different" }, { status: 400 })
     }
 
-    const [stockRes, saleRes, countLineRes] = await Promise.all([
-      prisma.inventoryStock.updateMany({
-        where: { productName: source },
-        data: { productName: target },
-      }),
-      prisma.inventorySale.updateMany({
-        where: { productName: source },
-        data: { productName: target },
-      }),
-      prisma.stockCountLine.updateMany({
-        where: { productName: source },
-        data: { productName: target },
-      }),
+    const [stockRes, saleRes, countLineRes] = await prisma.$transaction([
+      prisma.inventoryStock.updateMany({ where: { productName: source }, data: { productName: target } }),
+      prisma.inventorySale.updateMany({ where: { productName: source }, data: { productName: target } }),
+      prisma.stockCountLine.updateMany({ where: { productName: source }, data: { productName: target } }),
     ])
-
-    // Clean up old product shelf mapping if exists
-    await prisma.productShelf.deleteMany({
-      where: { productName: source },
-    }).catch(() => {})
+    const sourceShelf = await prisma.productShelf.findUnique({ where: { productName: source } })
+    const targetShelf = await prisma.productShelf.findUnique({ where: { productName: target } })
+    if (sourceShelf) {
+      if (targetShelf) await prisma.productShelf.delete({ where: { productName: source } })
+      else await prisma.productShelf.update({ where: { productName: source }, data: { productName: target } })
+    }
 
     return NextResponse.json({
       success: true,
@@ -47,6 +39,7 @@ export async function POST(req: Request) {
       updatedStocksCount: stockRes.count,
       updatedSalesCount: saleRes.count,
       updatedCountLinesCount: countLineRes.count,
+      updatedShelfCount: sourceShelf ? 1 : 0,
     })
   } catch (error) {
     console.error(error)
