@@ -1,6 +1,7 @@
 "use client"
 
 import { useEffect, useMemo, useState } from "react"
+import type { ReactNode } from "react"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
 import { Input } from "@/components/ui/input"
 import { Checkbox } from "@/components/ui/checkbox"
@@ -19,6 +20,8 @@ export type TableColumn = {
   key: string
   label: string
   type: "text" | "number" | "boolean" | "date"
+  previousValueKey?: string
+  autoValueKey?: string
   required?: boolean
   className?: string
   readOnly?: boolean
@@ -41,6 +44,7 @@ interface TablesProps {
   minWidth?: string
   readOnly?: boolean
   focusRowIndex?: number
+  extraActions?: ReactNode
 }
 
 function createBlankRow(columns: TableColumn[]) {
@@ -60,6 +64,7 @@ export function Tables({
   minWidth = "1100px",
   readOnly = false,
   focusRowIndex,
+  extraActions,
 }: TablesProps) {
   const [activeSuggestion, setActiveSuggestion] = useState<{ rowIndex: number; columnKey: string } | null>(null)
   const [quantityDialog, setQuantityDialog] = useState<{ rowIndex: number; column: TableColumn } | null>(null)
@@ -236,6 +241,19 @@ export function Tables({
                       </div>
                     ) : (
                       <div className="relative space-y-1">
+                        {column.previousValueKey && row[column.previousValueKey] !== undefined && row[column.previousValueKey] !== "" && (!column.autoValueKey || Number(row[column.previousValueKey]) !== Number(row[column.autoValueKey])) ? (
+                          <label className="flex items-center gap-1.5 text-xs font-semibold text-amber-600 dark:text-amber-400 cursor-pointer select-none py-0.5">
+                            <Checkbox
+                              checked={Number(value) === Number(row[column.previousValueKey])}
+                              disabled={readOnly}
+                              onCheckedChange={(checked) => {
+                                if (readOnly) return
+                                handleCellChange(rowIndex, column, checked ? String(row[column.previousValueKey]) : String(row[column.autoValueKey] ?? ""))
+                              }}
+                            />
+                            <span>Prev: ₦{Number(row[column.previousValueKey]).toLocaleString()}</span>
+                          </label>
+                        ) : null}
                         <Input
                           id={`cell-${rowIndex}-${column.key}`}
                           type={column.type === "number" ? "number" : column.type === "date" ? "date" : "text"}
@@ -304,10 +322,9 @@ export function Tables({
       </Table>
       </div>
       </div>
-      {!readOnly && <div className="absolute bottom-2 right-2 z-20 justify-end">
-        <Button type="button" variant="secondary" onClick={addRow}>
-          Add row
-        </Button>
+      {!readOnly && <div className="absolute bottom-2 right-2 z-20 flex items-center justify-end gap-2">
+        {extraActions}
+        <Button type="button" variant="secondary" onClick={addRow}>Add row</Button>
       </div>}
       <Dialog open={quantityDialog !== null} onOpenChange={(open) => !open && setQuantityDialog(null)}>
         <DialogContent className="max-w-sm">

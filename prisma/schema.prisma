@@ -226,6 +226,68 @@ model InventoryStock {
   updatedAt       DateTime  @updatedAt
 }
 
+model ProductShelf {
+  id          String   @id @default(auto()) @map("_id") @db.ObjectId
+  productName String   @unique
+  shelfId     String?  @db.ObjectId
+  shelfName   String?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+}
+
+model Shelf {
+  id              String        @id @default(auto()) @map("_id") @db.ObjectId
+  name            String
+  number          String?
+  rowFrom         Int?
+  rowTo           Int?
+  columnFrom      Int?
+  columnTo        Int?
+  stockCounts     StockCount[]
+  createdAt       DateTime      @default(now())
+  updatedAt       DateTime      @updatedAt
+
+  @@index([name])
+}
+
+model StockCount {
+  id              String           @id @default(auto()) @map("_id") @db.ObjectId
+  date            DateTime
+  shelf           Shelf?           @relation(fields: [shelfId], references: [id])
+  shelfId         String?          @db.ObjectId
+  shelfName       String?
+  note            String?
+  normalized      Boolean          @default(false)
+  normalizedAt    DateTime?
+  lines           StockCountLine[]
+  createdById     String?
+  createdAt       DateTime         @default(now())
+  updatedAt       DateTime         @updatedAt
+
+  @@index([date])
+  @@index([shelfId])
+}
+
+model StockCountLine {
+  id              String      @id @default(auto()) @map("_id") @db.ObjectId
+  count           StockCount  @relation(fields: [countId], references: [id], onDelete: Cascade)
+  countId         String      @db.ObjectId
+  productName     String
+  shelfName       String?
+  expectedPcs     Int         @default(0)
+  countedPcs      Int?
+  differencePcs   Int?
+  expiry          DateTime?
+  normalizedPcs   Int?
+  normalizedAt    DateTime?
+  normalizedById  String?
+  createdAt       DateTime    @default(now())
+  updatedAt       DateTime    @updatedAt
+
+  @@index([productName])
+  @@index([countId])
+}
+
 model Expense {
   id        String        @id @default(auto()) @map("_id") @db.ObjectId
   date      DateTime

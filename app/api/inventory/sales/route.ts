@@ -3,6 +3,28 @@ import { prisma } from "@/lib/prisma"
 
 const optionalNumber = (value: unknown) => value === "" || value == null ? undefined : Number(value)
 
+const createSaleRow = (row: any, customerName?: string) => ({
+  sn: optionalNumber(row.sn),
+  customerSn: optionalNumber(row.customerSn),
+  customerName: row.customerName === "" ? undefined : String(row.customerName || customerName || ""),
+  productName: String(row.productName || ""),
+  carton: Boolean(row.carton),
+  cartonQty: optionalNumber(row.cartonQty),
+  packsPerCarton: optionalNumber(row.packsPerCarton),
+  pack: Boolean(row.pack),
+  wholesale: Boolean(row.wholesale),
+  pcsCount: optionalNumber(row.pcsCount),
+  packQty: optionalNumber(row.packQty),
+  pcsQty: optionalNumber(row.pcsQty),
+  totalPcs: optionalNumber(row.totalPcs),
+  qty: optionalNumber(row.qty),
+  costPrice: optionalNumber(row.costPrice),
+  packSalesPrice: optionalNumber(row.salesPrice),
+  pcsSalesPrice: optionalNumber(row.salesPrice),
+  price: optionalNumber(row.salesPrice),
+  total: optionalNumber(row.total),
+})
+
 export async function GET(req: Request) {
   try {
     const requestUrl = new URL(req.url)
@@ -49,6 +71,26 @@ export async function POST(req: Request) {
     const body = await req.json()
     const { date, rows, customerName, paymentMethod, cashPaid, posPayment, change } = body
 
+    if (Array.isArray(body.sections)) {
+      const sections = body.sections.filter((section: any) => Array.isArray(section.rows) && section.rows.length > 0)
+      if (!sections.length) return NextResponse.json({ error: "No rows provided" }, { status: 400 })
+
+      const sales = await prisma.$transaction(sections.map((section: any) => prisma.inventory.create({
+        data: {
+          type: "sale",
+          date: date?.date ? new Date(date.date) : undefined,
+          rangeFrom: date?.from ? new Date(date.from) : undefined,
+          rangeTo: date?.to ? new Date(date.to) : undefined,
+          paymentMethod: section.paymentMethod || undefined,
+          cashPaid: section.cashPaid === undefined ? undefined : Number(section.cashPaid),
+          posPayment: section.posPayment === undefined ? undefined : Number(section.posPayment),
+          change: section.change === undefined ? undefined : Number(section.change),
+          sales: { create: section.rows.map((row: any) => createSaleRow(row, section.customerName)) },
+        },
+      })))
+      return NextResponse.json(sales)
+    }
+
     if (!Array.isArray(rows) || rows.length === 0) {
       return NextResponse.json({ error: "No rows provided" }, { status: 400 })
     }
@@ -64,27 +106,7 @@ export async function POST(req: Request) {
         posPayment: posPayment === undefined ? undefined : Number(posPayment),
         change: change === undefined ? undefined : Number(change),
         sales: {
-          create: rows.map((row: any) => ({
-            sn: optionalNumber(row.sn),
-            customerSn: optionalNumber(row.customerSn),
-            customerName: row.customerName === "" ? undefined : String(row.customerName || customerName || ""),
-            productName: String(row.productName || ""),
-            carton: Boolean(row.carton),
-            cartonQty: optionalNumber(row.cartonQty),
-            packsPerCarton: optionalNumber(row.packsPerCarton),
-            pack: Boolean(row.pack),
-            wholesale: Boolean(row.wholesale),
-            pcsCount: optionalNumber(row.pcsCount),
-            packQty: optionalNumber(row.packQty),
-            pcsQty: optionalNumber(row.pcsQty),
-            totalPcs: optionalNumber(row.totalPcs),
-            qty: optionalNumber(row.qty),
-            costPrice: optionalNumber(row.costPrice),
-            packSalesPrice: optionalNumber(row.salesPrice),
-            pcsSalesPrice: optionalNumber(row.salesPrice),
-            price: optionalNumber(row.salesPrice),
-            total: optionalNumber(row.total),
-          })),
+          create: rows.map((row: any) => createSaleRow(row, customerName)),
         },
       },
     })

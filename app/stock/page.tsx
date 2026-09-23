@@ -39,13 +39,22 @@ const stockColumns: TableColumn[] = [
   { key: "totalPcs", label: "Total Pcs", type: "number", readOnly: true, className: "min-w-[100px] w-28" },
   { key: "costPrice", label: "Purchase Cost", type: "number", className: "min-w-[100px] w-32" },
   { key: "wholesale", label: "Wholesale", type: "boolean", className: "w-24" },
-  { key: "cartonSalesPrice", label: "Carton Sales Price", type: "number", className: "min-w-[100px] w-36" },
-  { key: "packSalesPrice", label: "Pack Sales Price", type: "number", className: "min-w-[100px] w-36" },
-  { key: "pcsSalesPrice", label: "Pcs Sales Price", type: "number", className: "min-w-[100px] w-36" },
+  { key: "cartonSalesPrice", label: "Carton Sales Price", type: "number", previousValueKey: "_lastSavedCartonSalesPrice", autoValueKey: "_markupCartonSalesPrice", className: "min-w-[100px] w-36" },
+  { key: "packSalesPrice", label: "Pack Sales Price", type: "number", previousValueKey: "_lastSavedPackSalesPrice", autoValueKey: "_markupPackSalesPrice", className: "min-w-[100px] w-36" },
+  { key: "pcsSalesPrice", label: "Pcs Sales Price", type: "number", previousValueKey: "_lastSavedPcsSalesPrice", autoValueKey: "_markupPcsSalesPrice", className: "min-w-[100px] w-36" },
   { key: "expiry", label: "Expiry", type: "date", className: "min-w-[150px] w-40" },
 ]
 
 type InventoryProductName = string
+type SavedStockPricing = {
+  costPrice?: number
+  cartonSalesPrice?: number
+  packSalesPrice?: number
+  pcsSalesPrice?: number
+  wholesaleCartonSalesPrice?: number
+  wholesalePackSalesPrice?: number
+  wholesalePcsSalesPrice?: number
+}
 
 const createBlankStockRow = () => ({
   sn: "",
@@ -95,6 +104,7 @@ const StockPage = () => {
   const [focusRowIndex, setFocusRowIndex] = useState<number | undefined>(undefined)
   const [companies, setCompanies] = useState<Array<{ companyName: string; repName: string }>>([])
   const [companyDropdownOpen, setCompanyDropdownOpen] = useState(false)
+  const [savedStockPricing, setSavedStockPricing] = useState<Record<string, SavedStockPricing>>({})
 
   const productNames = useMemo(
     () => cachedProducts,
@@ -103,6 +113,26 @@ const StockPage = () => {
 
   useEffect(() => {
     loadInventoryProducts()
+    fetch("/api/inventory/stock")
+      .then((response) => response.json())
+      .then((data) => {
+        if (!Array.isArray(data)) return
+        setSavedStockPricing(data.reduce((acc, item) => {
+          if (item?.productName) {
+            acc[String(item.productName).trim().toLowerCase()] = {
+              costPrice: item.costPrice,
+              cartonSalesPrice: item.cartonSalesPrice,
+              packSalesPrice: item.packSalesPrice,
+              pcsSalesPrice: item.pcsSalesPrice,
+              wholesaleCartonSalesPrice: item.wholesaleCartonSalesPrice,
+              wholesalePackSalesPrice: item.wholesalePackSalesPrice,
+              wholesalePcsSalesPrice: item.wholesalePcsSalesPrice,
+            }
+          }
+          return acc
+        }, {} as Record<string, SavedStockPricing>))
+      })
+      .catch(() => setSavedStockPricing({}))
     fetch("/api/inventory/companies")
       .then((res) => res.json())
       .then((data) => setCompanies(Array.isArray(data) ? data : []))
@@ -155,7 +185,7 @@ const StockPage = () => {
         if (productName) setFocusRowIndex(purchase.stocks.findIndex((stock: TableRow) => stock.productName === productName))
       })
       .catch(() => toast.error("Unable to load stock purchase"))
-  }, [editId])
+  }, [editId, searchParams])
 
   const loadInventoryProducts = async () => {
     setLoadingProducts(true)
@@ -181,6 +211,9 @@ const StockPage = () => {
     setSaveState((current) => current === "saving" ? current : "idle")
     const normalizedRows = rows.map((row, rowIndex) => {
       const previousRow = tableRows[rowIndex]
+      const stockInfo = typeof row.productName === "string"
+        ? savedStockPricing[row.productName.trim().toLowerCase()]
+        : undefined
       const wasWholesale = Boolean(previousRow?.wholesale)
       const isWholesale = Boolean(row.wholesale)
       const modeChanged = isWholesale !== wasWholesale
@@ -309,6 +342,12 @@ const StockPage = () => {
         wholesaleCartonSalesPrice: isCarton ? wholesaleCarton : "",
         wholesalePackSalesPrice: isPack ? wholesalePack : "",
         wholesalePcsSalesPrice: wholesalePcs,
+        _lastSavedCartonSalesPrice: isCarton ? (isWholesale ? (stockInfo?.wholesaleCartonSalesPrice ?? stockInfo?.cartonSalesPrice ?? "") : (stockInfo?.cartonSalesPrice ?? stockInfo?.wholesaleCartonSalesPrice ?? "")) : "",
+        _lastSavedPackSalesPrice: isPack ? (isWholesale ? (stockInfo?.wholesalePackSalesPrice ?? stockInfo?.packSalesPrice ?? "") : (stockInfo?.packSalesPrice ?? stockInfo?.wholesalePackSalesPrice ?? "")) : "",
+        _lastSavedPcsSalesPrice: isWholesale ? (stockInfo?.wholesalePcsSalesPrice ?? stockInfo?.pcsSalesPrice ?? "") : (stockInfo?.pcsSalesPrice ?? stockInfo?.wholesalePcsSalesPrice ?? ""),
+        _markupCartonSalesPrice: isWholesale ? suggestedWholesaleCarton : suggestedRetailCarton,
+        _markupPackSalesPrice: isWholesale ? suggestedWholesalePack : suggestedRetailPack,
+        _markupPcsSalesPrice: isWholesale ? suggestedWholesalePcs : suggestedRetailPcs,
       }
     })
 
@@ -370,6 +409,7 @@ const StockPage = () => {
         </div>
         <div className="flex items-center gap-2">
           <Button variant="outline" asChild><Link href="/stock/products">Stock products</Link></Button>
+          <Button variant="outline" asChild><Link href="/stock/count">Stock count</Link></Button>
           <Dialog open={dateRangeOpen} onOpenChange={setDateRangeOpen}>
           <DialogTrigger asChild>
             <Button className="max-w-52 font-semibold">View stocks</Button>

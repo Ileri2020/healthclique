@@ -33,11 +33,22 @@ const salesColumns: TableColumn[] = [
   { key: "pcsQty", label: "Pcs Qty", type: "number", className: "min-w-[100px] w-28" },
   { key: "totalPcs", label: "Total Pcs", type: "number", readOnly: true, className: "min-w-[100px] w-28" },
   { key: "wholesale", label: "Wholesale", type: "boolean", className: "w-24" },
-  { key: "salesPrice", label: "Sales Price", type: "number", className: "min-w-[100px] w-36" },
+  { key: "salesPrice", label: "Sales Price", type: "number", previousValueKey: "_lastSavedSalesPrice", autoValueKey: "_markupSalesPrice", className: "min-w-[100px] w-36" },
   { key: "total", label: "Total Price", type: "number", readOnly: true, className: "min-w-[100px] w-36" },
 ]
 
 type InventoryProductName = string
+type PaymentMethod = "" | "cash" | "pos" | "cash&pos"
+type SalesCustomerSection = {
+  id: string
+  customerName: string
+  rows: TableRow[]
+  globalWholesale: boolean
+  paymentMethod: PaymentMethod
+  cashPaid: string
+  posPayment: string
+  change: string
+}
 
 const createBlankSalesRow = () => ({
   sn: "",
@@ -56,15 +67,20 @@ const createBlankSalesRow = () => ({
   total: "",
 })
 
+const createCustomerSection = (): SalesCustomerSection => ({
+  id: `${Date.now()}-${Math.random()}`,
+  customerName: "",
+  rows: Array.from({ length: 4 }, createBlankSalesRow),
+  globalWholesale: false,
+  paymentMethod: "",
+  cashPaid: "",
+  posPayment: "",
+  change: "",
+})
+
 const SalesPage = () => {
-  const [tableRows, setTableRows] = useState<TableRow[]>(() => Array.from({ length: 4 }, createBlankSalesRow))
-  const [customerName, setCustomerName] = useState("")
-  const [globalWholesale, setGlobalWholesale] = useState(false)
-  const [paymentMethod, setPaymentMethod] = useState<"" | "cash" | "pos" | "cash&pos">("")
-  const [paymentDialogOpen, setPaymentDialogOpen] = useState(false)
-  const [cashPaid, setCashPaid] = useState("")
-  const [posPayment, setPosPayment] = useState("")
-  const [change, setChange] = useState("")
+  const [customerSections, setCustomerSections] = useState<SalesCustomerSection[]>(() => [createCustomerSection()])
+  const [paymentDialogSectionId, setPaymentDialogSectionId] = useState<string | null>(null)
   const [dateRangeOpen, setDateRangeOpen] = useState(false)
   const [viewDate, setViewDate] = useState<Date>(new Date())
   const [viewRange, setViewRange] = useState<{ from: Date | undefined; to: Date | undefined }>({ from: undefined, to: undefined })
@@ -94,11 +110,11 @@ const SalesPage = () => {
       .catch(() => setCustomerList([]))
   }, [])
 
-  const filteredCustomers = useMemo(() => {
-    const query = customerName.trim().toLowerCase()
+  const filteredCustomers = (name: string) => {
+    const query = name.trim().toLowerCase()
     if (query.length < 3) return []
-    return customerList.filter((name) => name.toLowerCase().includes(query)).slice(0, 8)
-  }, [customerName, customerList])
+    return customerList.filter((customer) => customer.toLowerCase().includes(query)).slice(0, 8)
+  }
 
   useEffect(() => {
     if (!editId) return
@@ -106,11 +122,7 @@ const SalesPage = () => {
       .then((response) => response.json())
       .then((sale) => {
         if (!sale?.sales) return
-        setCustomerName(sale.sales[0]?.customerName ?? "")
-        setPaymentMethod(sale.paymentMethod ?? "")
-        setCashPaid(sale.cashPaid == null ? "" : String(sale.cashPaid))
-        setPosPayment(sale.posPayment == null ? "" : String(sale.posPayment))
-        setChange(sale.change == null ? "" : String(sale.change))
+        const firstCustomer = sale.sales[0]?.customerName ?? ""
         if (sale.date) {
           setSelectedDate(new Date(sale.date))
           setViewDate(new Date(sale.date))
@@ -120,7 +132,7 @@ const SalesPage = () => {
           setSelectedRange({ from: new Date(sale.rangeFrom), to: new Date(sale.rangeTo) })
           setDateMode("range")
         }
-        setTableRows(sale.sales.map((row: TableRow) => ({
+        const rows = sale.sales.map((row: TableRow) => ({
           ...row,
           carton: Boolean(row.carton),
           cartonQty: row.cartonQty ?? "",
@@ -132,12 +144,22 @@ const SalesPage = () => {
           totalPcs: row.totalPcs ?? "",
           salesPrice: row.price ?? row.packSalesPrice ?? row.pcsSalesPrice ?? "",
           total: row.total ?? "",
-        })))
+        }))
+        setCustomerSections([{
+          id: `${Date.now()}-edit`,
+          customerName: firstCustomer,
+          rows,
+          globalWholesale: Boolean(sale.sales.some((row: TableRow) => row.wholesale)),
+          paymentMethod: sale.paymentMethod ?? "",
+          cashPaid: sale.cashPaid == null ? "" : String(sale.cashPaid),
+          posPayment: sale.posPayment == null ? "" : String(sale.posPayment),
+          change: sale.change == null ? "" : String(sale.change),
+        }])
         const productName = searchParams.get("product")
         if (productName) setFocusRowIndex(sale.sales.findIndex((row: TableRow) => row.productName === productName))
       })
       .catch(() => toast.error("Unable to load saved sales"))
-  }, [editId])
+  }, [editId, searchParams])
 
   const loadInventoryProducts = async () => {
     setLoadingProducts(true)
@@ -161,7 +183,7 @@ const SalesPage = () => {
         setStockPricing(
           data.reduce((acc, item: any) => {
             if (item?.productName) {
-              acc[item.productName] = {
+              acc[String(item.productName).trim().toLowerCase()] = {
                 costPrice: item.costPrice,
                 cartonSalesPrice: item.cartonSalesPrice,
                 packSalesPrice: item.packSalesPrice,
@@ -180,22 +202,24 @@ const SalesPage = () => {
     }
   }
 
-  const totalCustomers = useMemo(() => {
-    const customerSet = new Set<string>()
-    if (customerName.trim()) customerSet.add(customerName.trim())
-    return customerSet.size
-  }, [customerName])
+  const totalCustomers = customerSections.filter((section) => section.customerName.trim()).length
 
-  const totalSalesAmount = useMemo(
-    () => tableRows.reduce((sum, row) => sum + (Number(row.total) || 0), 0),
-    [tableRows]
-  )
+  const updateSection = (sectionId: string, update: Partial<SalesCustomerSection>) => {
+    setCustomerSections((current) => current.map((section) => section.id === sectionId ? { ...section, ...update } : section))
+  }
 
-  useEffect(() => {
-    const total = totalSalesAmount ? String(Number(totalSalesAmount.toFixed(2))) : ""
-    if (paymentMethod === "cash") setCashPaid(total)
-    if (paymentMethod === "pos") setPosPayment(total)
-  }, [paymentMethod, totalSalesAmount])
+  const sectionTotal = (section: SalesCustomerSection) => section.rows.reduce((sum, row) => sum + (Number(row.total) || 0), 0)
+
+  const setSectionPaymentMethod = (section: SalesCustomerSection, method: PaymentMethod) => {
+    const total = sectionTotal(section)
+    updateSection(section.id, {
+      paymentMethod: method,
+      cashPaid: method === "cash" ? String(Number(total.toFixed(2))) : method === "cash&pos" ? section.cashPaid : "",
+      posPayment: method === "pos" ? String(Number(total.toFixed(2))) : method === "cash&pos" ? section.posPayment : "",
+      ...(method === "cash&pos" ? {} : { change: section.change }),
+    })
+    if (method === "cash&pos") setPaymentDialogSectionId(section.id)
+  }
 
   const currentLabel = useMemo(() => {
     if (dateMode === "range" && selectedRange.from && selectedRange.to) {
@@ -204,14 +228,15 @@ const SalesPage = () => {
     return format(selectedDate, "PPP")
   }, [dateMode, selectedDate, selectedRange])
 
-  const handleRowChange = (rows: TableRow[], wholesaleOverride = globalWholesale) => {
+  const handleRowChange = (section: SalesCustomerSection, rows: TableRow[], wholesaleOverride = section.globalWholesale) => {
     setSaveState((current) => current === "saving" ? current : "idle")
     const normalizedRows = rows.map((row, rowIndex) => {
       const productName = typeof row.productName === "string" ? row.productName : ""
-      const stockInfo = productName ? stockPricing[productName] : undefined
-      const previousRow = tableRows[rowIndex]
+      const stockInfo = productName ? stockPricing[productName.trim().toLowerCase()] : undefined
+      const previousRow = section.rows[rowIndex]
+      const productChanged = productName.trim().toLowerCase() !== String(previousRow?.productName ?? "").trim().toLowerCase()
       const rowWholesale = Boolean(row.wholesale) || wholesaleOverride
-      const previousWholesale = Boolean(previousRow?.wholesale) || globalWholesale
+      const previousWholesale = Boolean(previousRow?.wholesale) || section.globalWholesale
       const wholesaleChanged = rowWholesale !== previousWholesale
       const costValue = row.costPrice === "" || row.costPrice === undefined || row.costPrice === null
         ? stockInfo?.costPrice
@@ -224,16 +249,45 @@ const SalesPage = () => {
       const pcQty = row.pcsQty !== "" && row.pcsQty !== undefined && row.pcsQty !== null ? Number(row.pcsQty) : 0
       const computedTotalPcs = cartonQty > 0 || packQty > 0 || pcQty > 0 ? (cartonQty * packsPerCarton * pCount) + (packQty * pCount) + pcQty : ""
 
-      const fallbackPrice = costValue !== undefined && !Number.isNaN(costValue) ? Number((costValue * 1.1).toFixed(2)) : undefined
-      const defaultCarton = rowWholesale ? (stockInfo?.wholesaleCartonSalesPrice ?? fallbackPrice) : (stockInfo?.cartonSalesPrice ?? fallbackPrice)
-      const defaultPack = rowWholesale ? (stockInfo?.wholesalePackSalesPrice ?? fallbackPrice) : (stockInfo?.packSalesPrice ?? fallbackPrice)
-      const defaultPcs = rowWholesale ? (stockInfo?.wholesalePcsSalesPrice ?? fallbackPrice) : (stockInfo?.pcsSalesPrice ?? fallbackPrice)
-      const defaultPrice = cartonQty > 0 || Boolean(row.carton)
-        ? defaultCarton
-        : packQty > 0 || Boolean(row.pack)
-        ? defaultPack
-        : defaultPcs
-      const nextSalesPrice = wholesaleChanged && !row._salesPriceManual
+      // Last-saved prices from stock (respects wholesale flag, unit-type aware)
+      const lastSavedCarton = rowWholesale
+        ? (stockInfo?.wholesaleCartonSalesPrice ?? stockInfo?.cartonSalesPrice)
+        : (stockInfo?.cartonSalesPrice ?? stockInfo?.wholesaleCartonSalesPrice)
+      const lastSavedPack = rowWholesale
+        ? (stockInfo?.wholesalePackSalesPrice ?? stockInfo?.packSalesPrice)
+        : (stockInfo?.packSalesPrice ?? stockInfo?.wholesalePackSalesPrice)
+      const lastSavedPcs = rowWholesale
+        ? (stockInfo?.wholesalePcsSalesPrice ?? stockInfo?.pcsSalesPrice)
+        : (stockInfo?.pcsSalesPrice ?? stockInfo?.wholesalePcsSalesPrice)
+
+      // Markup-calculated prices per unit type (derived from cost / totalPcs)
+      const markupFactor = rowWholesale ? 1.1 : 1.3
+      const totalPiecesNum = Number(computedTotalPcs) || 0
+      const costPerPiece = costValue !== undefined && !Number.isNaN(costValue) && totalPiecesNum > 0
+        ? costValue / totalPiecesNum
+        : undefined
+      const markupPcs = costPerPiece !== undefined ? Number((costPerPiece * markupFactor).toFixed(2)) : undefined
+      const markupPack = costPerPiece !== undefined && pCount > 0 ? Number((costPerPiece * pCount * markupFactor).toFixed(2)) : undefined
+      const markupCarton = costPerPiece !== undefined && packsPerCarton > 0 && pCount > 0
+        ? Number((costPerPiece * packsPerCarton * pCount * markupFactor).toFixed(2))
+        : undefined
+
+      // Active unit type: pick the last saved price first, fall back to markup, then keep existing
+      const defaultCarton = lastSavedCarton !== undefined ? lastSavedCarton : (markupCarton ?? undefined)
+      const defaultPack = lastSavedPack !== undefined ? lastSavedPack : (markupPack ?? undefined)
+      const defaultPcs = lastSavedPcs !== undefined ? lastSavedPcs : (markupPcs ?? undefined)
+      const isCartonMode = cartonQty > 0 || Boolean(row.carton)
+      const isPackMode = packQty > 0 || Boolean(row.pack)
+      const defaultPrice = isCartonMode ? defaultCarton : isPackMode ? defaultPack : defaultPcs
+
+      // The markup price for the active unit (for checkbox comparison)
+      const activeMarkupPrice = isCartonMode ? markupCarton : isPackMode ? markupPack : markupPcs
+      // The last-saved price for the active unit (for checkbox)
+      const activeLastSavedPrice = isCartonMode ? lastSavedCarton : isPackMode ? lastSavedPack : lastSavedPcs
+
+      const nextSalesPrice = productChanged
+        ? defaultPrice ?? row.salesPrice
+        : wholesaleChanged && !row._salesPriceManual
         ? (defaultPrice ?? row.salesPrice)
         : row._salesPriceManual
         ? row.salesPrice
@@ -241,9 +295,9 @@ const SalesPage = () => {
         ? (defaultPrice ?? row.salesPrice)
         : row.salesPrice
       const rowPrice = Number(nextSalesPrice || 0)
-      const totalValue = cartonQty > 0 || Boolean(row.carton)
+      const totalValue = isCartonMode
         ? Number((cartonQty * rowPrice + (packQty * rowPrice) / packsPerCarton + (pcQty * rowPrice) / (packsPerCarton * pCount)).toFixed(2))
-        : packQty > 0 || Boolean(row.pack)
+        : isPackMode
         ? Number((cartonQty * packsPerCarton * rowPrice + packQty * rowPrice + (pcQty * rowPrice) / pCount).toFixed(2))
         : Number(((computedTotalPcs === "" ? 0 : Number(computedTotalPcs)) * rowPrice).toFixed(2))
 
@@ -254,46 +308,51 @@ const SalesPage = () => {
         costPrice: costValue ?? row.costPrice,
         salesPrice: nextSalesPrice,
         total: totalValue || "",
+        _lastSavedSalesPrice: activeLastSavedPrice !== undefined && activeLastSavedPrice !== null ? String(activeLastSavedPrice) : "",
+        _markupSalesPrice: activeMarkupPrice !== undefined && activeMarkupPrice !== null ? String(activeMarkupPrice) : "",
       }
     })
 
-    setTableRows(normalizedRows)
+    updateSection(section.id, { rows: normalizedRows, globalWholesale: wholesaleOverride })
   }
 
   const handleSubmit = async () => {
     if (saveState === "saving") return
-    const validRows = tableRows.filter((row) => row.productName)
-    const invalidRow = validRows.find(
+    const sectionsWithRows = customerSections.map((section) => ({ ...section, validRows: section.rows.filter((row) => row.productName) }))
+    const validSections = sectionsWithRows.filter((section) => section.validRows.length > 0)
+    const invalidSection = validSections.find((section) => section.validRows.some(
       (row) =>
         row.costPrice === "" ||
         row.costPrice === undefined ||
         Number.isNaN(Number(row.costPrice)) ||
         row.salesPrice === "" || row.salesPrice === undefined || row.salesPrice === null
-    )
+    ))
 
-    if (!validRows.length) {
+    if (!validSections.length) {
       toast.error("Add at least one product before saving sales.")
       return
     }
 
-    if (change.trim() && !customerName.trim()) {
-      toast.error("Add a customer name before entering change.")
+    if (validSections.some((section) => !section.customerName.trim())) {
+      toast.error("Add a customer name for every sales section.")
       return
     }
 
-    if (invalidRow) {
+    if (invalidSection) {
       toast.error("Each sales row requires cost price and a sales price.")
       return
     }
 
     const payload = {
-      customerName: customerName.trim(),
       date: selectedRange.from && selectedRange.to ? { from: selectedRange.from, to: selectedRange.to } : { date: selectedDate },
-      paymentMethod: paymentMethod || undefined,
-      cashPaid: cashPaid === "" ? undefined : Number(cashPaid),
-      posPayment: posPayment === "" ? undefined : Number(posPayment),
-      change: change === "" ? undefined : Number(change),
-      rows: validRows.map((row) => ({ ...row, customerName: customerName.trim(), wholesale: Boolean(row.wholesale) || globalWholesale })),
+      sections: validSections.map((section) => ({
+        customerName: section.customerName.trim(),
+        paymentMethod: section.paymentMethod || undefined,
+        cashPaid: section.cashPaid === "" ? undefined : Number(section.cashPaid),
+        posPayment: section.posPayment === "" ? undefined : Number(section.posPayment),
+        change: section.change === "" ? undefined : Number(section.change),
+        rows: section.validRows.map((row) => ({ ...row, customerName: section.customerName.trim(), wholesale: Boolean(row.wholesale) || section.globalWholesale })),
+      })),
     }
 
     setSaveState("saving")
@@ -308,14 +367,8 @@ const SalesPage = () => {
       }
       toast.success(editId ? "Sales updated" : "Sales saved")
       setSaveState("saved")
-      setTableRows(Array.from({ length: 4 }, createBlankSalesRow))
-      setCustomerName("")
-      setGlobalWholesale(false)
-      setPaymentMethod("")
-      setPaymentDialogOpen(false)
-      setCashPaid("")
-      setPosPayment("")
-      setChange("")
+      setCustomerSections([createCustomerSection()])
+      setPaymentDialogSectionId(null)
       if (editId) {
         router.push("/sales")
       }
@@ -394,90 +447,35 @@ const SalesPage = () => {
         </Dialog>
       </div>
 
-      <div className="rounded-lg border bg-card p-4">
-        <div className="mb-4 flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
-          <div className="relative flex flex-1 flex-col gap-2 md:max-w-sm">
-            <Label htmlFor="customer-name">Customer name</Label>
-            <input
-              id="customer-name"
-              type="text"
-              className="w-full rounded border bg-transparent px-3 py-2 text-sm"
-              value={customerName}
-              onFocus={() => {
-                if (customerName.trim().length >= 3) setCustomerDropdownOpen(true)
-              }}
-              onChange={(event) => {
-                const val = event.target.value
-                setCustomerName(val)
-                setCustomerDropdownOpen(val.trim().length >= 3)
-              }}
-              onBlur={() => {
-                window.setTimeout(() => setCustomerDropdownOpen(false), 150)
-              }}
-              placeholder="Enter customer name"
-            />
-            {customerDropdownOpen && filteredCustomers.length > 0 ? (
-              <div className="absolute left-0 right-0 top-full z-50 mt-1 max-h-48 overflow-y-auto rounded-md border bg-popover p-1 text-popover-foreground shadow-md">
-                {filteredCustomers.map((name) => (
-                  <button
-                    key={name}
-                    type="button"
-                    className="block w-full rounded px-2 py-1.5 text-left text-sm font-medium hover:bg-accent"
-                    onMouseDown={(event) => {
-                      event.preventDefault()
-                      setCustomerName(name)
-                      setCustomerDropdownOpen(false)
-                    }}
-                  >
-                    {name}
-                  </button>
-                ))}
+      <div className="space-y-4">
+        {customerSections.map((section, sectionIndex) => {
+          const sectionCustomers = filteredCustomers(section.customerName)
+          const sectionTotalValue = sectionTotal(section)
+          return <div key={section.id} className="rounded-lg border bg-card p-4">
+            <div className="mb-4 flex flex-col gap-3 md:flex-row md:items-end md:justify-between">
+              <div className="relative flex flex-1 flex-col gap-2 md:max-w-sm">
+                <Label htmlFor={`customer-name-${section.id}`}>Customer {sectionIndex + 1}</Label>
+                <input id={`customer-name-${section.id}`} type="text" className="w-full rounded border bg-transparent px-3 py-2 text-sm" value={section.customerName} onFocus={() => section.customerName.trim().length >= 3 && setCustomerDropdownOpen(true)} onChange={(event) => { const value = event.target.value; updateSection(section.id, { customerName: value }); setCustomerDropdownOpen(true) }} onBlur={() => window.setTimeout(() => setCustomerDropdownOpen(false), 150)} placeholder="Enter customer name" />
+                {customerDropdownOpen && sectionCustomers.length > 0 ? <div className="absolute left-0 right-0 top-full z-50 mt-1 max-h-48 overflow-y-auto rounded-md border bg-popover p-1 text-popover-foreground shadow-md">{sectionCustomers.map((name) => <button key={name} type="button" className="block w-full rounded px-2 py-1.5 text-left text-sm font-medium hover:bg-accent" onMouseDown={(event) => { event.preventDefault(); updateSection(section.id, { customerName: name }); setCustomerDropdownOpen(false) }}>{name}</button>)}</div> : null}
               </div>
-            ) : null}
+              {sectionIndex === 0 ? <div className="flex flex-col gap-2 md:max-w-xs"><Label htmlFor="sales-date">Date</Label><input id="sales-date" type="date" className="w-full rounded border bg-transparent px-3 py-2 text-sm" value={format(selectedDate, "yyyy-MM-dd")} onChange={(event) => { setDateMode("single"); setSelectedDate(new Date(event.target.value)); setSelectedRange({ from: undefined, to: undefined }) }} /></div> : null}
+              <label className="flex items-center gap-2 rounded border px-3 py-2 text-sm"><input type="checkbox" checked={section.globalWholesale} onChange={(event) => { const enabled = event.target.checked; handleRowChange(section, section.rows.map((row) => ({ ...row, wholesale: enabled })), enabled) }} />Wholesale</label>
+            </div>
+            <div className="rounded-lg border bg-card p-2 sm:p-4 max-w-full">
+              <Tables columns={salesColumns} defaultRowCount={4} rows={section.rows} onRowsChange={(rows) => handleRowChange(section, rows)} autocomplete={{ productName: productNames }} showTotals minWidth="1300px" focusRowIndex={sectionIndex === 0 ? focusRowIndex : undefined} extraActions={sectionIndex === customerSections.length - 1 ? <Button type="button" variant="outline" onClick={() => setCustomerSections((current) => [...current, createCustomerSection()])}>New customer</Button> : null} />
+            </div>
+            <div className="mt-4 flex flex-wrap items-end gap-4 border-t pt-4">
+              <div className="mr-auto"><p className="text-xs uppercase tracking-wide text-muted-foreground">Customer total</p><p className="text-xl font-bold">₦{sectionTotalValue.toLocaleString()}</p></div>
+              <div className="flex items-center gap-3">{(["cash", "pos", "cash&pos"] as const).map((method) => <label key={method} className="flex items-center gap-2 text-sm"><input type="checkbox" checked={section.paymentMethod === method} onChange={(event) => setSectionPaymentMethod(section, event.target.checked ? method : "")} />{method === "cash&pos" ? "Cash & POS" : method.toUpperCase()}</label>)}</div>
+              <label className="flex items-center gap-2 text-sm">Cash<input type="number" min="0" step="0.01" className="w-28 rounded border bg-transparent px-2 py-1" value={section.cashPaid} onChange={(event) => updateSection(section.id, { cashPaid: event.target.value })} /></label>
+              <label className="flex items-center gap-2 text-sm">POS<input type="number" min="0" step="0.01" className="w-28 rounded border bg-transparent px-2 py-1" value={section.posPayment} onChange={(event) => updateSection(section.id, { posPayment: event.target.value })} /></label>
+              <label className="flex items-center gap-2 text-sm">Change<input type="number" min="0" step="0.01" className="w-28 rounded border bg-transparent px-2 py-1" value={section.change} onChange={(event) => updateSection(section.id, { change: event.target.value })} /></label>
+            </div>
           </div>
-          <div className="flex flex-col gap-2 md:max-w-xs">
-            <Label htmlFor="sales-date">Date</Label>
-            <input
-              id="sales-date"
-              type="date"
-              className="w-full rounded border bg-transparent px-3 py-2 text-sm"
-              value={format(selectedDate, "yyyy-MM-dd")}
-              onChange={(event) => {
-                setDateMode("single")
-                setSelectedDate(new Date(event.target.value))
-                setSelectedRange({ from: undefined, to: undefined })
-              }}
-            />
-          </div>
-          <label className="flex items-center gap-2 rounded border px-3 py-2 text-sm">
-            <input
-              type="checkbox"
-              checked={globalWholesale}
-              onChange={(event) => {
-                const enabled = event.target.checked
-                setGlobalWholesale(enabled)
-                handleRowChange(tableRows.map((row) => ({ ...row, wholesale: enabled })), enabled)
-              }}
-            />
-            Wholesale
-          </label>
-        </div>
-
-        <div className="rounded-lg border bg-card p-2 sm:p-4 max-w-full">
-          <Tables
-            columns={salesColumns}
-            defaultRowCount={4}
-            rows={tableRows}
-            onRowsChange={handleRowChange}
-            autocomplete={{ productName: productNames }}
-            showTotals
-            minWidth="1300px"
-            focusRowIndex={focusRowIndex}
-          />
-        </div>
+        })}
       </div>
 
-      <Dialog open={paymentDialogOpen} onOpenChange={setPaymentDialogOpen}>
+      <Dialog open={paymentDialogSectionId !== null} onOpenChange={(open) => !open && setPaymentDialogSectionId(null)}>
         <DialogContent className="max-w-sm">
           <DialogHeader>
             <DialogTitle>Cash and POS payment</DialogTitle>
@@ -486,46 +484,21 @@ const SalesPage = () => {
           <div className="grid gap-4 py-2">
             <div className="space-y-2">
               <Label htmlFor="cash-paid">Cash paid</Label>
-              <input id="cash-paid" type="number" min="0" step="0.01" className="w-full rounded border bg-transparent px-3 py-2 text-sm" value={cashPaid} onChange={(event) => setCashPaid(event.target.value)} />
+              <input id="cash-paid" type="number" min="0" step="0.01" className="w-full rounded border bg-transparent px-3 py-2 text-sm" value={customerSections.find((section) => section.id === paymentDialogSectionId)?.cashPaid ?? ""} onChange={(event) => paymentDialogSectionId && updateSection(paymentDialogSectionId, { cashPaid: event.target.value })} />
             </div>
             <div className="space-y-2">
               <Label htmlFor="pos-payment">POS payment</Label>
-              <input id="pos-payment" type="number" min="0" step="0.01" className="w-full rounded border bg-transparent px-3 py-2 text-sm" value={posPayment} onChange={(event) => setPosPayment(event.target.value)} />
+              <input id="pos-payment" type="number" min="0" step="0.01" className="w-full rounded border bg-transparent px-3 py-2 text-sm" value={customerSections.find((section) => section.id === paymentDialogSectionId)?.posPayment ?? ""} onChange={(event) => paymentDialogSectionId && updateSection(paymentDialogSectionId, { posPayment: event.target.value })} />
             </div>
           </div>
           <DialogFooter>
-            <Button type="button" onClick={() => setPaymentDialogOpen(false)}>Done</Button>
+            <Button type="button" onClick={() => setPaymentDialogSectionId(null)}>Done</Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
 
       <div className="flex flex-wrap items-end gap-3">
         <Button onClick={handleSubmit} disabled={saveState === "saving"}>{saveState === "saving" ? "Saving..." : editId ? "Update sales" : "Save sales"}</Button>
-        <div className="flex items-center gap-3">
-          {(["cash", "pos", "cash&pos"] as const).map((method) => (
-            <label key={method} className="flex items-center gap-2 text-sm">
-              <input
-                type="checkbox"
-                checked={paymentMethod === method}
-                onChange={(event) => {
-                  if (!event.target.checked) {
-                    setPaymentMethod("")
-                    return
-                  }
-                  setPaymentMethod(method)
-                  if (method === "cash") setCashPaid(totalSalesAmount ? String(Number(totalSalesAmount.toFixed(2))) : "")
-                  if (method === "pos") setPosPayment(totalSalesAmount ? String(Number(totalSalesAmount.toFixed(2))) : "")
-                  if (method === "cash&pos") setPaymentDialogOpen(true)
-                }}
-              />
-              {method === "cash&pos" ? "Cash & POS" : method.toUpperCase()}
-            </label>
-          ))}
-        </div>
-        <label className="flex items-center gap-2 text-sm">
-          Change
-          <input type="number" min="0" step="0.01" className="w-28 rounded border bg-transparent px-3 py-2 text-sm" value={change} onChange={(event) => setChange(event.target.value)} />
-        </label>
         <span className="text-sm text-muted-foreground">Selected: {currentLabel}</span>
         <span className="text-sm text-muted-foreground">Customers: {totalCustomers}</span>
         {loadingProducts ? <span className="text-sm">Loading products...</span> : null}
