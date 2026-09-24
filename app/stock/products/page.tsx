@@ -47,7 +47,7 @@ export default function StockProductsPage() {
   const [renameFrom, setRenameFrom] = useState("")
   const [renameTo, setRenameTo] = useState("")
   const [renameSaving, setRenameSaving] = useState(false)
-  const pageSize = 30
+  const pageSize = 75
 
   useEffect(() => {
     fetch("/api/inventory/products/availability")
@@ -159,9 +159,9 @@ export default function StockProductsPage() {
       <div className="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between max-w-xl mx-auto">
         <Input placeholder="Search stock products..." value={searchTerm} onChange={(event) => setSearchTerm(event.target.value)} className="max-w-md" />
         <label className="text-sm font-medium">Sort by
-          <select className="mt-1 block rounded-md border bg-transparent px-3 py-2 text-sm" value={sortBy} onChange={(event) => setSortBy(event.target.value as "name" | "expiry")}>
-            <option value="name">Product name</option>
-            <option value="expiry">Expiry date</option>
+          <select className="mt-1 block rounded-md border bg-background px-3 py-2 text-sm text-foreground" value={sortBy} onChange={(event) => setSortBy(event.target.value as "name" | "expiry")}>
+            <option className="bg-background text-foreground" value="name">Product name</option>
+            <option className="bg-background text-foreground" value="expiry">Expiry date</option>
           </select>
         </label>
         <span className="text-sm text-muted-foreground">{filteredProducts.length} product{filteredProducts.length === 1 ? "" : "s"}</span>

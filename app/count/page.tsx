@@ -442,17 +442,17 @@ export default function StockCountPage() {
           <Label htmlFor="shelf-filter" className="text-sm font-semibold">Filter shelf</Label>
           <select
             id="shelf-filter"
-            className="mt-1 w-full rounded-md border bg-transparent px-3 py-2 text-sm"
+            className="mt-1 w-full rounded-md border bg-background px-3 py-2 text-sm text-foreground"
             value={selectedShelfFilter}
             onChange={(e) => setSelectedShelfFilter(e.target.value)}
           >
-            <option value="all">All shelves</option>
+            <option className="bg-background text-foreground" value="all">All shelves</option>
             {shelves.map((s) => (
-              <option key={s.id} value={s.name}>
+              <option key={s.id} className="bg-background text-foreground" value={s.name}>
                 {s.name} {s.number ? `(#${s.number})` : ""}
               </option>
             ))}
-            <option value="Unassigned">Unassigned</option>
+            <option className="bg-background text-foreground" value="Unassigned">Unassigned</option>
           </select>
         </div>
 
@@ -460,16 +460,16 @@ export default function StockCountPage() {
           <Label htmlFor="sort-by" className="text-sm font-semibold">Sort by</Label>
           <select
             id="sort-by"
-            className="mt-1 w-full rounded-md border bg-transparent px-3 py-2 text-sm"
+            className="mt-1 w-full rounded-md border bg-background px-3 py-2 text-sm text-foreground"
             value={sortBy}
             onChange={(e) => setSortBy(e.target.value as any)}
           >
-            <option value="name">Product name</option>
-            <option value="shelf">Shelf name</option>
-            <option value="expected">Expected quantity</option>
-            <option value="price">Sales price</option>
-            <option value="expiry">Expiry date</option>
-            <option value="status">Difference status</option>
+            <option className="bg-background text-foreground" value="name">Product name</option>
+            <option className="bg-background text-foreground" value="shelf">Shelf name</option>
+            <option className="bg-background text-foreground" value="expected">Expected quantity</option>
+            <option className="bg-background text-foreground" value="price">Sales price</option>
+            <option className="bg-background text-foreground" value="expiry">Expiry date</option>
+            <option className="bg-background text-foreground" value="status">Difference status</option>
           </select>
         </div>
       </div>
