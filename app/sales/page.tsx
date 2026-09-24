@@ -402,10 +402,8 @@ const SalesPage = () => {
     })
     const invalidSection = groupedSections.find((section) => section.validRows.some(
       (row) =>
-        row.costPrice === "" ||
-        row.costPrice === undefined ||
-        Number.isNaN(Number(row.costPrice)) ||
-        row.salesPrice === "" || row.salesPrice === undefined || row.salesPrice === null
+        (row.salesPrice === "" || row.salesPrice === undefined || row.salesPrice === null) &&
+        (row.total === "" || row.total === undefined || row.total === null)
     ))
 
     if (!validSections.length) {
@@ -414,7 +412,7 @@ const SalesPage = () => {
     }
 
     if (invalidSection) {
-      toast.error("Each sales row requires cost price and a sales price.")
+      toast.error("Each sales row requires a sales price or total price.")
       return
     }
 
