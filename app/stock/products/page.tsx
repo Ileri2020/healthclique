@@ -37,6 +37,7 @@ export default function StockProductsPage() {
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState("")
   const [searchTerm, setSearchTerm] = useState("")
+  const [sortBy, setSortBy] = useState<"name" | "expiry">("name")
   const [currentPage, setCurrentPage] = useState(1)
   const [selectedProduct, setSelectedProduct] = useState<string | null>(null)
   const [history, setHistory] = useState<{ stocks: ProductHistoryEntry[]; sales: ProductHistoryEntry[] }>({ stocks: [], sales: [] })
@@ -68,8 +69,17 @@ export default function StockProductsPage() {
 
   const filteredProducts = useMemo(() => {
     const query = searchTerm.trim().toLowerCase()
-    return query ? products.filter((product) => product.productName.toLowerCase().includes(query)) : products
-  }, [products, searchTerm])
+    const filtered = query ? products.filter((product) => product.productName.toLowerCase().includes(query)) : [...products]
+    if (sortBy === "expiry") {
+      filtered.sort((a, b) => {
+        if (!a.expiry && !b.expiry) return 0
+        if (!a.expiry) return -1
+        if (!b.expiry) return 1
+        return new Date(a.expiry).getTime() - new Date(b.expiry).getTime()
+      })
+    }
+    return filtered
+  }, [products, searchTerm, sortBy])
 
   const totalPages = Math.max(1, Math.ceil(filteredProducts.length / pageSize))
   const visibleProducts = filteredProducts.slice((currentPage - 1) * pageSize, currentPage * pageSize)
@@ -80,7 +90,7 @@ export default function StockProductsPage() {
     return [1, currentPage - 1, currentPage, currentPage + 1, currentPage + 2, totalPages]
   }, [currentPage, totalPages])
 
-  useEffect(() => setCurrentPage(1), [searchTerm])
+  useEffect(() => setCurrentPage(1), [searchTerm, sortBy])
   useEffect(() => {
     if (currentPage > totalPages) setCurrentPage(totalPages)
   }, [currentPage, totalPages])
@@ -146,8 +156,14 @@ export default function StockProductsPage() {
       <Button variant="outline" asChild><Link href="/stock">Back to stock</Link></Button>
     </div>
     <div className="space-y-4">
-      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between max-w-sm mx-auto">
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between max-w-xl mx-auto">
         <Input placeholder="Search stock products..." value={searchTerm} onChange={(event) => setSearchTerm(event.target.value)} className="max-w-md" />
+        <label className="text-sm font-medium">Sort by
+          <select className="mt-1 block rounded-md border bg-transparent px-3 py-2 text-sm" value={sortBy} onChange={(event) => setSortBy(event.target.value as "name" | "expiry")}>
+            <option value="name">Product name</option>
+            <option value="expiry">Expiry date</option>
+          </select>
+        </label>
         <span className="text-sm text-muted-foreground">{filteredProducts.length} product{filteredProducts.length === 1 ? "" : "s"}</span>
       </div>
       <div className="overflow-x-auto rounded-lg border">

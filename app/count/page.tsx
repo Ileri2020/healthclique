@@ -95,7 +95,7 @@ export default function StockCountPage() {
   const [searchTerm, setSearchTerm] = useState("")
   const [searchDropdownOpen, setSearchDropdownOpen] = useState(false)
   const [selectedShelfFilter, setSelectedShelfFilter] = useState<string>("all")
-  const [sortBy, setSortBy] = useState<"name" | "shelf" | "price" | "expected" | "status">("name")
+  const [sortBy, setSortBy] = useState<"name" | "shelf" | "price" | "expected" | "status" | "expiry">("name")
   const [countDate, setCountDate] = useState<Date>(new Date())
 
   // Create Shelf Dialog
@@ -344,6 +344,14 @@ export default function StockCountPage() {
       if (sortBy === "shelf") return (a.shelfName || "ZZZ").localeCompare(b.shelfName || "ZZZ")
       if (sortBy === "expected") return b.availablePieces - a.availablePieces
       if (sortBy === "price") return (b.pcsSalesPrice || 0) - (a.pcsSalesPrice || 0)
+      if (sortBy === "expiry") {
+        const aExpiry = a.expiryInput || a.shortestExpiry
+        const bExpiry = b.expiryInput || b.shortestExpiry
+        if (!aExpiry && !bExpiry) return 0
+        if (!aExpiry) return -1
+        if (!bExpiry) return 1
+        return new Date(aExpiry).getTime() - new Date(bExpiry).getTime()
+      }
       if (sortBy === "status") {
         const aDiff = aHasCount ? Number(a.countedPcs) - a.availablePieces : 0
         const bDiff = bHasCount ? Number(b.countedPcs) - b.availablePieces : 0
@@ -460,6 +468,7 @@ export default function StockCountPage() {
             <option value="shelf">Shelf name</option>
             <option value="expected">Expected quantity</option>
             <option value="price">Sales price</option>
+            <option value="expiry">Expiry date</option>
             <option value="status">Difference status</option>
           </select>
         </div>
