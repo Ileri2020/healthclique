@@ -1,6 +1,6 @@
 "use client"
 
-import { useEffect, useMemo, useState } from "react"
+import { Fragment, useEffect, useMemo, useState } from "react"
 import type { ReactNode } from "react"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
 import { Input } from "@/components/ui/input"
@@ -31,6 +31,8 @@ export type TableColumn = {
   }[]
 }
 
+export type AutocompleteOption = string | { label: string; value: string }
+
 export type TableRow = Record<string, string | number | boolean | undefined>
 
 interface TablesProps {
@@ -38,13 +40,16 @@ interface TablesProps {
   defaultRowCount?: number
   rows?: TableRow[]
   onRowsChange?: (rows: TableRow[]) => void
-  autocomplete?: Record<string, string[]>
+  autocomplete?: Record<string, AutocompleteOption[]>
   restrictToOptions?: string[]
   showTotals?: boolean
   minWidth?: string
   readOnly?: boolean
   focusRowIndex?: number
   extraActions?: ReactNode
+  snRestartKey?: string
+  groupTotalKey?: string
+  groupTotalContent?: (range: { startIndex: number; endIndex: number; total: number }) => ReactNode
 }
 
 function createBlankRow(columns: TableColumn[]) {
@@ -65,6 +70,9 @@ export function Tables({
   readOnly = false,
   focusRowIndex,
   extraActions,
+  snRestartKey,
+  groupTotalKey,
+  groupTotalContent,
 }: TablesProps) {
   const [activeSuggestion, setActiveSuggestion] = useState<{ rowIndex: number; columnKey: string } | null>(null)
   const [quantityDialog, setQuantityDialog] = useState<{ rowIndex: number; column: TableColumn } | null>(null)
@@ -112,6 +120,12 @@ export function Tables({
 
     if (column.key === "salesPrice") {
       row._salesPriceManual = true
+    }
+    if (column.key === "total") {
+      row._totalManual = true
+    }
+    if (column.key === "salesPrice") {
+      row._totalManual = false
     }
 
     newRows[rowIndex] = row
@@ -162,8 +176,23 @@ export function Tables({
     const val = String(activeRows[rowIndex]?.[columnKey] ?? "").toLowerCase()
     if (val.length < 4) return []
     const list = autocomplete?.[columnKey] ?? []
-    return list.filter((item) => item.toLowerCase().includes(val)).slice(0, 10)
+    return list.filter((item) => (typeof item === "string" ? item : item.label).toLowerCase().includes(val)).slice(0, 10)
   }, [activeSuggestion, activeRows, autocomplete])
+
+  const serialNumberForRow = (rowIndex: number) => {
+    if (!snRestartKey) return rowIndex + 1
+    let serialNumber = 1
+    for (let index = 1; index <= rowIndex; index += 1) {
+      serialNumber = activeRows[index]?.[snRestartKey] ? 1 : serialNumber + 1
+    }
+    return serialNumber
+  }
+
+  const groupTotalForRows = (startIndex: number, endIndex: number, columnKey: string) =>
+    activeRows.slice(startIndex, endIndex + 1).reduce((sum, row) => {
+      const value = row[columnKey]
+      return sum + (typeof value === "number" ? value : Number(value) || 0)
+    }, 0)
 
   return (
     <div className="relative w-full max-w-full pb-14">
@@ -183,14 +212,19 @@ export function Tables({
           </TableRow>
         </TableHeader>
         <TableBody>
-          {activeRows.map((row, rowIndex) => (
-            <TableRow key={rowIndex} className="border-b border-background border-2">
+          {activeRows.map((row, rowIndex) => {
+            const groupStartIndex = groupTotalKey
+              ? activeRows.slice(0, rowIndex + 1).reduce((startIndex, currentRow, index) => currentRow[groupTotalKey] ? index : startIndex, 0)
+              : 0
+            const isGroupEnd = groupTotalKey && (!activeRows[rowIndex + 1] || Boolean(activeRows[rowIndex + 1][groupTotalKey]))
+            return <Fragment key={rowIndex}>
+            <TableRow className="border-b border-background border-2">
               {columns.map((column) => {
                 const value = row[column.key]
                 const isSn = column.key === "sn"
                 const isSnEditable = Boolean(snEditableRows[rowIndex])
                 const displayValue = isSn
-                  ? String(value === undefined || value === "" ? rowIndex + 1 : value)
+                  ? String(snRestartKey ? serialNumberForRow(rowIndex) : value === undefined || value === "" ? rowIndex + 1 : value)
                   : value === undefined || value === null
                   ? ""
                   : String(value)
@@ -286,20 +320,22 @@ export function Tables({
                         />
                         {isCurrentSuggestionActive && filteredSuggestions.length > 0 ? (
                           <div className="absolute left-0 right-0 top-full z-50 mt-1 max-h-48 overflow-y-auto rounded-md border bg-popover p-1 text-popover-foreground shadow-md">
-                            {filteredSuggestions.map((item) => (
-                              <button
-                                key={item}
+                            {filteredSuggestions.map((item) => {
+                              const label = typeof item === "string" ? item : item.label
+                              const value = typeof item === "string" ? item : item.value
+                              return <button
+                                key={value}
                                 type="button"
                                 className="block w-full rounded px-2 py-1.5 text-left text-sm hover:bg-accent"
                                 onMouseDown={(event) => {
                                   event.preventDefault()
-                                  handleCellChange(rowIndex, column, item)
+                                  handleCellChange(rowIndex, column, value)
                                   setActiveSuggestion(null)
                                 }}
                               >
-                                {item}
+                                {label}
                               </button>
-                            ))}
+                            })}
                           </div>
                         ) : null}
                       </div>
@@ -308,7 +344,15 @@ export function Tables({
                 )
               })}
             </TableRow>
-          ))}
+            {isGroupEnd ? <TableRow className="border-b border-background border-2 bg-muted/30">
+              {columns.map((column) => (
+                <TableCell key={column.key} className="font-semibold justify-center items-center text-center">
+                  {column.key === "productName" ? groupTotalContent?.({ startIndex: groupStartIndex, endIndex: rowIndex, total: groupTotalForRows(groupStartIndex, rowIndex, "total") }) ?? "Customer total" : column.key === "total" ? groupTotalForRows(groupStartIndex, rowIndex, column.key) || "" : ""}
+                </TableCell>
+              ))}
+            </TableRow> : null}
+            </Fragment>
+          })}
           {footerTotals ? (
             <TableRow className="border-b border-background border-2">
               {columns.map((column) => (

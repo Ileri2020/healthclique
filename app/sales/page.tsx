@@ -6,11 +6,12 @@ import { format } from "date-fns"
 import { Button } from "@/components/ui/button"
 import { Label } from "@/components/ui/label"
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog"
-import { Tables, TableColumn, TableRow } from "@/components/myComponents/tables"
+import { Tables, AutocompleteOption, TableColumn, TableRow } from "@/components/myComponents/tables"
 import { toast } from "sonner"
 
 const salesColumns: TableColumn[] = [
   { key: "sn", label: "S/N", type: "number", required: true, className: "w-10" },
+  { key: "newCustomer", label: "NC", type: "boolean", className: "w-20" },
   { key: "productName", label: "Product Name", type: "text", required: true },
   {
     key: "carton",
@@ -34,11 +35,17 @@ const salesColumns: TableColumn[] = [
   { key: "totalPcs", label: "Total Pcs", type: "number", readOnly: true, className: "min-w-[100px] w-28" },
   { key: "wholesale", label: "Wholesale", type: "boolean", className: "w-24" },
   { key: "salesPrice", label: "Sales Price", type: "number", previousValueKey: "_lastSavedSalesPrice", autoValueKey: "_markupSalesPrice", className: "min-w-[100px] w-36" },
-  { key: "total", label: "Total Price", type: "number", readOnly: true, className: "min-w-[100px] w-36" },
+  { key: "total", label: "Total Price", type: "number", className: "min-w-[100px] w-36" },
 ]
 
 type InventoryProductName = string
 type PaymentMethod = "" | "cash" | "pos" | "cash&pos"
+type GroupPayment = {
+  paymentMethod: PaymentMethod
+  cashPaid: string
+  posPayment: string
+  change: string
+}
 type SalesCustomerSection = {
   id: string
   customerName: string
@@ -48,6 +55,7 @@ type SalesCustomerSection = {
   cashPaid: string
   posPayment: string
   change: string
+  groupPayments: GroupPayment[]
 }
 
 const createBlankSalesRow = () => ({
@@ -63,6 +71,7 @@ const createBlankSalesRow = () => ({
   totalPcs: "",
   costPrice: "",
   wholesale: false,
+  newCustomer: false,
   salesPrice: "",
   total: "",
 })
@@ -76,6 +85,7 @@ const createCustomerSection = (): SalesCustomerSection => ({
   cashPaid: "",
   posPayment: "",
   change: "",
+  groupPayments: [{ paymentMethod: "", cashPaid: "", posPayment: "", change: "" }],
 })
 
 const SalesPage = () => {
@@ -96,25 +106,17 @@ const SalesPage = () => {
   const searchParams = useSearchParams()
   const editId = searchParams.get("edit")
 
-  const [customerList, setCustomerList] = useState<string[]>([])
-  const [customerDropdownOpen, setCustomerDropdownOpen] = useState(false)
-
   const productNames = useMemo(() => cachedProducts, [cachedProducts])
+  const productOptions = useMemo<AutocompleteOption[]>(() => productNames.map((productName) => {
+    const pricing = stockPricing[productName.trim().toLowerCase()]
+    const price = pricing?.pcsSalesPrice ?? pricing?.packSalesPrice ?? pricing?.cartonSalesPrice
+    return { value: productName, label: `(${price == null ? "-" : `₦${Number(price).toLocaleString()}`}) ${productName}` }
+  }), [productNames, stockPricing])
 
   useEffect(() => {
     loadInventoryProducts()
     loadStockPricing()
-    fetch("/api/inventory/customers")
-      .then((res) => res.json())
-      .then((data) => setCustomerList(Array.isArray(data) ? data : []))
-      .catch(() => setCustomerList([]))
   }, [])
-
-  const filteredCustomers = (name: string) => {
-    const query = name.trim().toLowerCase()
-    if (query.length < 3) return []
-    return customerList.filter((customer) => customer.toLowerCase().includes(query)).slice(0, 8)
-  }
 
   useEffect(() => {
     if (!editId) return
@@ -154,6 +156,12 @@ const SalesPage = () => {
           cashPaid: sale.cashPaid == null ? "" : String(sale.cashPaid),
           posPayment: sale.posPayment == null ? "" : String(sale.posPayment),
           change: sale.change == null ? "" : String(sale.change),
+          groupPayments: [{
+            paymentMethod: sale.paymentMethod ?? "",
+            cashPaid: sale.cashPaid == null ? "" : String(sale.cashPaid),
+            posPayment: sale.posPayment == null ? "" : String(sale.posPayment),
+            change: sale.change == null ? "" : String(sale.change),
+          }],
         }])
         const productName = searchParams.get("product")
         if (productName) setFocusRowIndex(sale.sales.findIndex((row: TableRow) => row.productName === productName))
@@ -202,13 +210,58 @@ const SalesPage = () => {
     }
   }
 
-  const totalCustomers = customerSections.filter((section) => section.customerName.trim()).length
+  const totalCustomers = customerSections.reduce((count, section) => {
+    const rows = section.rows.filter((row) => row.productName)
+    return count + (rows.length ? 1 + rows.filter((row) => Boolean(row.newCustomer)).length : 0)
+  }, 0)
 
   const updateSection = (sectionId: string, update: Partial<SalesCustomerSection>) => {
     setCustomerSections((current) => current.map((section) => section.id === sectionId ? { ...section, ...update } : section))
   }
 
   const sectionTotal = (section: SalesCustomerSection) => section.rows.reduce((sum, row) => sum + (Number(row.total) || 0), 0)
+
+  const paymentForGroup = (section: SalesCustomerSection, groupIndex: number): GroupPayment => section.groupPayments[groupIndex] ?? { paymentMethod: "", cashPaid: "", posPayment: "", change: "" }
+
+  const groupIndexForStart = (section: SalesCustomerSection, startIndex: number) =>
+    section.rows.slice(0, startIndex + 1).filter((row) => Boolean(row.newCustomer)).length
+
+  const updateGroupPayment = (section: SalesCustomerSection, groupIndex: number, update: Partial<GroupPayment>) => {
+    const payments = [...section.groupPayments]
+    while (payments.length <= groupIndex) payments.push({ paymentMethod: "", cashPaid: "", posPayment: "", change: "" })
+    payments[groupIndex] = { ...payments[groupIndex], ...update }
+    updateSection(section.id, { groupPayments: payments })
+  }
+
+  const setGroupPaymentMethod = (section: SalesCustomerSection, groupIndex: number, method: PaymentMethod, total: number) => {
+    const current = paymentForGroup(section, groupIndex)
+    updateGroupPayment(section, groupIndex, {
+      paymentMethod: method,
+      cashPaid: method === "cash" ? String(Number(total.toFixed(2))) : method === "cash&pos" ? current.cashPaid : "",
+      posPayment: method === "pos" ? String(Number(total.toFixed(2))) : method === "cash&pos" ? current.posPayment : "",
+    })
+  }
+
+  const groupPaymentControls = (section: SalesCustomerSection, startIndex: number, total: number) => {
+    const groupIndex = groupIndexForStart(section, startIndex)
+    const payment = paymentForGroup(section, groupIndex)
+    return <div className="flex min-w-[620px] flex-wrap items-center gap-2 text-xs">
+      <span className="font-semibold">Customer total</span>
+      {(["cash", "pos", "cash&pos"] as const).map((method) => <label key={method} className="flex items-center gap-1"><input type="checkbox" checked={payment.paymentMethod === method} onChange={(event) => setGroupPaymentMethod(section, groupIndex, event.target.checked ? method : "", total)} />{method === "cash&pos" ? "Cash & transfer" : method.toUpperCase()}</label>)}
+      <label className="flex items-center gap-1">Cash<input type="number" min="0" step="0.01" className="w-24 rounded border bg-transparent px-2 py-1" value={payment.cashPaid} onChange={(event) => updateGroupPayment(section, groupIndex, { cashPaid: event.target.value })} /></label>
+      <label className="flex items-center gap-1">POS<input type="number" min="0" step="0.01" className="w-24 rounded border bg-transparent px-2 py-1" value={payment.posPayment} onChange={(event) => updateGroupPayment(section, groupIndex, { posPayment: event.target.value })} /></label>
+      <label className="flex items-center gap-1">Change<input type="number" min="0" step="0.01" className="w-24 rounded border bg-transparent px-2 py-1" value={payment.change} onChange={(event) => updateGroupPayment(section, groupIndex, { change: event.target.value })} /></label>
+    </div>
+  }
+
+  const groupPaymentSummary = (section: SalesCustomerSection) => {
+    const groups = section.rows.reduce((count, row) => count + (row.productName && row.newCustomer ? 1 : 0), section.rows.some((row) => row.productName) ? 1 : 0)
+    return Array.from({ length: groups }, (_, index) => paymentForGroup(section, index)).reduce((summary, payment) => ({
+      cash: summary.cash + Number(payment.cashPaid || 0),
+      pos: summary.pos + Number(payment.posPayment || 0),
+      change: summary.change + Number(payment.change || 0),
+    }), { cash: 0, pos: 0, change: 0 })
+  }
 
   const setSectionPaymentMethod = (section: SalesCustomerSection, method: PaymentMethod) => {
     const total = sectionTotal(section)
@@ -248,6 +301,7 @@ const SalesPage = () => {
       const pCount = row.pcsCount !== "" && row.pcsCount !== undefined && row.pcsCount !== null ? Number(row.pcsCount) : 1
       const pcQty = row.pcsQty !== "" && row.pcsQty !== undefined && row.pcsQty !== null ? Number(row.pcsQty) : 0
       const computedTotalPcs = cartonQty > 0 || packQty > 0 || pcQty > 0 ? (cartonQty * packsPerCarton * pCount) + (packQty * pCount) + pcQty : ""
+      const quantityChanged = cartonQty !== Number(previousRow?.cartonQty || 0) || packQty !== Number(previousRow?.packQty || 0) || pcQty !== Number(previousRow?.pcsQty || 0) || packsPerCarton !== Number(previousRow?.packsPerCarton || 1) || pCount !== Number(previousRow?.pcsCount || 1)
 
       // Last-saved prices from stock (respects wholesale flag, unit-type aware)
       const lastSavedCarton = rowWholesale
@@ -294,20 +348,32 @@ const SalesPage = () => {
         : row.salesPrice === "" || row.salesPrice === undefined || row.salesPrice === null
         ? (defaultPrice ?? row.salesPrice)
         : row.salesPrice
-      const rowPrice = Number(nextSalesPrice || 0)
-      const totalValue = isCartonMode
+      const priceMultiplier = isCartonMode
+        ? cartonQty + packQty / packsPerCarton + pcQty / (packsPerCarton * pCount)
+        : isPackMode
+        ? cartonQty * packsPerCarton + packQty + pcQty / pCount
+        : Number(computedTotalPcs) || 0
+      const totalManual = Boolean(row._totalManual) && !productChanged && !quantityChanged && !wholesaleChanged
+      const preciseSalesPrice = totalManual && priceMultiplier > 0 ? Number((Number(row.total) / priceMultiplier).toFixed(2)) : nextSalesPrice
+      const normalizedSalesPrice = preciseSalesPrice === "" || preciseSalesPrice === undefined || preciseSalesPrice === null
+        ? preciseSalesPrice
+        : Number(Number(preciseSalesPrice).toFixed(2))
+      const rowPrice = Number(normalizedSalesPrice || 0)
+      const calculatedTotal = isCartonMode
         ? Number((cartonQty * rowPrice + (packQty * rowPrice) / packsPerCarton + (pcQty * rowPrice) / (packsPerCarton * pCount)).toFixed(2))
         : isPackMode
         ? Number((cartonQty * packsPerCarton * rowPrice + packQty * rowPrice + (pcQty * rowPrice) / pCount).toFixed(2))
         : Number(((computedTotalPcs === "" ? 0 : Number(computedTotalPcs)) * rowPrice).toFixed(2))
+      const totalValue = totalManual ? Number(Number(row.total).toFixed(2)) : calculatedTotal
 
       return {
         ...row,
         wholesale: rowWholesale,
         totalPcs: computedTotalPcs,
         costPrice: costValue ?? row.costPrice,
-        salesPrice: nextSalesPrice,
+        salesPrice: normalizedSalesPrice,
         total: totalValue || "",
+        _totalManual: totalManual,
         _lastSavedSalesPrice: activeLastSavedPrice !== undefined && activeLastSavedPrice !== null ? String(activeLastSavedPrice) : "",
         _markupSalesPrice: activeMarkupPrice !== undefined && activeMarkupPrice !== null ? String(activeMarkupPrice) : "",
       }
@@ -320,7 +386,21 @@ const SalesPage = () => {
     if (saveState === "saving") return
     const sectionsWithRows = customerSections.map((section) => ({ ...section, validRows: section.rows.filter((row) => row.productName) }))
     const validSections = sectionsWithRows.filter((section) => section.validRows.length > 0)
-    const invalidSection = validSections.find((section) => section.validRows.some(
+    const groupedSections = validSections.flatMap((section) => {
+      const groups: TableRow[][] = []
+      section.validRows.forEach((row) => {
+        if (row.newCustomer && groups.length > 0) groups.push([])
+        if (!groups.length) groups.push([])
+        groups[groups.length - 1].push(row)
+      })
+      return groups.filter((rows) => rows.length > 0).map((rows, groupIndex) => ({
+        ...section,
+        validRows: rows,
+        customerName: groupIndex === 0 ? section.customerName : "",
+        groupIndex,
+      }))
+    })
+    const invalidSection = groupedSections.find((section) => section.validRows.some(
       (row) =>
         row.costPrice === "" ||
         row.costPrice === undefined ||
@@ -333,11 +413,6 @@ const SalesPage = () => {
       return
     }
 
-    if (validSections.some((section) => !section.customerName.trim())) {
-      toast.error("Add a customer name for every sales section.")
-      return
-    }
-
     if (invalidSection) {
       toast.error("Each sales row requires cost price and a sales price.")
       return
@@ -345,12 +420,12 @@ const SalesPage = () => {
 
     const payload = {
       date: selectedRange.from && selectedRange.to ? { from: selectedRange.from, to: selectedRange.to } : { date: selectedDate },
-      sections: validSections.map((section) => ({
-        customerName: section.customerName.trim(),
-        paymentMethod: section.paymentMethod || undefined,
-        cashPaid: section.cashPaid === "" ? undefined : Number(section.cashPaid),
-        posPayment: section.posPayment === "" ? undefined : Number(section.posPayment),
-        change: section.change === "" ? undefined : Number(section.change),
+      sections: groupedSections.map((section) => ({
+        customerName: section.customerName.trim() || undefined,
+        paymentMethod: paymentForGroup(section, section.groupIndex).paymentMethod || undefined,
+        cashPaid: paymentForGroup(section, section.groupIndex).cashPaid === "" ? undefined : Number(paymentForGroup(section, section.groupIndex).cashPaid),
+        posPayment: paymentForGroup(section, section.groupIndex).posPayment === "" ? undefined : Number(paymentForGroup(section, section.groupIndex).posPayment),
+        change: paymentForGroup(section, section.groupIndex).change === "" ? undefined : Number(paymentForGroup(section, section.groupIndex).change),
         rows: section.validRows.map((row) => ({ ...row, customerName: section.customerName.trim(), wholesale: Boolean(row.wholesale) || section.globalWholesale })),
       })),
     }
@@ -369,9 +444,13 @@ const SalesPage = () => {
       setSaveState("saved")
       setCustomerSections([createCustomerSection()])
       setPaymentDialogSectionId(null)
-      if (editId) {
-        router.push("/sales")
-      }
+      window.setTimeout(() => {
+        if (editId) {
+          router.push("/sales")
+        } else {
+          setSaveState("idle")
+        }
+      }, 3000)
     } catch (error) {
       console.error(error)
       setSaveState("error")
@@ -386,6 +465,7 @@ const SalesPage = () => {
           <h1 className="text-3xl font-bold">Sales</h1>
           <p className="text-sm text-muted-foreground">Track daily and range-based sales.</p>
         </div>
+        <Button variant="outline" onClick={() => router.push(`/sales/daily?date=${format(selectedDate, "yyyy-MM-dd")}`)}>Today's sales</Button>
         <Dialog open={dateRangeOpen} onOpenChange={setDateRangeOpen}>
           <DialogTrigger asChild>
             <Button variant="outline">View sales</Button>
@@ -449,27 +529,17 @@ const SalesPage = () => {
 
       <div className="space-y-4">
         {customerSections.map((section, sectionIndex) => {
-          const sectionCustomers = filteredCustomers(section.customerName)
           const sectionTotalValue = sectionTotal(section)
           return <div key={section.id} className="rounded-lg border bg-card p-4">
             <div className="mb-4 flex flex-col gap-3 md:flex-row md:items-end md:justify-between">
-              <div className="relative flex flex-1 flex-col gap-2 md:max-w-sm">
-                <Label htmlFor={`customer-name-${section.id}`}>Customer {sectionIndex + 1}</Label>
-                <input id={`customer-name-${section.id}`} type="text" className="w-full rounded border bg-transparent px-3 py-2 text-sm" value={section.customerName} onFocus={() => section.customerName.trim().length >= 3 && setCustomerDropdownOpen(true)} onChange={(event) => { const value = event.target.value; updateSection(section.id, { customerName: value }); setCustomerDropdownOpen(true) }} onBlur={() => window.setTimeout(() => setCustomerDropdownOpen(false), 150)} placeholder="Enter customer name" />
-                {customerDropdownOpen && sectionCustomers.length > 0 ? <div className="absolute left-0 right-0 top-full z-50 mt-1 max-h-48 overflow-y-auto rounded-md border bg-popover p-1 text-popover-foreground shadow-md">{sectionCustomers.map((name) => <button key={name} type="button" className="block w-full rounded px-2 py-1.5 text-left text-sm font-medium hover:bg-accent" onMouseDown={(event) => { event.preventDefault(); updateSection(section.id, { customerName: name }); setCustomerDropdownOpen(false) }}>{name}</button>)}</div> : null}
-              </div>
               {sectionIndex === 0 ? <div className="flex flex-col gap-2 md:max-w-xs"><Label htmlFor="sales-date">Date</Label><input id="sales-date" type="date" className="w-full rounded border bg-transparent px-3 py-2 text-sm" value={format(selectedDate, "yyyy-MM-dd")} onChange={(event) => { setDateMode("single"); setSelectedDate(new Date(event.target.value)); setSelectedRange({ from: undefined, to: undefined }) }} /></div> : null}
               <label className="flex items-center gap-2 rounded border px-3 py-2 text-sm"><input type="checkbox" checked={section.globalWholesale} onChange={(event) => { const enabled = event.target.checked; handleRowChange(section, section.rows.map((row) => ({ ...row, wholesale: enabled })), enabled) }} />Wholesale</label>
             </div>
             <div className="rounded-lg border bg-card p-2 sm:p-4 max-w-full">
-              <Tables columns={salesColumns} defaultRowCount={4} rows={section.rows} onRowsChange={(rows) => handleRowChange(section, rows)} autocomplete={{ productName: productNames }} showTotals minWidth="1300px" focusRowIndex={sectionIndex === 0 ? focusRowIndex : undefined} extraActions={sectionIndex === customerSections.length - 1 ? <Button type="button" variant="outline" onClick={() => setCustomerSections((current) => [...current, createCustomerSection()])}>New customer</Button> : null} />
+              <Tables columns={salesColumns} defaultRowCount={4} rows={section.rows} onRowsChange={(rows) => handleRowChange(section, rows)} autocomplete={{ productName: productOptions }} minWidth="1400px" focusRowIndex={sectionIndex === 0 ? focusRowIndex : undefined} snRestartKey="newCustomer" groupTotalKey="newCustomer" groupTotalContent={({ startIndex, total }) => groupPaymentControls(section, startIndex, total)} />
             </div>
             <div className="mt-4 flex flex-wrap items-end gap-4 border-t pt-4">
-              <div className="mr-auto"><p className="text-xs uppercase tracking-wide text-muted-foreground">Customer total</p><p className="text-xl font-bold">₦{sectionTotalValue.toLocaleString()}</p></div>
-              <div className="flex items-center gap-3">{(["cash", "pos", "cash&pos"] as const).map((method) => <label key={method} className="flex items-center gap-2 text-sm"><input type="checkbox" checked={section.paymentMethod === method} onChange={(event) => setSectionPaymentMethod(section, event.target.checked ? method : "")} />{method === "cash&pos" ? "Cash & POS" : method.toUpperCase()}</label>)}</div>
-              <label className="flex items-center gap-2 text-sm">Cash<input type="number" min="0" step="0.01" className="w-28 rounded border bg-transparent px-2 py-1" value={section.cashPaid} onChange={(event) => updateSection(section.id, { cashPaid: event.target.value })} /></label>
-              <label className="flex items-center gap-2 text-sm">POS<input type="number" min="0" step="0.01" className="w-28 rounded border bg-transparent px-2 py-1" value={section.posPayment} onChange={(event) => updateSection(section.id, { posPayment: event.target.value })} /></label>
-              <label className="flex items-center gap-2 text-sm">Change<input type="number" min="0" step="0.01" className="w-28 rounded border bg-transparent px-2 py-1" value={section.change} onChange={(event) => updateSection(section.id, { change: event.target.value })} /></label>
+              {(() => { const summary = groupPaymentSummary(section); return <><div className="mr-auto"><p className="text-xs uppercase tracking-wide text-muted-foreground">Total sales</p><p className="text-xl font-bold">₦{sectionTotalValue.toLocaleString()}</p></div><label className="flex items-center gap-2 text-sm">Cash<input readOnly type="number" className="w-28 rounded border bg-muted px-2 py-1" value={summary.cash} /></label><label className="flex items-center gap-2 text-sm">POS<input readOnly type="number" className="w-28 rounded border bg-muted px-2 py-1" value={summary.pos} /></label><label className="flex items-center gap-2 text-sm">Change<input readOnly type="number" className="w-28 rounded border bg-muted px-2 py-1" value={summary.change} /></label></> })()}
             </div>
           </div>
         })}
@@ -498,7 +568,7 @@ const SalesPage = () => {
       </Dialog>
 
       <div className="flex flex-wrap items-end gap-3">
-        <Button onClick={handleSubmit} disabled={saveState === "saving"}>{saveState === "saving" ? "Saving..." : editId ? "Update sales" : "Save sales"}</Button>
+        <Button onClick={handleSubmit} disabled={saveState === "saving" || saveState === "saved"}>{saveState === "saving" ? "Saving..." : saveState === "saved" ? "Saved" : editId ? "Update sales" : "Save sales"}</Button>
         <span className="text-sm text-muted-foreground">Selected: {currentLabel}</span>
         <span className="text-sm text-muted-foreground">Customers: {totalCustomers}</span>
         {loadingProducts ? <span className="text-sm">Loading products...</span> : null}

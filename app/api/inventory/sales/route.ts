@@ -54,6 +54,13 @@ export async function GET(req: Request) {
       rangeTo: inventory.rangeTo,
       customerName: inventory.sales[0]?.customerName ?? "",
       products: inventory.sales.map((sale) => sale.productName).filter(Boolean),
+      rows: inventory.sales.map((sale) => ({
+        sn: sale.sn,
+        customerName: sale.customerName ?? "",
+        productName: sale.productName,
+        qty: sale.totalPcs ?? sale.qty ?? 0,
+        amount: sale.total ?? 0,
+      })),
       total: inventory.sales.reduce((sum, sale) => sum + (sale.total ?? 0), 0),
       paymentMethod: inventory.paymentMethod,
       cashPaid: inventory.cashPaid,
@@ -75,19 +82,23 @@ export async function POST(req: Request) {
       const sections = body.sections.filter((section: any) => Array.isArray(section.rows) && section.rows.length > 0)
       if (!sections.length) return NextResponse.json({ error: "No rows provided" }, { status: 400 })
 
-      const sales = await prisma.$transaction(sections.map((section: any) => prisma.inventory.create({
-        data: {
-          type: "sale",
-          date: date?.date ? new Date(date.date) : undefined,
-          rangeFrom: date?.from ? new Date(date.from) : undefined,
-          rangeTo: date?.to ? new Date(date.to) : undefined,
-          paymentMethod: section.paymentMethod || undefined,
-          cashPaid: section.cashPaid === undefined ? undefined : Number(section.cashPaid),
-          posPayment: section.posPayment === undefined ? undefined : Number(section.posPayment),
-          change: section.change === undefined ? undefined : Number(section.change),
-          sales: { create: section.rows.map((row: any) => createSaleRow(row, section.customerName)) },
-        },
-      })))
+      const sales = []
+      for (const section of sections) {
+        const sale = await prisma.inventory.create({
+          data: {
+            type: "sale",
+            date: date?.date ? new Date(date.date) : undefined,
+            rangeFrom: date?.from ? new Date(date.from) : undefined,
+            rangeTo: date?.to ? new Date(date.to) : undefined,
+            paymentMethod: section.paymentMethod || undefined,
+            cashPaid: section.cashPaid === undefined ? undefined : Number(section.cashPaid),
+            posPayment: section.posPayment === undefined ? undefined : Number(section.posPayment),
+            change: section.change === undefined ? undefined : Number(section.change),
+            sales: { create: section.rows.map((row: any) => createSaleRow(row, section.customerName)) },
+          },
+        })
+        sales.push(sale)
+      }
       return NextResponse.json(sales)
     }
 
