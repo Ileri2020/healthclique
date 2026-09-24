@@ -171,11 +171,11 @@ export function Tables({
       <div style={{ minWidth }}>
         <Table className="bg-foreground/10">
         <TableHeader>
-          <TableRow>
+          <TableRow className="border-b border-background border-2">
             {columns.map((column) => (
               <TableHead
                 key={column.key}
-                className={`${column.key === "productName" ? "w-[300px] min-w-[260px]" : ""} ${column.type === "boolean" ? "w-[50px] max-w-[50px] min-w-[50px]" : ""} ${column.className ?? ""}`}
+                className={`${column.key === "productName" ? "w-[300px] min-w-[260px]" : ""} ${column.type === "boolean" ? "w-[100px] max-w-[100px] min-w-[100px]" : ""} ${column.className ?? ""}`}
               >
                 <div className="flex items-center justify-center text-center">{column.label}</div>
               </TableHead>
@@ -184,7 +184,7 @@ export function Tables({
         </TableHeader>
         <TableBody>
           {activeRows.map((row, rowIndex) => (
-            <TableRow key={rowIndex}>
+            <TableRow key={rowIndex} className="border-b border-background border-2">
               {columns.map((column) => {
                 const value = row[column.key]
                 const isSn = column.key === "sn"
@@ -200,10 +200,10 @@ export function Tables({
                 return (
                   <TableCell
                     key={column.key}
-                    className={`align-top py-2 ${column.key === "productName" ? "w-[300px] min-w-[260px]" : ""} ${column.type === "boolean" ? "w-[50px] max-w-[50px] min-w-[50px]" : ""} ${column.type === "number" ? "max-w-[120px]" : ""} ${column.className ?? ""}`}
+                    className={`align-top py-2 justify-center items-center text-center ${column.key === "productName" ? "w-[300px] min-w-[260px]" : ""} ${column.type === "boolean" ? "w-[100px] max-w-[100px] min-w-[100px]" : ""} ${column.type === "number" ? "max-w-[120px]" : ""} ${column.className ?? ""}`}
                   >
                     {column.type === "boolean" ? (
-                      <div className="flex w-[50px] max-w-[50px] items-center justify-center gap-2 whitespace-nowrap">
+                      <div className="flex w-[100px] max-w-[100px] items-center justify-center gap-2 whitespace-nowrap">
                         <Checkbox
                           checked={Boolean(value)}
                           disabled={readOnly}
@@ -240,7 +240,7 @@ export function Tables({
                         {rowIndex + 1}
                       </div>
                     ) : (
-                      <div className="relative space-y-1">
+                      <div className="relative mx-auto space-y-1">
                         {column.previousValueKey && row[column.previousValueKey] !== undefined && row[column.previousValueKey] !== "" && (!column.autoValueKey || Number(row[column.previousValueKey]) !== Number(row[column.autoValueKey])) ? (
                           <label className="flex items-center gap-1.5 text-xs font-semibold text-amber-600 dark:text-amber-400 cursor-pointer select-none py-0.5">
                             <Checkbox
@@ -310,9 +310,9 @@ export function Tables({
             </TableRow>
           ))}
           {footerTotals ? (
-            <TableRow>
+            <TableRow className="border-b border-background border-2">
               {columns.map((column) => (
-                <TableCell key={column.key} className="font-semibold">
+                <TableCell key={column.key} className="font-semibold justify-center items-center text-center">
                   {column.type === "number" ? footerTotals[column.key] : ""}
                 </TableCell>
               ))}

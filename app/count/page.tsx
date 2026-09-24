@@ -503,13 +503,13 @@ export default function StockCountPage() {
           <TableBody>
             {loading ? (
               <TableRow>
-                <TableCell colSpan={9} className="py-8 text-center text-muted-foreground">
+                <TableCell colSpan={9} className="py-8 justify-center items-center text-center text-muted-foreground">
                   Loading stock count products...
                 </TableCell>
               </TableRow>
             ) : filteredProducts.length === 0 ? (
               <TableRow>
-                <TableCell colSpan={9} className="py-8 text-center text-muted-foreground">
+                <TableCell colSpan={9} className="py-8 justify-center items-center text-center text-muted-foreground">
                   No stock products found for audit.
                 </TableCell>
               </TableRow>
@@ -527,9 +527,9 @@ export default function StockCountPage() {
 
                 return (
                   <TableRow key={p.productName} className={hasCount ? "bg-muted/30" : "hover:bg-muted/40"}>
-                    <TableCell>{(currentPage - 1) * productsPerPage + index + 1}</TableCell>
-                    <TableCell className="font-medium">{p.productName}</TableCell>
-                    <TableCell>
+                    <TableCell className="justify-center items-center text-center">{(currentPage - 1) * productsPerPage + index + 1}</TableCell>
+                    <TableCell className="font-medium justify-center items-center text-center">{p.productName}</TableCell>
+                    <TableCell className="justify-center items-center text-center">
                       <Input
                         type="number"
                         min="0"
@@ -539,7 +539,7 @@ export default function StockCountPage() {
                         onChange={(e) => handleCountChange(p.productName, e.target.value)}
                       />
                     </TableCell>
-                    <TableCell className="text-center">
+                    <TableCell className="justify-center items-center text-center">
                       <input
                         type="checkbox"
                         aria-label={`Merge ${p.productName}`}
@@ -554,7 +554,7 @@ export default function StockCountPage() {
                         }}
                       />
                     </TableCell>
-                    <TableCell>
+                    <TableCell className="justify-center items-center text-center">
                       <select
                         className="w-full rounded border bg-transparent px-2 py-1 text-xs"
                         value={p.shelfId || ""}
@@ -568,7 +568,7 @@ export default function StockCountPage() {
                         ))}
                       </select>
                     </TableCell>
-                    <TableCell>
+                    <TableCell className="justify-center items-center text-center">
                       <input
                         type="date"
                         className="w-full rounded border bg-transparent px-2 py-1 text-xs"
@@ -576,11 +576,11 @@ export default function StockCountPage() {
                         onChange={(e) => handleExpiryChange(p.productName, e.target.value)}
                       />
                     </TableCell>
-                    <TableCell className="text-xs">
+                    <TableCell className="text-xs justify-center items-center text-center">
                       <div>{expectedFormatted}</div>
                       <div className="text-[11px] text-muted-foreground">({p.availablePieces.toLocaleString()} Pcs total)</div>
                     </TableCell>
-                    <TableCell className="text-xs font-medium">
+                    <TableCell className="text-xs font-medium justify-center items-center text-center">
                       {diffPcs === null ? (
                         <span className="text-muted-foreground">-</span>
                       ) : (
@@ -589,7 +589,7 @@ export default function StockCountPage() {
                         </span>
                       )}
                     </TableCell>
-                    <TableCell className="text-xs">
+                    <TableCell className="text-xs justify-center items-center text-center">
                       {p.pcsSalesPrice ? `₦${p.pcsSalesPrice.toLocaleString()}/pc` : p.packSalesPrice ? `₦${p.packSalesPrice.toLocaleString()}/pk` : "-"}
                     </TableCell>
                   </TableRow>
