@@ -7,6 +7,7 @@ import { Button } from "@/components/ui/button"
 import { Label } from "@/components/ui/label"
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog"
 import { Tables, AutocompleteOption, TableColumn, TableRow } from "@/components/myComponents/tables"
+import { SalesCsvImporter } from "@/components/myComponents/sales-csv-importer"
 import { toast } from "sonner"
 
 const salesColumns: TableColumn[] = [
@@ -463,6 +464,7 @@ const SalesPage = () => {
           <h1 className="text-3xl font-bold">Sales</h1>
           <p className="text-sm text-muted-foreground">Track daily and range-based sales.</p>
         </div>
+        <SalesCsvImporter products={productNames} pricing={stockPricing} loadingProducts={loadingProducts} />
         <Button variant="outline" onClick={() => router.push(`/sales/daily?date=${format(selectedDate, "yyyy-MM-dd")}`)}>Today's sales</Button>
         <Dialog open={dateRangeOpen} onOpenChange={setDateRangeOpen}>
           <DialogTrigger asChild>

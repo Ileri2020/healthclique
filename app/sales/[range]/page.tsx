@@ -61,7 +61,11 @@ export default function SalesHistoryPage({ params }: { params: Promise<{ range: 
     <main className="space-y-6 p-6">
       <div className="flex items-center justify-between gap-4">
         <div><p className="text-sm text-muted-foreground">Saved sales entries</p><h1 className="text-3xl font-bold">{heading}</h1></div>
-        <Button variant="outline" asChild><Link href="/sales">Back to sales</Link></Button>
+        <div className="flex flex-wrap gap-2">
+          <Button variant="destructive" asChild><Link href={`/sales/unstocked${from && to ? `?from=${encodeURIComponent(from)}&to=${encodeURIComponent(to)}` : ""}`}>Products sold without stock</Link></Button>
+          <Button variant="destructive" asChild><Link href={`/sales/unstocked?tab=loss${from && to ? `&from=${encodeURIComponent(from)}&to=${encodeURIComponent(to)}` : ""}`}>Sold on loss</Link></Button>
+          <Button variant="outline" asChild><Link href="/sales">Back to sales</Link></Button>
+        </div>
       </div>
       <div className="overflow-x-auto rounded-lg border">
         <Table>

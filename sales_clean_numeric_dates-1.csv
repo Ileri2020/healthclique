@@ -1,0 +1,613 @@
+﻿Date,Customer / S/N,Item Description,Quantity,Quantity Type,Amount (NGN),Entry Type
+2026-06-20,1,Anorol,1,pack,850,Sale
+2026-06-20,2,Prednicure,2,pack,200,Sale
+2026-06-20,2,Dolometa-B,1,pack,500,Sale
+2026-06-20,3,Prednicure,1,pack,160,Sale
+2026-06-20,3,Skg pcm,1,pack,150,Sale
+2026-06-20,3,Lofnac 100,1,pack,300,Sale
+2026-06-20,4,Pred,2,pack,200,Sale
+2026-06-20,4,Zolat suspension,1,pack,1000,Sale
+2026-06-20,5,Drylove pad,1,pack,950,Sale
+2026-06-20,6,Fingamenta 80/480mg,1,pack,700,Sale
+2026-06-20,7,Lofnac 100,1,pack,300,Sale
+2026-06-20,8,Toothbrush,1,pack,250,Sale
+2026-06-20,8,Ampiclox cap,1,pack,500,Sale
+2026-06-20,8,Epiderm,1,pack,900,Sale
+2026-06-20,9,Pcm Em 30,1,pack,200,Sale
+2026-06-20,9,Unitrim dispersible,1,pack,300,Sale
+2026-06-20,9,Loratadine,1,pack,300,Sale
+2026-06-20,9,Folic acid,1,pack,100,Sale
+2026-06-20,9,Tanzol,1,pack,250,Sale
+2026-06-20,9,Vit C (orange),1,pack,50,Sale
+2026-06-20,,,,,8050,Recorded daily total
+2026-07-25,1,Tuxil P (Adult),1,pack,1000,Sale
+2026-07-25,2,Tebolan,1,sachet,200,Sale
+2026-07-25,3,Loratadine 10mg,1,sachet,850,Sale
+2026-07-25,4,Vitamin C (Caroted) (White & Orange),1,sachet,250,Sale
+2026-07-25,5,Diclofenac Sodium,1,pack,350,Sale
+2026-07-25,6,Tydineal,1,pack,950,Sale
+2026-07-25,,,,,2400,Recorded daily total
+2026-07-29,1,Asmalyn Syr,1,pcs,750,Sale
+2026-07-29,2,Prednisone Tab,2,pcs,200,Sale
+2026-07-29,3,Ibu-400,1,pack,350,Sale
+2026-07-29,4,Delvon,1,pcs,200,Sale
+2026-07-29,5,Mags Plm tab,1,pcs,150,Sale
+2026-07-29,6,Emzor Plm tab,1,pcs,200,Sale
+2026-07-29,7,Dolo Met B,1,pcs,500,Sale
+2026-07-29,8,Emzor Paracetamol,2,sachet,400,Sale
+2026-07-29,9,Neurogesic Extra,1,pack,1450,Sale
+2026-07-29,10,Tetracydine Hcl,1,pack,300,Sale
+2026-07-29,11,Tabalon Ibuprofen,1,pack,300,Sale
+2026-07-29,,,,,4800,Recorded daily total
+2026-07-30,1,Vit C (Colored),10,pcs,50,Sale
+2026-07-30,2,Omorfin Ciprofloxacin,1,pack,650,Sale
+2026-07-30,3,Bonababe,2,pcs,600,Sale
+2026-07-30,4,Vit C (Colored),30,pcs,150,Sale
+2026-07-30,5,Max Expectorant,1,pcs,800,Sale
+2026-07-30,6,Vit C (Colored),1,pack,1100,Sale
+2026-07-30,7,Boska,1,pack,1150,Sale
+2026-07-30,8,Orphesic,1,pack,1400,Sale
+2026-07-30,9,Dolo-Met B,1,pack,500,Sale
+2026-07-30,10,Coplin (Cough linctus),1,pcs,1900,Sale
+2026-07-30,11,Heafylin,1,pcs,1050,Sale
+2026-07-30,12,Loratari x 2y,1,pcs,1150,Sale
+2026-07-30,13,Loflac,1,pcs,250,Sale
+2026-07-30,14,Loflac,1,pcs,250,Sale
+2026-07-30,15,Emzor Paracetamol,1,pack,200,Sale
+2026-07-30,16,Vitamin C,1,pcs,200,Sale
+2026-07-30,,,,,10300,Recorded daily total
+2026-08-01,1,Em-Vit-C,1,pack,1100,Sale
+2026-08-01,2,Apetamin,1,pack,8800,Sale
+2026-08-01,3,Loratadine Dispersible,1,pack,300,Sale
+2026-08-01,4,Jucopan,1,pack,350,Sale
+2026-08-01,5,Paracetamol blue,1,pack,200,Sale
+2026-08-01,6,Vitamin C,1,pack,100,Sale
+2026-08-01,7,Inbu-400,1,pack,350,Sale
+2026-08-01,8,Anerol,1,pack,850,Sale
+2026-08-01,9,Chloramphenicol (Eye drop),1,pack,550,Sale
+2026-08-01,10,Robb (Inhale),1,pack,500,Sale
+2026-08-01,11,Paracetamol,1,pack,150,Sale
+2026-08-01,12,Vasoprin,2,pack,200,Sale
+2026-08-01,13,Postinor 2,1,pack,2300,Sale
+2026-08-01,14,M. fedipine CR 30mg,1,pack,1500,Sale
+2026-08-01,15,Amitriptyline 25mg,1,pack,700,Sale
+2026-08-01,16,Bandum etc,1,pack,450,Sale
+2026-08-01,17,Vasoprin 75mg,1,pack,100,Sale
+2026-08-01,18,Daga Puntas,1,pack,150,Sale
+2026-08-01,,Discount,0,,-50,Discount
+2026-08-01,,,,,18600,Recorded daily total
+2026-08-02,1,Lorat tablets,1,pack,1100,Sale
+2026-08-02,2,L-Flox - 500,1,pack,1800,Sale
+2026-08-02,3,Daga Paracetamol,1,pack,150,Sale
+2026-08-02,,,,,3050,Recorded daily total
+2026-08-03,1,Pregnancy test strip,1,pack,100,Sale
+2026-08-03,2,Shaving Stick,1,pack,150,Sale
+2026-08-03,3,Tydineal,1,pack,950,Sale
+2026-08-03,4,Dolo Meta B,1,pack,500,Sale
+2026-08-03,5,Orphesic,1,pack,1400,Sale
+2026-08-03,6,Vitamin C,1,pack,100,Sale
+2026-08-03,7,Vita Clox Ampicillin,1,pack,500,Sale
+2026-08-03,8,Vitamin C,1,pack,300,Sale
+2026-08-03,9,Cypon tab x 14,1,pack,1500,Sale
+2026-08-03,10,Prednicure,2,pack,100,Sale
+2026-08-03,11,Secorid,1,pack,1150,Sale
+2026-08-03,12,Daga pen tab,2,pack,300,Sale
+2026-08-03,,,,,10400,Recorded daily total
+2026-08-04,1,Molaxin Syr,1,pack,800,Sale
+2026-08-04,2,Daga pen tab,2,pack,300,Sale
+2026-08-04,3,Cotton Bud,2,pack,300,Sale
+2026-08-04,4,Loratadine Dispersible,1,pack,300,Sale
+2026-08-04,5,DryLove,1,pack,950,Sale
+2026-08-04,6,Cotton Bud,1,pack,150,Sale
+2026-08-04,7,Loratadine Dispersible,1,pack,300,Sale
+2026-08-04,8,Karaole,2,pack,400,Sale
+2026-08-04,9,Cotton wool,1,pack,200,Sale
+2026-08-04,10,Vitamox 500 (Amox),1,pack,450,Sale
+2026-08-04,11,Paracetamol (daga),1,pack,150,Sale
+2026-08-04,12,Shaving sticks,1,pack,150,Sale
+2026-08-04,13,Vitamin C,1,pack,50,Sale
+2026-08-04,14,Lorart tablets,1,pack,1100,Sale
+2026-08-04,15,Emzolyn 4-way,1,pack,1400,Sale
+2026-08-04,16,Procord,1,pack,350,Sale
+2026-08-04,17,Robb,1,pack,500,Sale
+2026-08-04,18,Pregnancy Strip,2,pack,200,Sale
+2026-08-04,19,Emprin 75,1,pack,100,Sale
+2026-08-04,20,Emzor Paracetamol,2,pack,400,Sale
+2026-08-04,,,,,8550,Recorded daily total
+2026-08-05,1,Emcap Extra,1,pack,250,Sale
+2026-08-05,2,Babyrex,1,pack,580,Sale
+2026-08-05,3,Bunto,1,pack,1300,Sale
+2026-08-05,4,Poccoclav,1,pack,2200,Sale
+2026-08-05,5,Rellatra,1,pack,350,Sale
+2026-08-05,6,Karade,2,pack,400,Sale
+2026-08-05,7,Babyrex,1,pack,500,Sale
+2026-08-05,8,Vitamin C (Transferred change of 520),1,pack,900,Sale
+2026-08-05,9,Vitamin C (Tab) (Advanced formula),1,pack,500,Sale
+2026-08-05,10,Cal D3 plus,1,pack,1300,Sale
+2026-08-05,11,M&B Paracetamol,1,pack,200,Sale
+2026-08-05,12,Fire xfarcy,2,pack,1400,Sale
+2026-08-05,,,,,9880,Recorded daily total
+2026-08-06,1,Toothbrush,1,pack,250,Sale
+2026-08-06,2,Max Valgins,2,pack,300,Sale
+2026-08-06,3,Emgolyte plus,1,pack,850,Sale
+2026-08-06,4,Lofnak 100,1,pack,250,Sale
+2026-08-06,5,Emcap Extra,1,pack,250,Sale
+2026-08-06,6,Anerol,1,pack,850,Sale
+2026-08-06,7,Pedicure,2,pack,290,Sale
+2026-08-06,8,Neurovite,1,pack,1000,Sale
+2026-08-06,9,Em-Vit C,1,pack,1100,Sale
+2026-08-06,10,Rulox,1,pack,235,Sale
+2026-08-06,11,Amalar,1,pack,580,Sale
+2026-08-06,12,Vitamox,1,pack,450,Sale
+2026-08-06,13,Daga,1,pack,150,Sale
+2026-08-06,14,Vitamin C,1,pack,200,Sale
+2026-08-06,15,Vitamin C,1,pack,400,Sale
+2026-08-06,16,Fesulf,1,pack,100,Sale
+2026-08-06,17,M&B Paracetamol,1,pack,200,Sale
+2026-08-06,18,Prednicure,2,pack,200,Sale
+2026-08-06,19,Cenpan,1,pack,600,Sale
+2026-08-06,20,Vitamin C,1,pack,280,Sale
+2026-08-06,21,Vitamin C,1,pack,250,Sale
+2026-08-06,22,Bunto,2,pack,2600,Sale
+2026-08-06,23,Fire xfarcy,1,pack,700,Sale
+2026-08-06,24,Moko mustmag,1,pack,3550,Sale
+2026-08-06,,,,,14400,Recorded daily total
+2026-08-07,1,Det / Deons,1,pack,2880,Sale
+2026-08-07,2,Pedicure,2,pack,200,Sale
+2026-08-07,2,Lofnac,1,pack,250,Sale
+2026-08-07,3,Chemiran,1,pack,1000,Sale
+2026-08-07,3,Cypri Gold,1,pack,750,Sale
+2026-08-07,4,Karade,1,pack,1290,Sale
+2026-08-07,5,Malanter Ds,1,pack,700,Sale
+2026-08-07,5,Daga,1,pack,150,Sale
+2026-08-07,6,Procold,1,pack,350,Sale
+2026-08-07,6,Shaving Stick,1,pack,200,Sale
+2026-08-07,6,Vitamin C,1,pack,50,Sale
+2026-08-07,6,Emcap Extra,1,pack,280,Sale
+2026-08-07,7,Felum,1,pack,200,Sale
+2026-08-07,7,Jucopan,1,pack,350,Sale
+2026-08-07,7,Rellatra,1,pack,350,Sale
+2026-08-07,8,Paracetamol,1,pack,200,Sale
+2026-08-07,8,Fingimeti,1,pack,700,Sale
+2026-08-07,9,Emzo Daga,1,pack,150,Sale
+2026-08-07,9,Cotton load,1,pack,150,Sale
+2026-08-07,9,"Nutri, Vit C",1,pack,100,Sale
+2026-08-07,,,,,9100,Recorded daily total
+2026-08-08,1,Tabolon 80mg,1,pack,350,Sale
+2026-08-08,1,Daga Pen to,1,pack,150,Sale
+2026-08-08,2,Boska,1,pack,400,Sale
+2026-08-08,2,Mixamal,1,pack,200,Sale
+2026-08-08,3,Tabolon 40mg,2,pack,200,Sale
+2026-08-08,3,Prednicure,5,pack,1000,Sale
+2026-08-08,4,Penicillin Procaine inj,1,pack,300,Sale
+2026-08-08,4,Tab Loratadine Dispersible,2,pack,200,Sale
+2026-08-08,5,Prednicure,1,pack,400,Sale
+2026-08-08,6,Procord,1,pack,1000,Sale
+2026-08-08,6,Amlodipine 10mg,2,pack,200,Sale
+2026-08-08,7,Prednicure,2,pack,200,Sale
+2026-08-08,7,Lodium,1,pack,1200,Sale
+2026-08-08,7,Oxagyl 400mg,2,pack,400,Sale
+2026-08-08,8,Asaprycin inj,5,pack,1900,Sale
+2026-08-08,,,,,7400,Recorded daily total
+2026-08-09,1,Malarde DS,1,pack,900,Sale
+2026-08-09,1,Daga Paracetamol,1,pack,150,Sale
+2026-08-09,1,Vitamin C,10,pack,600,Sale
+2026-08-09,2,Tabolon,1,pack,300,Sale
+2026-08-09,3,Fire xfarcy,1,pack,700,Sale
+2026-08-09,4,Amno pop,1,pack,3700,Sale
+2026-08-09,,,,,5800,Recorded daily total
+2026-08-10,1,Bafama 3x ozam,1,pack,800,Sale
+2026-08-10,1,Pcm,1,pack,200,Sale
+2026-08-10,2,Loratadine tab,1,pack,850,Sale
+2026-08-10,2,M&B Paracetamol,1,pack,200,Sale
+2026-08-10,2,Pedicure,2,pack,200,Sale
+2026-08-10,3,Syringe,2,pack,200,Sale
+2026-08-10,3,Loratadine dispersible,1,pack,300,Sale
+2026-08-10,3,Permethrin Cream,1,pack,1800,Sale
+2026-08-10,3,Mako benzoate losha,1,pack,1350,Sale
+2026-08-10,3,Medizam,1,pack,-350,Sale
+2026-08-10,4,Mist mag,1,pack,900,Sale
+2026-08-10,5,Dolometa-b,1,pack,500,Sale
+2026-08-10,,,,,7650,Recorded daily total
+2026-08-12,1,Mist mag,1,pack,800,Sale
+2026-08-12,1,Anerol,1,pack,850,Sale
+2026-08-12,1,Buscopan,1,pack,350,Sale
+2026-08-12,2,Vit c Orange,1,pack,100,Sale
+2026-08-12,2,Boska,1,pack,500,Sale
+2026-08-12,3,Pcm,1,pack,200,Sale
+2026-08-12,4,Fumbact A,1,pack,900,Sale
+2026-08-12,5,M&B,1,pack,200,Sale
+2026-08-12,5,Vitamin C,1,pack,300,Sale
+2026-08-12,6,Cenpan nyht,1,pack,600,Sale
+2026-08-12,6,Cotton bud,1,pack,100,Sale
+2026-08-12,,,,,4900,Recorded daily total
+2026-08-13,1,Panadol,1,pack,400,Sale
+2026-08-13,2,Vitaclox,2,pack,900,Sale
+2026-08-13,2,Tetracycline,2,pack,600,Sale
+2026-08-13,2,Cofta boss (dele),1,pack,650,Sale
+2026-08-13,3,Emzor Amoxicillin,1,pack,1800,Sale
+2026-08-13,3,M&B Children cough syrup,1,pack,700,Sale
+2026-08-13,3,Paracetamol daga,2,pack,300,Sale
+2026-08-13,4,Septrin,1,pack,800,Sale
+2026-08-13,4,Folic acid,1,pack,580,Sale
+2026-08-13,4,Arthenelle injec,1,pack,1000,Sale
+2026-08-13,4,Grishat Cethrizine,2,pack,1000,Sale
+2026-08-13,4,Kakas pcm Inj,1,pack,850,Sale
+2026-08-13,4,Ciprofloxacin,1,pack,650,Sale
+2026-08-13,4,Cotta gel,1,pack,200,Sale
+2026-08-13,4,Fest gentian,1,pack,300,Sale
+2026-08-13,4,Promethazine,1,pack,200,Sale
+2026-08-13,,,,,24850,Recorded daily total
+2026-08-14,1,Lonart DS,1,pack,2800,Sale
+2026-08-14,1,Cap Amoxicillin 500mg,1,pack,950,Sale
+2026-08-14,2,Vitamox,1,pack,450,Sale
+2026-08-14,2,Mixamel,1,pack,400,Sale
+2026-08-14,3,De-deons,1,pack,280,Sale
+2026-08-14,4,Meslun (Ampicillin),1,pack,400,Sale
+2026-08-14,5,Vitamin C white,1,pack,300,Sale
+2026-08-14,6,Kloumin,1,pack,5200,Sale
+2026-08-14,6,Fluconazole,1,pack,850,Sale
+2026-08-14,6,Secorid,1,pack,1150,Sale
+2026-08-14,6,Doxy cap,1,pack,850,Sale
+2026-08-14,6,Aday,1,pack,2800,Sale
+2026-08-14,7,Tetracycline,4,pack,1200,Sale
+2026-08-14,7,Vitaclox,2,pack,900,Sale
+2026-08-14,8,GG Cold,1,pack,200,Sale
+2026-08-14,9,Danacid,1,pack,250,Sale
+2026-08-14,9,Vit C Counting,1,pack,50,Sale
+2026-08-14,10,Dolo Met B,1,pack,500,Sale
+2026-08-14,10,Daga pcm tab,2,pack,300,Sale
+2026-08-14,,,,,15050,Recorded daily total
+2026-08-15,1,Lonart DS,1,pack,2800,Sale
+2026-08-15,1,Aquaclay 1000mg,1,pack,3700,Sale
+2026-08-15,2,Acycor plus,1,pack,900,Sale
+2026-08-15,2,Pyrantrin tab,1,pack,900,Sale
+2026-08-15,2,Lonart x 2+,1,pack,1100,Sale
+2026-08-15,2,Cipro (unbranded),1,pack,700,Sale
+2026-08-15,3,Prednicure,2,pack,200,Sale
+2026-08-15,4,Vit C,1,pack,200,Sale
+2026-08-15,5,Fire condom,1,pack,700,Sale
+2026-08-15,6,Cotton wool (dele),1,pack,600,Sale
+2026-08-15,7,Epogia,1,pack,950,Sale
+2026-08-15,7,Cotton wool,2,pack,250,Sale
+2026-08-15,8,Baby capon,1,pack,1300,Sale
+2026-08-15,,,,,11700,Recorded daily total
+2026-08-16,1,Bunto s/s,1,pack,700,Sale
+2026-08-16,2,Ibu cap forte,1,pack,650,Sale
+2026-08-16,2,Vit C (white),1,pack,50,Sale
+2026-08-16,3,Acycor plus,1,pack,900,Sale
+2026-08-16,4,Bunto tonic m/s,1,pack,1300,Sale
+2026-08-16,5,Ibuprofen syrup (afram),1,pack,900,Sale
+2026-08-16,6,Super apeti syrup,1,pack,2200,Sale
+2026-08-16,6,Caf capsule,2,pack,1000,Sale
+2026-08-16,6,Tetracycline cap HCL,4,pack,1200,Sale
+2026-08-16,6,Ampidox cap,2,pack,900,Sale
+2026-08-16,7,Daga Paracetamol,1,pack,1200,Sale
+2026-08-16,,,,,11000,Recorded daily total
+2026-08-17,1,Poccoclav,1,pack,2200,Sale
+2026-08-17,2,Felyin,1,pack,1200,Sale
+2026-08-17,3,Tanzol,4,pack,1000,Sale
+2026-08-17,4,Panda syrup,1,pack,750,Sale
+2026-08-17,4,Daga pcm,1,pack,150,Sale
+2026-08-17,4,Vit C (orange),1,pack,100,Sale
+2026-08-17,5,Ferrous,2,pack,2200,Sale
+2026-08-17,5,Vit C (orange),1,pack,100,Sale
+2026-08-17,5,Vit C (white),1,pack,200,Sale
+2026-08-17,6,Tydineal,1,pack,950,Sale
+2026-08-17,7,PT strip,1,pack,100,Sale
+2026-08-17,7,Vit C (orange),1,pack,100,Sale
+2026-08-17,8,Procold,1,pack,400,Sale
+2026-08-17,9,Methylated spirit,1,pack,1300,Sale
+2026-08-17,9,Cotton wool s/s,1,pack,200,Sale
+2026-08-17,9,Loratadine dispersible,1,pack,300,Sale
+2026-08-17,9,Amatem forte softgel,1,pack,2700,Sale
+2026-08-17,9,Aquaclay,1,pack,2900,Sale
+2026-08-17,9,Ciprotabs 500,1,pack,1520,Sale
+2026-08-17,9,Cotton bud,1,pack,150,Sale
+2026-08-17,10,Mipamol,1,pack,800,Sale
+2026-08-17,10,Vitaclox,2,pack,900,Sale
+2026-08-17,10,Tanzol,1,pack,250,Sale
+2026-08-17,11,Loxagyl 400mg,1,pack,200,Sale
+2026-08-17,,,,,22450,Recorded daily total
+2026-08-18,14,Fire xfarcy,1,pack,1700,Sale
+2026-08-18,,,,,8850,Recorded daily total
+2026-08-19,1,Amlodipine 5mg,1,pack,880,Sale
+2026-08-19,1,Safcare wet wipes,1,pack,300,Sale
+2026-08-19,2,Em-Vit-C,1,pack,1100,Sale
+2026-08-19,2,MGC,1,pack,700,Sale
+2026-08-19,3,PT strip (APEX),2,pack,200,Sale
+2026-08-19,4,Folic acid,2,pack,200,Sale
+2026-08-19,4,Maxigunne syrup,1,pack,900,Sale
+2026-08-19,4,Anotrim tab,1,sachet,360,Sale
+2026-08-19,5,Emrox syrup,1,pack,1700,Sale
+2026-08-19,6,Calcium D3 100,1,pack,1360,Sale
+2026-08-19,7,Boska,1,pack,500,Sale
+2026-08-19,8,M&B Pcm,1,pack,200,Sale
+2026-08-19,8,Unigyl 400mg,1,sachet,300,Sale
+2026-08-19,9,Ampidox cap,1,pack,500,Sale
+2026-08-19,10,Vit C (white),1,pack,100,Sale
+2026-08-19,10,Tanzol,4,pack,1000,Sale
+2026-08-19,11,Ferrous,3,sachet,300,Sale
+2026-08-19,11,Emzor Pcm,1,pack,200,Sale
+2026-08-19,11,M&B Pcm,1,pack,200,Sale
+2026-08-19,12,Heofylin syrup,1,pack,1050,Sale
+2026-08-19,13,Feedfine,1,sachet,360,Sale
+2026-08-19,13,Vit C (orange),1,pack,100,Sale
+2026-08-19,14,Fire xfarcy,1,pack,900,Sale
+2026-08-19,,,,,10950,Recorded daily total
+2026-08-21,1,Tetra cap,1,pack,300,Sale
+2026-08-21,1,Vit C (white),1,pack,100,Sale
+2026-08-21,2,Fire xfarcy,2,pack,1400,Sale
+2026-08-21,3,Procold,1,pack,450,Sale
+2026-08-21,4,Vit C (orange),1,pack,250,Sale
+2026-08-21,5,PT strip,5,pack,800,Sale
+2026-08-21,6,Lexo 500mg,1,pack,1800,Sale
+2026-08-21,7,Folic acid,1,pack,100,Sale
+2026-08-21,8,Asfyfer syrup,1,pack,4200,Sale
+2026-08-21,9,Doxycycline,1,pack,250,Sale
+2026-08-21,9,Daga Pcm,1,pack,150,Sale
+2026-08-21,9,Oxagyl 400mg,1,pack,200,Sale
+2026-08-21,11,Softcare wet wipes,1,pack,300,Sale
+2026-08-21,12,PT Strip,2,pack,200,Sale
+2026-08-21,13,Cenpan nyht,1,pack,300,Sale
+2026-08-21,,,,,11850,Recorded daily total
+2026-08-22,1,Loratadine,1,pack,850,Sale
+2026-08-22,2,Felum,2,pack,400,Sale
+2026-08-22,2,Pedicure,2,pack,200,Sale
+2026-08-22,3,Metformin,2,pack,700,Sale
+2026-08-22,4,Karole,2,pack,400,Sale
+2026-08-22,4,Alabukun,1,pack,400,Sale
+2026-08-22,5,Loratadine dispersible,1,pack,300,Sale
+2026-08-22,7,Piriton,1,pack,100,Sale
+2026-08-22,7,Cotton bud,1,pack,150,Sale
+2026-08-22,8,Dolo-Mets B,1,pack,500,Sale
+2026-08-22,8,Procold,1,pack,350,Sale
+2026-08-22,9,Pregnancy Strip Apex,2,pack,200,Sale
+2026-08-22,10,Vitamin E softgel,1,pack,1580,Sale
+2026-08-22,10,Pedicure,1,pack,200,Sale
+2026-08-22,10,Tabansor,3,pack,300,Sale
+2026-08-22,11,Robb inhale,1,pack,400,Sale
+2026-08-22,12,Lofnac gel,1,pack,850,Sale
+2026-08-22,12,Pedicure,2,pack,200,Sale
+2026-08-22,,,,,15250,Recorded daily total
+2026-08-23,1,Amoxid beecham,1,pack,3000,Sale
+2026-08-23,1,M&B Pcm,1,pack,200,Sale
+2026-08-23,1,Omeprazole (Emzor),1,pack,1400,Sale
+2026-08-23,1,Ruellextra discount,1,pack,350,Sale
+2026-08-23,1,Unigyl 200mg,1,pack,200,Sale
+2026-08-23,2,Karole,1,pack,200,Sale
+2026-08-23,3,Ferrous,2,pack,200,Sale
+2026-08-23,3,Piriton tab,1,pack,200,Sale
+2026-08-23,4,Procold,1,pack,400,Sale
+2026-08-23,4,Tutolin exp,1,pack,650,Sale
+2026-08-23,4,Vit C orange,1,pack,50,Sale
+2026-08-23,5,Mixagrip,1,pack,500,Sale
+2026-08-23,5,Savrepuls,1,pack,350,Sale
+2026-08-23,5,Tabalon,2,pack,300,Sale
+2026-08-23,5,Daga pcm,2,pack,300,Sale
+2026-08-23,13,M&B Vagem,2,pack,700,Sale
+2026-08-23,13,Jucopan,1,pack,3200,Sale
+2026-08-23,14,Super Apetit plus,1,pack,250,Sale
+2026-08-23,14,Lofnac 100,1,pack,250,Sale
+2026-08-23,14,Daga pented,1,pack,150,Sale
+2026-08-23,,,,,15250,Recorded daily total
+2026-08-24,1,Asfyfer cap,1,pack,2400,Sale
+2026-08-24,1,Epogia 1000mg,1,pack,750,Sale
+2026-08-24,2,Amitriptyline,1,pack,700,Sale
+2026-08-24,2,Bonduretic,1,pack,450,Sale
+2026-08-24,2,Amlodipine berlin,1,pack,650,Sale
+2026-08-24,3,M&B Pcm,1,pack,200,Sale
+2026-08-24,4,Vit C orange,1,pack,100,Sale
+2026-08-24,5,Danacid,2,pack,500,Sale
+2026-08-24,5,B co by 100,1,pack,1000,Sale
+2026-08-24,6,Diclo mor tab,1,pack,500,Sale
+2026-08-24,6,Any love,1,pack,950,Sale
+2026-08-24,7,Cal D3 plus,1,pack,650,Sale
+2026-08-24,8,Bco by 100,1,pack,1000,Sale
+2026-08-24,8,Ampicillin cap,2,pack,2800,Sale
+2026-08-24,8,M&B Pcm,1,pack,200,Sale
+2026-08-24,8,Vit C white,4,pack,400,Sale
+2026-08-24,8,Emzolyn exp,1,pack,1500,Sale
+2026-08-24,8,Folic acid,1,pack,150,Sale
+2026-08-24,8,Folic acid,2,pack,200,Sale
+2026-08-24,8,Shal-artem forte,1,pack,1000,Sale
+2026-08-24,8,Cenox tn,1,pack,1500,Sale
+2026-08-24,8,Tabalon,1,pack,300,Sale
+2026-08-24,9,Dedeon b/s,1,pack,4500,Sale
+2026-08-24,10,Danacid,1,pack,250,Sale
+2026-08-24,11,Daga,1,pack,150,Sale
+2026-08-24,11,Jucopan,1,pack,1400,Sale
+2026-08-24,11,Ciprofloxacin,1,pack,650,Sale
+2026-08-24,11,Tanzol,1,pack,250,Sale
+2026-08-24,11,Koyomine,1,pack,1400,Sale
+2026-08-24,,,,,23000,Recorded daily total
+2026-08-25,1,Epogia 1500mg,1,pack,750,Sale
+2026-08-25,2,Predicure,1,pack,450,Sale
+2026-08-25,3,Lonart by 2+,1,pack,1100,Sale
+2026-08-25,3,Amoxil cap,1,pack,500,Sale
+2026-08-25,3,M&B Pcm,1,pack,200,Sale
+2026-08-25,4,Lonart by 2+,1,pack,1100,Sale
+2026-08-25,4,Procold,1,pack,400,Sale
+2026-08-25,4,Emzor Pcm,1,pack,200,Sale
+2026-08-25,5,Ampiclox cap,1,pack,950,Sale
+2026-08-25,5,Cyprigold,1,pack,500,Sale
+2026-08-25,5,Vit C 1000mg,1,pack,800,Sale
+2026-08-25,5,Emzor Pcm,1,pack,200,Sale
+2026-08-25,,,,,20950,Recorded daily total
+2026-08-26,1,Chloroquin inj,1,pack,880,Sale
+2026-08-26,1,Fest gentamicen,1,pack,500,Sale
+2026-08-26,1,Krishat cehraxer,1,pack,470,Sale
+2026-08-26,2,Cyprivit b/s,1,pack,1400,Sale
+2026-08-26,2,Malanter DS,1,pack,900,Sale
+2026-08-26,3,Ceftriaxone inj,3,pack,1410,Sale
+2026-08-26,3,Syringe & needle 5ml,5,pack,250,Sale
+2026-08-26,3,Vit C,1,pack,40,Sale
+2026-08-26,4,Vit C white,40,pack,200,Sale
+2026-08-26,5,Caf eye drop,1,pack,600,Sale
+2026-08-26,6,Primolut-N,1,pack,13000,Sale
+2026-08-26,6,De-deons,1,pack,4500,Sale
+2026-08-26,6,Diclofenac sp,1,pack,1000,Sale
+2026-08-26,7,Diclomortab,1,pack,500,Sale
+2026-08-26,7,Cenox tn,1,pack,1500,Sale
+2026-08-26,8,Anorol,1,pack,1150,Sale
+2026-08-26,9,Lonart by 2+,1,pack,1100,Sale
+2026-08-26,9,Lonart by 2+ nurse,1,pack,900,Sale
+2026-08-26,9,Doxycycline tab,1,pack,250,Sale
+2026-08-26,10,Linconiyan cap,1,pack,600,Sale
+2026-08-26,10,Penicillin ointment,1,pack,750,Sale
+2026-08-26,11,GG cold,1,pack,200,Sale
+2026-08-26,12,Ciprotab osworth,1,pack,650,Sale
+2026-08-26,12,Vit c orange,1,pack,50,Sale
+2026-08-26,12,Lonart by 2+,1,pack,1100,Sale
+2026-08-26,12,Tabalon,1,pack,300,Sale
+2026-08-26,13,Virony Pad,1,pack,2200,Sale
+2026-08-26,13,Shaving stick,1,pack,150,Sale
+2026-08-26,13,Uncomyan cap,1,pack,600,Sale
+2026-08-26,13,Vit C,1,pack,100,Sale
+2026-08-26,13,Emzor Pcm,1,pack,200,Sale
+2026-08-26,14,PT strip,2,pack,200,Sale
+2026-08-26,,,,,37370,Recorded daily total
+2026-08-27,1,Swifen Syr,1,pack,1000,Sale
+2026-08-27,1,"Nutri, vit c",1,pack,300,Sale
+2026-08-27,1,Fugmarker,1,pack,170,Sale
+2026-08-27,1,Azitamaz,1,pack,400,Sale
+2026-08-27,2,Karale,1,pack,200,Sale
+2026-08-27,2,Artesunate inj,2,pack,2900,Sale
+2026-08-27,2,Pedicura,2,pack,200,Sale
+2026-08-27,2,Shaving stick,2,pack,150,Sale
+2026-08-27,3,Tabalon,1,pack,300,Sale
+2026-08-27,4,Vasoprin,25,pack,200,Sale
+2026-08-27,5,Zolat suspension,2,pack,2000,Sale
+2026-08-27,6,Pyrantrin,1,pack,900,Sale
+2026-08-27,6,Quinneing,1,pack,1400,Sale
+2026-08-27,6,Syringe & needle,1,pack,50,Sale
+2026-08-27,7,Loratadine syrup,1,pack,850,Sale
+2026-08-27,7,Camosunate 1-6,1,pack,1300,Sale
+2026-08-27,8,Virony Pad,1,pack,2200,Sale
+2026-08-27,9,Mixanal,2,pack,800,Sale
+2026-08-27,10,Pcm inj,1,pack,550,Sale
+2026-08-27,12,Microlern,1,pack,1500,Sale
+2026-08-27,12,Melbclox,4,pack,800,Sale
+2026-08-27,,,,,17150,Recorded daily total
+2026-08-28,1,Drylove pad,1,pack,950,Sale
+2026-08-28,1,Shaving stick,1,pack,150,Sale
+2026-08-28,1,Cotton bud,1,pack,100,Sale
+2026-08-28,2,Vit C (white),2,pack,200,Sale
+2026-08-28,2,Vit C (orange),1,pack,100,Sale
+2026-08-28,2,Ferrous,25,pack,200,Sale
+2026-08-28,2,PT,2,pack,200,Sale
+2026-08-28,2,Doxycycline (unbranded),1,pack,250,Sale
+2026-08-28,3,Cenox tn,1,pack,2500,Sale
+2026-08-28,4,PT,2,pack,200,Sale
+2026-08-28,5,Karale,2,pack,400,Sale
+2026-08-28,6,Robb inhaler,1,pack,350,Sale
+2026-08-28,7,Lonart by 2+,1,pack,1100,Sale
+2026-08-28,7,Tabalon,1,pack,300,Sale
+2026-08-28,7,Cenox,1,pack,1500,Sale
+2026-08-28,8,Karale,1,pack,200,Sale
+2026-08-28,9,Dolometa-B,1,pack,500,Sale
+2026-08-28,10,Amlodipine 5mg,1,pack,400,Sale
+2026-08-28,10,Emzor Pcm,1,pack,200,Sale
+2026-08-28,10,Vasoprin,1,pack,100,Sale
+2026-08-28,10,Amlodipine 5mg,1,pack,400,Sale
+2026-08-28,10,Vasoprin,1,pack,100,Sale
+2026-08-28,,,,,9800,Recorded daily total
+2026-08-29,1,Karade,2,pack,400,Sale
+2026-08-29,2,Malanter DS,1,pack,900,Sale
+2026-08-29,3,Panadol Extra,1,pack,400,Sale
+2026-08-29,4,Ampiclex,1,pack,3000,Sale
+2026-08-29,5,Paracetamol,1,pack,200,Sale
+2026-08-29,5,Amlodipine,1,pack,500,Sale
+2026-08-29,6,Dolometa B,2,pack,1000,Sale
+2026-08-29,7,Tydineal,1,pack,950,Sale
+2026-08-29,7,Chlorpheniramine,1,pack,200,Sale
+2026-08-29,8,Pt strip,1,pack,100,Sale
+2026-08-29,8,Kiss,1,pack,450,Sale
+2026-08-29,8,Vitamin C orange,1,pack,100,Sale
+2026-08-29,9,Ytacan plus,1,pack,750,Sale
+2026-08-29,9,GG Cold,1,pack,200,Sale
+2026-08-29,10,Vit c,1,pack,100,Sale
+2026-08-29,10,Cotton bud,1,pack,100,Sale
+2026-08-29,11,Coco,1,pack,2600,Sale
+2026-08-29,11,Pedicure,1,pack,100,Sale
+2026-08-29,12,Tabalon,1,pack,300,Sale
+2026-08-29,12,Pedicure,2,pack,200,Sale
+2026-08-29,12,Fesulf,5,pack,500,Sale
+2026-08-29,13,Pregnancy Test strip,2,pack,200,Sale
+2026-08-29,14,M&B Pcm,1,pack,1200,Sale
+2026-08-29,,,,,13400,Recorded daily total
+2026-08-30,1,M&B Pcm,1,pack,200,Sale
+2026-08-30,2,Kiss condom,1,pack,400,Sale
+2026-08-30,3,Folic acid,2,pack,200,Sale
+2026-08-30,4,Karade,3,pack,600,Sale
+2026-08-30,5,Ampiclox gsk,1,pack,2700,Sale
+2026-08-30,6,Ytacan,1,pack,700,Sale
+2026-08-30,7,Amlodipine 10mg,1,pack,500,Sale
+2026-08-30,7,Bonduretic,1,pack,450,Sale
+2026-08-30,7,Lisinopril 5mg,1,pack,350,Sale
+2026-08-30,8,Omefast,1,pack,1500,Sale
+2026-08-30,8,Tanzol,1,pack,250,Sale
+2026-08-30,8,Daga pcm,2,pack,300,Sale
+2026-08-30,8,Amoxil cap,1,pack,450,Sale
+2026-08-30,8,Buscopan,1,pack,350,Sale
+2026-08-30,9,Asrohew (chawleh),1,pack,800,Sale
+2026-08-30,9,Permethrin cream,1,pack,800,Sale
+2026-08-30,9,Kermeth,1,pack,400,Sale
+2026-08-30,10,Mofix,1,pack,200,Sale
+2026-08-30,,,,,12100,Recorded daily total
+2026-08-31,1,PT Strip,1,pack,100,Sale
+2026-08-31,2,Lonart by 2+,1,pack,1100,Sale
+2026-08-31,2,Cenox tn,1,pack,1500,Sale
+2026-08-31,3,Loxagyl 400mg,1,pack,200,Sale
+2026-08-31,3,Tetracycline cap,1,pack,300,Sale
+2026-08-31,4,Tetra cap,1,pack,300,Sale
+2026-08-31,5,Azaplon expectorant,1,pack,600,Sale
+2026-08-31,5,Diclofenac inj,5,pack,300,Sale
+2026-08-31,5,Vit C,1,pack,100,Sale
+2026-08-31,5,Cottonwool,1,pack,200,Sale
+2026-08-31,5,Infusion set,1,pack,250,Sale
+2026-08-31,6,Superapeti plus syrup,1,pack,2200,Sale
+2026-08-31,6,Epogia 1000mg,1,pack,1500,Sale
+2026-08-31,7,Lofnac tab,1,pack,250,Sale
+2026-08-31,7,Emzor Pcm 1/2 pc,4,pack,750,Sale
+2026-08-31,8,Caf capsule,1,pack,500,Sale
+2026-08-31,8,Ampiclox cap,1,pack,580,Sale
+2026-08-31,8,Tetra cap,1,pack,300,Sale
+2026-08-31,9,Chloroquine inj,2,pack,1760,Sale
+2026-08-31,9,Syringe & needle,5,pack,250,Sale
+2026-08-31,9,Piriton inj,1,pack,500,Sale
+2026-08-31,10,Bunto cap,1,pack,800,Sale
+2026-08-31,10,Epogia 1000mg,1,pack,750,Sale
+2026-08-31,11,Kiss condom,1,pack,400,Sale
+2026-08-31,12,Bunto syrup,1,pack,1300,Sale
+2026-08-31,12,Doxycap,1,pack,850,Sale
+2026-08-31,12,Rellextra,1,pack,350,Sale
+2026-08-31,13,Gent inj,1,pack,250,Sale
+2026-08-31,13,Syringe & needle,3,pack,50,Sale
+2026-08-31,13,PT strip,1,pack,500,Sale
+2026-08-31,14,Cef inj,4,pack,1880,Sale
+2026-08-31,,,,,20290,Recorded daily total
+2026-09-01,1,Ampiclox cap,2,pack,200,Sale
+2026-09-01,2,Shaving stick,1,pack,150,Sale
+2026-09-01,3,Tydineal,1,pack,950,Sale
+2026-09-01,4,Penicillin ointment,1,pack,750,Sale
+2026-09-01,4,Loratadine,1,pack,900,Sale
+2026-09-01,4,Pred,1,pack,100,Sale
+2026-09-01,5,Gent,1,pack,250,Sale
+2026-09-01,5,Cottonwool,1,pack,1200,Sale
+2026-09-01,6,Kiss,1,pack,400,Sale
+2026-09-01,7,Syringe,2,pack,100,Sale
+2026-09-01,7,Melbclox,1,pack,500,Sale
+2026-09-01,7,Vitamin C,1,pack,200,Sale
+2026-09-01,7,Vaksin,1,pack,150,Sale
+2026-09-01,7,Kiss,2,pack,800,Sale
+2026-09-01,,,,,3900,Recorded daily total
+2027-07-31,1,Ibu-400,1,pack,350,Sale
+2027-07-31,2,Andam Softgel-Forte,2,pack,2700,Sale
+2027-07-31,3,Lofnac,3,pack,500,Sale
+2027-07-31,4,Mycoten Tablet,1,pack,2200,Sale
+2027-07-31,5,A Day Ckit tablets,1,pack,2800,Sale
+2027-07-31,6,Doxycap,1,pack,850,Sale
+2027-07-31,7,Secorid,1,pack,1150,Sale
+2027-07-31,8,Loratadine Dispersible,1,pack,300,Sale
+2027-07-31,,,,,10850,Recorded daily total

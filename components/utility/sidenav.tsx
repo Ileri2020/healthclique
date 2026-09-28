@@ -19,6 +19,7 @@ import { signOut } from "next-auth/react";
 import { Login, Signup } from "../myComponents/subs";
 
 const inventoryLinks = [
+    { path: "/inventory/analytics", name: "Analytics", title: "Analytics", icon: LayoutGrid },
     { path: "/stock", name: "Stock", title: "Stock", icon: Package },
     { path: "/sales", name: "Sales", title: "Sales", icon: ShoppingCart },
     { path: "/stock/all", name: "All stock", title: "All stock", icon: Archive },
@@ -30,7 +31,7 @@ const inventoryLinks = [
 const Sidenav = () => {
     const { user, setUser } = useAppContext();
     const pathname = usePathname();
-    const inventoryMode = pathname.startsWith("/stock/") || pathname.startsWith("/sales/") || pathname.startsWith("/expenses") || pathname === "/stock" || pathname === "/sales";
+    const inventoryMode = pathname.startsWith("/inventory/") || pathname.startsWith("/stock/") || pathname.startsWith("/sales/") || pathname.startsWith("/expenses") || pathname === "/stock" || pathname === "/sales";
     const navigationLinks = inventoryMode ? inventoryLinks : Links.Links;
     const [categories, setCategories] = useState<any[]>([]);
     const [concerns, setConcerns] = useState<string[]>([]);
