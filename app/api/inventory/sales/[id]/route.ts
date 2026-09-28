@@ -16,8 +16,15 @@ export async function PUT(request: Request, { params }: { params: Promise<{ id: 
     const { id } = await params
     if (!/^[a-f\d]{24}$/i.test(id)) return NextResponse.json({ error: "Invalid sales id" }, { status: 400 })
     const body = await request.json()
-    const rows = Array.isArray(body.rows) ? body.rows : []
+    const sections = Array.isArray(body.sections) ? body.sections : []
+    const rows = Array.isArray(body.rows)
+      ? body.rows
+      : sections.flatMap((section: any) => Array.isArray(section.rows)
+        ? section.rows.map((row: any) => ({ ...row, customerName: row.customerName || section.customerName }))
+        : [])
     if (!rows.length) return NextResponse.json({ error: "No rows provided" }, { status: 400 })
+
+    const payment = sections[0] ?? body
 
     const inventory = await prisma.inventory.update({
       where: { id },
@@ -25,10 +32,10 @@ export async function PUT(request: Request, { params }: { params: Promise<{ id: 
         date: body.date?.date ? new Date(body.date.date) : undefined,
         rangeFrom: body.date?.from ? new Date(body.date.from) : undefined,
         rangeTo: body.date?.to ? new Date(body.date.to) : undefined,
-        paymentMethod: body.paymentMethod || undefined,
-        cashPaid: body.cashPaid === undefined ? undefined : Number(body.cashPaid),
-        posPayment: body.posPayment === undefined ? undefined : Number(body.posPayment),
-        change: body.change === undefined ? undefined : Number(body.change),
+        paymentMethod: payment.paymentMethod || undefined,
+        cashPaid: payment.cashPaid === undefined ? undefined : Number(payment.cashPaid),
+        posPayment: payment.posPayment === undefined ? undefined : Number(payment.posPayment),
+        change: payment.change === undefined ? undefined : Number(payment.change),
         sales: {
           deleteMany: {},
           create: rows.map((row: any) => ({

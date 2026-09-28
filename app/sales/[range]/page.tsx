@@ -1,6 +1,7 @@
 "use client"
 
 import { use, useEffect, useMemo, useState } from "react"
+import { useRouter } from "next/navigation"
 import { format } from "date-fns"
 import { Button } from "@/components/ui/button"
 import Link from "next/link"
@@ -22,6 +23,7 @@ type SaleHistory = {
 }
 
 export default function SalesHistoryPage({ params }: { params: Promise<{ range: string }> }) {
+  const router = useRouter()
   const [sales, setSales] = useState<SaleHistory[]>([])
   const [loading, setLoading] = useState(true)
   const token = use(params).range
@@ -66,7 +68,7 @@ export default function SalesHistoryPage({ params }: { params: Promise<{ range: 
           <TableHeader><TableRow><TableHead className="w-[120px] max-w-[120px]">Date</TableHead><TableHead className="min-w-[180px]">Customer name</TableHead><TableHead className="min-w-[240px]">Products</TableHead><TableHead>Total</TableHead><TableHead>Payment</TableHead><TableHead>Cash</TableHead><TableHead>POS</TableHead><TableHead>Change</TableHead><TableHead>Delete</TableHead></TableRow></TableHeader>
           <TableBody>
             {loading ? <TableRow><TableCell colSpan={9}>Loading sales...</TableCell></TableRow> : sales.length === 0 ? <TableRow><TableCell colSpan={9}>No sales found.</TableCell></TableRow> : sales.map((sale, index) => (
-              <TableRow key={`${sale.id}-${index}`} className="cursor-pointer hover:bg-muted/50" onClick={() => window.location.href = `/sales/view/${sale.id}`}>
+              <TableRow key={`${sale.id}-${index}`} role="link" tabIndex={0} className="cursor-pointer hover:bg-muted/50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring" onClick={() => router.push(`/sales?edit=${encodeURIComponent(sale.id)}`)} onKeyDown={(event) => { if (event.key === "Enter" || event.key === " ") { event.preventDefault(); router.push(`/sales?edit=${encodeURIComponent(sale.id)}`) } }}>
                 <TableCell className="w-[120px] max-w-[120px] truncate">{sale.date ? format(new Date(sale.date), "MMM d, yyyy") : sale.rangeFrom && sale.rangeTo ? `${format(new Date(sale.rangeFrom), "MMM d, yyyy")} - ${format(new Date(sale.rangeTo), "MMM d, yyyy")}` : "-"}</TableCell>
                 <TableCell>{sale.customerName || "-"}</TableCell>
                 <TableCell>{sale.products.join(", ") || "-"}</TableCell>

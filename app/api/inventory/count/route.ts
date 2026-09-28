@@ -13,11 +13,16 @@ export async function GET(req: Request) {
       return NextResponse.json(count)
     }
     const requestedDate = url.searchParams.get("date")
+    const requestedShelf = url.searchParams.get("shelf")?.trim()
     const asOfDate = requestedDate ? new Date(requestedDate) : undefined
     const calculatedProducts = await getCountProducts(asOfDate)
     const shelves = await prisma.shelf.findMany({ orderBy: { name: "asc" } })
+    const filteredProducts = requestedShelf
+      ? calculatedProducts.filter((product) => product.shelfName && product.shelfName.toLowerCase() === requestedShelf.toLowerCase())
+      : calculatedProducts
+
     return NextResponse.json({
-      products: calculatedProducts.map((product) => ({
+      products: filteredProducts.map((product) => ({
         productName: product.productName,
         availablePieces: product.expectedPcs,
         shortestExpiry: product.expiry,
@@ -211,16 +216,19 @@ export async function PUT(req: Request) {
         shelfName: body.shelfName || undefined,
         lines: {
           deleteMany: {},
-          create: body.lines.map((line: any) => ({
-            productName: String(line.productName || ""),
-            shelfName: line.shelfName || undefined,
-            expectedPcs: Number(line.expectedPcs) || 0,
-            countedPcs: line.countedPcs === "" || line.countedPcs == null ? null : Number(line.countedPcs),
-            differencePcs: line.countedPcs === "" || line.countedPcs == null ? null : Number(line.countedPcs) - (Number(line.expectedPcs) || 0),
-            expiry: line.expiry ? new Date(line.expiry) : null,
-            packsPerCarton: line.packsPerCarton ? Number(line.packsPerCarton) : null,
-            piecesPerPack: line.piecesPerPack ? Number(line.piecesPerPack) : null,
-          })),
+          create: body.lines.map((line: any) => {
+            const countedPcs = line.countedPcs === "" || line.countedPcs == null ? 0 : Number(line.countedPcs)
+            return {
+              productName: String(line.productName || ""),
+              shelfName: line.shelfName || undefined,
+              expectedPcs: Number(line.expectedPcs) || 0,
+              countedPcs,
+              differencePcs: countedPcs - (Number(line.expectedPcs) || 0),
+              expiry: line.expiry ? new Date(line.expiry) : null,
+              packsPerCarton: line.packsPerCarton ? Number(line.packsPerCarton) : null,
+              piecesPerPack: line.piecesPerPack ? Number(line.piecesPerPack) : null,
+            }
+          }),
         },
       },
       include: { lines: true, shelf: true },
@@ -241,6 +249,9 @@ export async function POST(req: Request) {
 
     if (!Array.isArray(lines) || lines.length === 0) {
       return NextResponse.json({ error: "No count lines provided" }, { status: 400 })
+    }
+    if (!shelfId && !shelfName) {
+      return NextResponse.json({ error: "A shelf is required to save a stock count" }, { status: 400 })
     }
 
     const countDate = date ? new Date(date) : new Date()

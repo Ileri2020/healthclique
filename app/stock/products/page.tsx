@@ -1,6 +1,7 @@
 "use client"
 
 import { useEffect, useMemo, useState } from "react"
+import { useSession } from "next-auth/react"
 import { format } from "date-fns"
 import Link from "next/link"
 import { Button } from "@/components/ui/button"
@@ -8,7 +9,7 @@ import { Input } from "@/components/ui/input"
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
-import { Pencil } from "lucide-react"
+import { GitMerge, Pencil } from "lucide-react"
 import { toast } from "sonner"
 
 type ProductAvailability = {
@@ -33,6 +34,8 @@ type ProductHistoryEntry = {
 }
 
 export default function StockProductsPage() {
+  const { data: session } = useSession()
+  const canMergeProducts = session?.user?.role === "admin" || session?.user?.role === "staff"
   const [products, setProducts] = useState<ProductAvailability[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState("")
@@ -47,6 +50,11 @@ export default function StockProductsPage() {
   const [renameFrom, setRenameFrom] = useState("")
   const [renameTo, setRenameTo] = useState("")
   const [renameSaving, setRenameSaving] = useState(false)
+  const [mergeSource, setMergeSource] = useState<string | null>(null)
+  const [mergeTarget, setMergeTarget] = useState("")
+  const [mergeOpen, setMergeOpen] = useState(false)
+  const [mergeSuggestionsOpen, setMergeSuggestionsOpen] = useState(false)
+  const [mergeSaving, setMergeSaving] = useState(false)
   const pageSize = 75
 
   useEffect(() => {
@@ -132,6 +140,44 @@ export default function StockProductsPage() {
     ? productNames.filter((name) => name.toLowerCase().includes(renameTo.toLowerCase())).slice(0, 8)
     : []
 
+  const mergeTargetSuggestions = mergeTarget.trim().length >= 3
+    ? productNames.filter((name) => name !== mergeSource && name.toLowerCase().includes(mergeTarget.trim().toLowerCase())).slice(0, 8)
+    : []
+
+  const mergeProduct = async () => {
+    const target = mergeTarget.trim()
+    if (!mergeSource || !target || target.toLowerCase() === mergeSource.toLowerCase()) {
+      toast.error("Select a different target product.")
+      return
+    }
+    setMergeSaving(true)
+    try {
+      const response = await fetch("/api/inventory/products/merge", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ sourceProductName: mergeSource, targetProductName: target }),
+      })
+      const result = await response.json().catch(() => null)
+      if (!response.ok) throw new Error(result?.error || "Unable to merge products")
+      toast.success(`Merged '${mergeSource}' into '${target}'`)
+      setMergeOpen(false)
+      setSelectedProduct(null)
+      setMergeSource(null)
+      setMergeTarget("")
+      const availabilityResponse = await fetch("/api/inventory/products/availability")
+      if (availabilityResponse.ok) setProducts(await availabilityResponse.json())
+      const namesResponse = await fetch("/api/inventory/products")
+      if (namesResponse.ok) {
+        const names = await namesResponse.json()
+        setProductNames(Array.isArray(names) ? names : [])
+      }
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "Unable to merge products")
+    } finally {
+      setMergeSaving(false)
+    }
+  }
+
   const renameProduct = async () => {
     const nextName = renameTo.trim()
     if (!nextName || nextName === renameFrom) return toast.error("Enter a different product name.")
@@ -168,14 +214,15 @@ export default function StockProductsPage() {
       </div>
       <div className="overflow-x-auto rounded-lg border">
         <Table className="bg-foreground/20 max-w-xl mx-auto rounded-lg">
-          <TableHeader><TableRow><TableHead className="w-12">S/N</TableHead><TableHead className="w-[200px] min-w-[200px] max-w-[200px]">Product name</TableHead><TableHead>Available quantity</TableHead><TableHead className="max-w-[100px]">Total pieces</TableHead><TableHead>Expiry</TableHead></TableRow></TableHeader>
+          <TableHeader><TableRow><TableHead className="w-12">S/N</TableHead><TableHead className="w-[200px] min-w-[200px] max-w-[200px]">Product name</TableHead><TableHead>Available quantity</TableHead><TableHead className="max-w-[100px]">Total pieces</TableHead><TableHead>Expiry</TableHead>{canMergeProducts ? <TableHead className="w-16 text-center"><GitMerge className="mx-auto h-4 w-4" /><span className="sr-only">Merge</span></TableHead> : null}</TableRow></TableHeader>
           <TableBody>
-            {loading ? <TableRow><TableCell colSpan={5} className="justify-center items-center text-center">Loading stock products...</TableCell></TableRow> : error ? <TableRow><TableCell colSpan={5} className="justify-center items-center text-center">{error}</TableCell></TableRow> : filteredProducts.length === 0 ? <TableRow><TableCell colSpan={5} className="justify-center items-center text-center">No stock products found.</TableCell></TableRow> : visibleProducts.map((product, index) => <TableRow key={product.productName} className="cursor-pointer hover:bg-muted/50" onClick={() => setSelectedProduct(product.productName)}>
+            {loading ? <TableRow><TableCell colSpan={canMergeProducts ? 6 : 5} className="justify-center items-center text-center">Loading stock products...</TableCell></TableRow> : error ? <TableRow><TableCell colSpan={canMergeProducts ? 6 : 5} className="justify-center items-center text-center">{error}</TableCell></TableRow> : filteredProducts.length === 0 ? <TableRow><TableCell colSpan={canMergeProducts ? 6 : 5} className="justify-center items-center text-center">No stock products found.</TableCell></TableRow> : visibleProducts.map((product, index) => <TableRow key={product.productName} className="cursor-pointer hover:bg-muted/50" onClick={() => setSelectedProduct(product.productName)}>
               <TableCell className="justify-center items-center text-center">{(currentPage - 1) * pageSize + index + 1}</TableCell>
               <TableCell className="w-[200px] min-w-[200px] max-w-[200px] font-medium justify-center items-center text-center"><div className="flex items-center justify-center gap-1"><span className="truncate">{product.productName}</span><Button type="button" variant="ghost" size="icon" className="h-7 w-7 shrink-0" title={`Edit ${product.productName}`} onClick={(event) => { event.stopPropagation(); setRenameFrom(product.productName); setRenameTo(product.productName); setRenameOpen(true) }}><Pencil className="h-3.5 w-3.5" /></Button></div></TableCell>
               <TableCell className="justify-center items-center text-center">{product.cartons} carton{product.cartons === 1 ? "" : "s"}, {product.packs} pack{product.packs === 1 ? "" : "s"}, {product.pieces} pcs</TableCell>
               <TableCell className="max-w-[100px] truncate justify-center items-center text-center">{product.availablePieces.toLocaleString()}</TableCell>
               <TableCell className="justify-center items-center text-center">{product.expiry ? format(new Date(product.expiry), "MMM d, yyyy") : "-"}</TableCell>
+              {canMergeProducts ? <TableCell className="justify-center items-center text-center"><Button type="button" variant="ghost" size="icon" aria-label={`Merge ${product.productName}`} title={`Merge ${product.productName}`} onClick={(event) => { event.stopPropagation(); setMergeSource(product.productName); setMergeTarget(""); setMergeOpen(true) }}><GitMerge className="h-4 w-4 text-amber-600" /></Button></TableCell> : null}
             </TableRow>)}
           </TableBody>
         </Table>
@@ -202,11 +249,45 @@ export default function StockProductsPage() {
         </Tabs>
       </DialogContent>
     </Dialog>
-    <Dialog open={renameOpen} onOpenChange={setRenameOpen}>
+    {canMergeProducts ? <Dialog open={mergeOpen} onOpenChange={setMergeOpen}>
       <DialogContent className="max-w-md">
+        <DialogHeader>
+          <DialogTitle className="flex items-center gap-2"><GitMerge className="h-5 w-5 text-amber-500" />Merge product records</DialogTitle>
+          <DialogDescription>Move saved stock, sales, count, and shelf records for <strong className="text-foreground">{mergeSource}</strong> to another product.</DialogDescription>
+        </DialogHeader>
+        <div className="space-y-4 py-2">
+          <div className="relative">
+            <label htmlFor="stock-products-merge-target" className="text-sm font-medium">Target product name</label>
+            <Input
+              id="stock-products-merge-target"
+              className="mt-1"
+              placeholder="Search product name..."
+              value={mergeTarget}
+              onFocus={() => setMergeSuggestionsOpen(mergeTarget.trim().length >= 3)}
+              onChange={(event) => { setMergeTarget(event.target.value); setMergeSuggestionsOpen(event.target.value.trim().length >= 3) }}
+              onBlur={() => window.setTimeout(() => setMergeSuggestionsOpen(false), 150)}
+            />
+            {mergeSuggestionsOpen && mergeTargetSuggestions.length ? <div className="absolute left-0 right-0 top-full z-20 mt-1 max-h-48 overflow-y-auto rounded-md border bg-popover p-1 text-popover-foreground shadow-md">{mergeTargetSuggestions.map((name) => <button key={name} type="button" className="block w-full rounded px-2 py-1.5 text-left text-sm hover:bg-accent" onMouseDown={(event) => { event.preventDefault(); setMergeTarget(name); setMergeSuggestionsOpen(false) }}>{name}</button>)}</div> : null}
+          </div>
+          <p className="rounded-md border border-amber-500/30 bg-amber-500/10 p-3 text-xs text-amber-800 dark:text-amber-300">This will update existing stock, sales, stock-count, and shelf references to the selected target product.</p>
+        </div>
+        <DialogFooter>
+          <Button type="button" variant="outline" onClick={() => setMergeOpen(false)} disabled={mergeSaving}>Cancel</Button>
+          <Button type="button" variant="destructive" onClick={mergeProduct} disabled={mergeSaving || !mergeTarget.trim() || mergeTarget.trim().toLowerCase() === mergeSource?.toLowerCase()}>
+            {mergeSaving ? <><GitMerge className="mr-2 h-4 w-4 animate-pulse" />Merging...</> : "Confirm merge"}
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog> : null}
+    <Dialog open={renameOpen} onOpenChange={setRenameOpen}>
+      <DialogContent className="flex max-h-[90vh] max-w-md flex-col overflow-y-auto">
         <DialogHeader><DialogTitle>Edit product name</DialogTitle><DialogDescription>This renames every saved stock and sales reference for this product.</DialogDescription></DialogHeader>
-        <div className="relative space-y-2 py-3"><Input autoFocus value={renameTo} onChange={(event) => setRenameTo(event.target.value)} placeholder="Product name" />{renameSuggestions.length > 0 ? <div className="absolute left-0 right-0 top-full z-20 mt-1 rounded-md border bg-popover p-1 shadow-md">{renameSuggestions.map((name) => <button key={name} type="button" className="block w-full rounded px-2 py-1.5 text-left text-sm hover:bg-accent" onMouseDown={(event) => { event.preventDefault(); setRenameTo(name) }}>{name}</button>)}</div> : null}</div>
-        <DialogFooter><Button type="button" onClick={renameProduct} disabled={renameSaving}>{renameSaving ? "Saving..." : "Save name"}</Button></DialogFooter>
+        <div className="relative space-y-2 py-3"><Input autoFocus value={renameTo} onChange={(event) => setRenameTo(event.target.value)} placeholder="Product name" />{renameSuggestions.length > 0 ? <div className="absolute left-0 right-0 top-full z-10 mt-1 rounded-md border bg-popover p-1 shadow-md">{renameSuggestions.map((name) => <button key={name} type="button" className="block w-full rounded px-2 py-1.5 text-left text-sm hover:bg-accent" onMouseDown={(event) => { event.preventDefault(); setRenameTo(name) }}>{name}</button>)}</div> : null}</div>
+        <DialogFooter className="sticky bottom-0 z-20 mt-auto border-t bg-background pt-4">
+          <Button type="button" className="w-full sm:w-auto" onClick={renameProduct} disabled={renameSaving || !renameTo.trim() || renameTo.trim() === renameFrom}>
+            {renameSaving ? "Submitting..." : "Submit name"}
+          </Button>
+        </DialogFooter>
       </DialogContent>
     </Dialog>
   </main>

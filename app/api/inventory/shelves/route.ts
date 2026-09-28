@@ -17,7 +17,10 @@ export async function GET() {
 export async function POST(req: Request) {
   try {
     const session = await auth()
-    if (session?.user?.role !== "admin") return NextResponse.json({ error: "Admin access required" }, { status: 403 })
+    const role = session?.user?.role?.trim().toLowerCase()
+    if (role !== "admin" && role !== "staff") {
+      return NextResponse.json({ error: "Admin or staff access required" }, { status: 403 })
+    }
     const body = await req.json()
     const { name, number, rowFrom, rowTo, columnFrom, columnTo } = body
 

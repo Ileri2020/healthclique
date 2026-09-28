@@ -1,11 +1,14 @@
 import { NextResponse } from "next/server"
 import { auth } from "@/auth"
-import { prisma } from "@/lib/prisma"
+import { mergeInventoryProductNames } from "@/lib/merge-inventory-products"
 
 export async function POST(req: Request) {
   try {
     const session = await auth()
-    if (session?.user?.role !== "admin") return NextResponse.json({ error: "Admin access required" }, { status: 403 })
+    const role = session?.user?.role?.toLowerCase()
+    if (role !== "admin" && role !== "staff") {
+      return NextResponse.json({ error: "Admin or staff access required" }, { status: 403 })
+    }
     const body = await req.json()
     const { sourceProductName, targetProductName } = body
 
@@ -20,29 +23,10 @@ export async function POST(req: Request) {
       return NextResponse.json({ error: "Source and target product names must be different" }, { status: 400 })
     }
 
-    const [stockRes, saleRes, countLineRes] = await prisma.$transaction([
-      prisma.inventoryStock.updateMany({ where: { productName: source }, data: { productName: target } }),
-      prisma.inventorySale.updateMany({ where: { productName: source }, data: { productName: target } }),
-      prisma.stockCountLine.updateMany({ where: { productName: source }, data: { productName: target } }),
-    ])
-    const sourceShelf = await prisma.productShelf.findUnique({ where: { productName: source } })
-    const targetShelf = await prisma.productShelf.findUnique({ where: { productName: target } })
-    if (sourceShelf) {
-      if (targetShelf) await prisma.productShelf.delete({ where: { productName: source } })
-      else await prisma.productShelf.update({ where: { productName: source }, data: { productName: target } })
-    }
-
-    return NextResponse.json({
-      success: true,
-      sourceProductName: source,
-      targetProductName: target,
-      updatedStocksCount: stockRes.count,
-      updatedSalesCount: saleRes.count,
-      updatedCountLinesCount: countLineRes.count,
-      updatedShelfCount: sourceShelf ? 1 : 0,
-    })
+    const result = await mergeInventoryProductNames(source, target)
+    return NextResponse.json({ success: true, sourceProductName: source, targetProductName: target, ...result })
   } catch (error) {
     console.error(error)
-    return NextResponse.json({ error: "Unable to merge products" }, { status: 500 })
+    return NextResponse.json({ error: error instanceof Error ? error.message : "Unable to merge products" }, { status: 500 })
   }
 }

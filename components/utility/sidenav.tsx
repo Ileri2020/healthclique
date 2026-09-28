@@ -108,7 +108,7 @@ const Sidenav = () => {
                                 >
                                     <div className="flex items-center gap-4">
                                         <div className={`p-2 rounded-xl border ${isActive ? "bg-white/20 border-white/30" : "bg-muted border-border group-hover:border-primary/30 group-hover:bg-primary/5"} transition-all`}>
-                                            <link.icon className="h-5 w-5 shrink-0" aria-hidden="true" />
+                                            {link.icon ? <link.icon className="h-5 w-5 shrink-0" aria-hidden="true" /> : link.name}
                                         </div>
                                         <span className="font-bold tracking-tight">{link.title}</span>
                                     </div>

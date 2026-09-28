@@ -23,6 +23,12 @@ type DailySale = {
   rows?: DailySaleRow[]
 }
 
+type DailyProductSale = DailySaleRow & {
+  saleId: string
+  customer: string
+  rowIndex: number
+}
+
 export default function DailySalesPage() {
   const [date, setDate] = useState(() => format(new Date(), "yyyy-MM-dd"))
   const [fromDate, setFromDate] = useState("")
@@ -62,6 +68,12 @@ export default function DailySalesPage() {
   }, [date, filterMode, fromDate, toDate])
 
   const totalSales = useMemo(() => sales.reduce((sum, sale) => sum + Number(sale.total || 0), 0), [sales])
+  const productSales = useMemo<DailyProductSale[]>(() => sales.flatMap((sale) => (sale.rows ?? []).map((row, rowIndex) => ({
+    ...row,
+    saleId: sale.id,
+    customer: row.customerName || sale.customerName || "",
+    rowIndex,
+  }))), [sales])
   const changeDate = (days: number) => {
     const start = new Date(`${filterMode === "range" ? fromDate : date}T00:00:00`)
     const end = new Date(`${filterMode === "range" ? toDate : date}T00:00:00`)
@@ -89,8 +101,6 @@ export default function DailySalesPage() {
   const heading = filterMode === "range" && fromDate && toDate
     ? `${format(new Date(`${fromDate}T00:00:00`), "PPP")} - ${format(new Date(`${toDate}T00:00:00`), "PPP")}`
     : format(new Date(`${date}T00:00:00`), "PPP")
-  let serialNumber = 0
-
   return (
     <main className="space-y-6 p-6">
       <div className="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
@@ -117,18 +127,29 @@ export default function DailySalesPage() {
 
       <div className="overflow-x-auto rounded-lg border">
         <Table>
-          <TableHeader><TableRow><TableHead className="w-16">S/N</TableHead><TableHead>Product name</TableHead><TableHead>Quantity</TableHead><TableHead>Amount</TableHead></TableRow></TableHeader>
+          <TableHeader><TableRow><TableHead className="w-16">S/N</TableHead><TableHead>Customer</TableHead><TableHead>Product name</TableHead><TableHead>Quantity</TableHead><TableHead>Amount</TableHead></TableRow></TableHeader>
           <TableBody>
-            {loading ? <TableRow><TableCell colSpan={4} className="text-center">Loading daily sales...</TableCell></TableRow> : sales.length === 0 ? <TableRow><TableCell colSpan={4} className="text-center">No sales recorded for this date.</TableCell></TableRow> : sales.flatMap((sale) => {
-              const rows = sale.rows ?? []
-              const customerName = sale.customerName || rows.find((row) => row.customerName)?.customerName || ""
-              const customerRow = customerName ? [<TableRow key={`${sale.id}-customer`} className="bg-muted/30"><TableCell colSpan={4} className="font-semibold">{customerName} ({rows.length} {rows.length === 1 ? "product" : "products"})</TableCell></TableRow>] : []
-              const productRows = rows.map((row, rowIndex) => {
-                serialNumber += 1
-                return <TableRow key={`${sale.id}-${rowIndex}`}><TableCell>{serialNumber}</TableCell><TableCell>{row.productName || "-"}</TableCell><TableCell>{Number(row.qty || 0).toLocaleString()}</TableCell><TableCell>₦{Number(row.amount || 0).toLocaleString()}</TableCell></TableRow>
-              })
-              return [...customerRow, ...productRows]
-            })}
+            {loading ? <TableRow><TableCell colSpan={5} className="text-center">Loading daily product sales...</TableCell></TableRow> : productSales.length === 0 ? <TableRow><TableCell colSpan={5} className="text-center">No product sales recorded for this date.</TableCell></TableRow> : productSales.map((row, index) => (
+              <TableRow
+                key={`${row.saleId}-${row.rowIndex}`}
+                role="link"
+                tabIndex={0}
+                className="cursor-pointer hover:bg-muted/50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                onClick={() => router.push(`/sales?edit=${encodeURIComponent(row.saleId)}&product=${encodeURIComponent(row.productName || "")}`)}
+                onKeyDown={(event) => {
+                  if (event.key === "Enter" || event.key === " ") {
+                    event.preventDefault()
+                    router.push(`/sales?edit=${encodeURIComponent(row.saleId)}&product=${encodeURIComponent(row.productName || "")}`)
+                  }
+                }}
+              >
+                <TableCell>{index + 1}</TableCell>
+                <TableCell>{row.customer || "-"}</TableCell>
+                <TableCell>{row.productName || "-"}</TableCell>
+                <TableCell>{Number(row.qty || 0).toLocaleString()}</TableCell>
+                <TableCell>₦{Number(row.amount || 0).toLocaleString()}</TableCell>
+              </TableRow>
+            ))}
           </TableBody>
         </Table>
       </div>

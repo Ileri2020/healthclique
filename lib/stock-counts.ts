@@ -39,7 +39,7 @@ const piecesFor = (row: { totalPcs: number | null; cartonQty: number | null; pac
 }
 
 export async function getCountProducts(asOfDate?: Date) {
-  const [stocks, sales, normalizedLines, shelfLines] = await Promise.all([
+  const [stocks, sales, normalizedLines, shelfLines, productShelves] = await Promise.all([
     prisma.inventoryStock.findMany({
       include: { inventory: { select: { date: true, rangeFrom: true, createdAt: true } } },
       orderBy: { createdAt: "asc" },
@@ -57,6 +57,9 @@ export async function getCountProducts(asOfDate?: Date) {
       where: asOfDate ? { count: { date: { lte: asOfDate } } } : undefined,
       orderBy: { createdAt: "desc" },
       select: { productName: true, count: { select: { shelf: { select: { name: true } } } } },
+    }),
+    prisma.productShelf.findMany({
+      select: { productName: true, shelfName: true },
     }),
   ])
 
@@ -82,6 +85,11 @@ export async function getCountProducts(asOfDate?: Date) {
   shelfLines.forEach((line) => {
     const key = keyFor(line.productName)
     if (!latestShelves.has(key) && line.count.shelf?.name) latestShelves.set(key, line.count.shelf.name)
+  })
+  const assignedShelves = new Map<string, string>()
+  productShelves.forEach((assignment) => {
+    const key = keyFor(assignment.productName)
+    if (assignment.shelfName) assignedShelves.set(key, assignment.shelfName)
   })
 
   return [...stockGroups.entries()].map(([key, allProductStocks]) => {
@@ -123,7 +131,7 @@ export async function getCountProducts(asOfDate?: Date) {
       cartonEnabled: productStocks.some((stock) => stock.carton || (stock.packsPerCarton || 0) > 0),
       packEnabled: productStocks.some((stock) => stock.pack || (stock.pcsCount || 0) > 0),
       salesPrice: latestStock?.pcsSalesPrice ?? latestStock?.packSalesPrice ?? latestStock?.cartonSalesPrice ?? null,
-      shelfName: latestShelves.get(key) ?? null,
+      shelfName: assignedShelves.get(key) ?? latestShelves.get(key) ?? null,
     }
   }).filter((product): product is NonNullable<typeof product> => product !== null).sort((left, right) => left.productName.localeCompare(right.productName))
 }

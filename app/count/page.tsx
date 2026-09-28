@@ -2,6 +2,7 @@
 
 import { useEffect, useMemo, useRef, useState } from "react"
 import { useRouter, useSearchParams } from "next/navigation"
+import { useSession } from "next-auth/react"
 import Link from "next/link"
 import { format } from "date-fns"
 import { Button } from "@/components/ui/button"
@@ -82,6 +83,8 @@ function formatPcsToUnits(pcs: number, ppc: number, pCount: number, cartonEnable
 }
 
 export default function StockCountPage() {
+  const { data: session } = useSession()
+  const canMergeProducts = session?.user?.role === "admin" || session?.user?.role === "staff"
   const router = useRouter()
   const searchParams = useSearchParams()
   const editId = searchParams.get("edit")
@@ -94,9 +97,12 @@ export default function StockCountPage() {
   // Header controls state
   const [searchTerm, setSearchTerm] = useState("")
   const [searchDropdownOpen, setSearchDropdownOpen] = useState(false)
-  const [selectedShelfFilter, setSelectedShelfFilter] = useState<string>("all")
+  const [selectedShelfFilter, setSelectedShelfFilter] = useState<string>("")
   const [sortBy, setSortBy] = useState<"name" | "shelf" | "price" | "expected" | "status" | "expiry">("name")
   const [countDate, setCountDate] = useState<Date>(new Date())
+  const [assignShelfOpen, setAssignShelfOpen] = useState(false)
+  const [assignProductName, setAssignProductName] = useState<string | null>(null)
+  const [assignShelfId, setAssignShelfId] = useState("")
 
   // Create Shelf Dialog
   const [createShelfOpen, setCreateShelfOpen] = useState(false)
@@ -123,12 +129,62 @@ export default function StockCountPage() {
   const productsPerPage = 75
   const tableTopRef = useRef<HTMLDivElement>(null)
 
-  useEffect(() => { loadCountData() }, [editId, countDate])
+  useEffect(() => { loadCountData() }, [editId, countDate, selectedShelfFilter])
+
+  const ADD_TO_SHELF_OPTION = "__add_to_shelf__"
 
   const loadCountData = async () => {
     setLoading(true)
     try {
-      const response = await fetch(`/api/inventory/count?date=${format(countDate, "yyyy-MM-dd")}`)
+      const shelvesResponse = await fetch("/api/inventory/shelves")
+      if (shelvesResponse.ok) {
+        const shelvesData = await shelvesResponse.json()
+        setShelves(Array.isArray(shelvesData) ? shelvesData : [])
+      }
+
+      if (!selectedShelfFilter.trim() || selectedShelfFilter === ADD_TO_SHELF_OPTION) {
+        const response = await fetch(`/api/inventory/count?date=${format(countDate, "yyyy-MM-dd")}`)
+        if (!response.ok) throw new Error("Unable to load count data")
+        const data = await response.json()
+        let nextProducts = (data.products || []).map((p: any) => ({
+          ...p,
+          countedPcs: "",
+          expiryInput: p.shortestExpiry ? p.shortestExpiry.split("T")[0] : "",
+        }))
+        if (editId) {
+          const savedResponse = await fetch(`/api/inventory/count?id=${editId}`)
+          if (savedResponse.ok) {
+            const saved = await savedResponse.json()
+            const savedDate = new Date(saved.date)
+            if (format(countDate, "yyyy-MM-dd") !== format(savedDate, "yyyy-MM-dd")) setCountDate(savedDate)
+            const savedShelfName = saved.shelfName || saved.lines?.[0]?.shelfName || ""
+            if (savedShelfName) setSelectedShelfFilter(savedShelfName)
+            nextProducts = saved.lines
+              .filter((line: any) => !savedShelfName || !line.shelfName || line.shelfName === savedShelfName)
+              .map((line: any) => ({
+                productName: line.productName,
+                availablePieces: line.expectedPcs,
+                shortestExpiry: line.expiry,
+                shelfId: null,
+                shelfName: line.shelfName || savedShelfName || null,
+                packsPerCarton: line.packsPerCarton || 0,
+                piecesPerPack: line.piecesPerPack || 0,
+                cartonEnabled: Boolean(line.packsPerCarton),
+                packEnabled: Boolean(line.piecesPerPack),
+                countedPcs: line.countedPcs == null ? "" : line.countedPcs,
+                expiryInput: line.expiry ? line.expiry.split("T")[0] : "",
+              }))
+          }
+        }
+        setProducts(nextProducts)
+        setLoading(false)
+        return
+      }
+
+      const query = new URLSearchParams({ date: format(countDate, "yyyy-MM-dd") })
+      query.set("shelf", selectedShelfFilter.trim())
+
+      const response = await fetch(`/api/inventory/count?${query.toString()}`)
       if (!response.ok) throw new Error("Unable to load count data")
       const data = await response.json()
       let nextProducts = (data.products || []).map((p: any) => ({
@@ -142,19 +198,23 @@ export default function StockCountPage() {
           const saved = await savedResponse.json()
           const savedDate = new Date(saved.date)
           if (format(countDate, "yyyy-MM-dd") !== format(savedDate, "yyyy-MM-dd")) setCountDate(savedDate)
-          nextProducts = saved.lines.map((line: any) => ({
-            productName: line.productName,
-            availablePieces: line.expectedPcs,
-            shortestExpiry: line.expiry,
-            shelfId: null,
-            shelfName: line.shelfName || saved.shelfName || null,
-            packsPerCarton: line.packsPerCarton || 0,
-            piecesPerPack: line.piecesPerPack || 0,
-            cartonEnabled: Boolean(line.packsPerCarton),
-            packEnabled: Boolean(line.piecesPerPack),
-            countedPcs: line.countedPcs == null ? "" : line.countedPcs,
-            expiryInput: line.expiry ? line.expiry.split("T")[0] : "",
-          }))
+          const savedShelfName = saved.shelfName || saved.lines?.[0]?.shelfName || ""
+          if (savedShelfName) setSelectedShelfFilter(savedShelfName)
+          nextProducts = saved.lines
+            .filter((line: any) => !savedShelfName || !line.shelfName || line.shelfName === savedShelfName)
+            .map((line: any) => ({
+              productName: line.productName,
+              availablePieces: line.expectedPcs,
+              shortestExpiry: line.expiry,
+              shelfId: null,
+              shelfName: line.shelfName || savedShelfName || null,
+              packsPerCarton: line.packsPerCarton || 0,
+              piecesPerPack: line.piecesPerPack || 0,
+              cartonEnabled: Boolean(line.packsPerCarton),
+              packEnabled: Boolean(line.piecesPerPack),
+              countedPcs: line.countedPcs == null ? "" : line.countedPcs,
+              expiryInput: line.expiry ? line.expiry.split("T")[0] : "",
+            }))
         }
       }
       setProducts(nextProducts)
@@ -235,6 +295,47 @@ export default function StockCountPage() {
     )
   }
 
+  const handleAssignShelfToProduct = async () => {
+    if (!assignProductName || !assignShelfId.trim()) {
+      toast.error("Select a shelf to save the product to")
+      return
+    }
+
+    const shelf = shelves.find((item) => item.id === assignShelfId)
+    if (!shelf) {
+      toast.error("Selected shelf was not found")
+      return
+    }
+
+    try {
+      const response = await fetch("/api/inventory/products/shelf", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ productName: assignProductName, shelfId: assignShelfId }),
+      })
+
+      if (!response.ok) {
+        const error = await response.json().catch(() => null)
+        throw new Error(error?.error || "Unable to assign shelf")
+      }
+
+      setProducts((prev) =>
+        prev.map((product) =>
+          product.productName === assignProductName
+            ? { ...product, shelfId: shelf.id, shelfName: shelf.name }
+            : product
+        )
+      )
+      setAssignShelfOpen(false)
+      setAssignProductName(null)
+      setAssignShelfId("")
+      toast.success(`${assignProductName} was added to ${shelf.name}`)
+      if (selectedShelfFilter === shelf.name) loadCountData()
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "Unable to assign shelf")
+    }
+  }
+
   const handleMergeExecute = async () => {
     if (!mergeSource || !mergeTarget.trim()) return toast.error("Select a target product")
     if (mergeSource.toLowerCase() === mergeTarget.trim().toLowerCase()) return toast.error("Select a different product to merge into")
@@ -262,17 +363,22 @@ export default function StockCountPage() {
   }
 
   const handleSaveStockCount = async () => {
+    if (!selectedShelfFilter.trim() || selectedShelfFilter === ADD_TO_SHELF_OPTION) {
+      toast.error("Select a shelf before saving the stock count")
+      return
+    }
+
     setSaving(true)
     setSaveState("saving")
     try {
       const lines = products.map((p) => {
-        const cVal = p.countedPcs !== "" && p.countedPcs !== undefined && p.countedPcs !== null ? Number(p.countedPcs) : undefined
+        const cVal = p.countedPcs !== "" && p.countedPcs !== undefined && p.countedPcs !== null ? Number(p.countedPcs) : 0
         return {
           productName: p.productName,
-          shelfName: p.shelfName || undefined,
+          shelfName: p.shelfName || selectedShelfFilter,
           shelfId: p.shelfId || undefined,
           expectedPcs: p.availablePieces,
-          countedPcs: cVal,
+          countedPcs: Number.isFinite(cVal) ? cVal : 0,
           expiry: p.expiryInput ? new Date(p.expiryInput).toISOString() : undefined,
           packsPerCarton: p.packsPerCarton || undefined,
           piecesPerPack: p.piecesPerPack || undefined,
@@ -285,7 +391,7 @@ export default function StockCountPage() {
         body: JSON.stringify({
           id: editId || undefined,
           date: countDate.toISOString(),
-          shelfName: selectedShelfFilter !== "all" ? selectedShelfFilter : undefined,
+          shelfName: selectedShelfFilter,
           lines,
         }),
       })
@@ -326,7 +432,7 @@ export default function StockCountPage() {
       list = list.filter((p) => p.productName.toLowerCase().includes(query))
     }
 
-    if (selectedShelfFilter !== "all") {
+    if (selectedShelfFilter && selectedShelfFilter !== ADD_TO_SHELF_OPTION) {
       list = list.filter((p) => (p.shelfName || "Unassigned") === selectedShelfFilter)
     }
 
@@ -367,7 +473,7 @@ export default function StockCountPage() {
     const start = (currentPage - 1) * productsPerPage
     return filteredProducts.slice(start, start + productsPerPage)
   }, [filteredProducts, currentPage])
-  const totalPages = Math.max(1, Math.ceil(filteredProducts.length / productsPerPage))
+  const totalPages = Math.ceil(filteredProducts.length / productsPerPage)
   const pageNumbers = useMemo(() => {
     const firstPage = Math.max(1, currentPage - 3)
     const lastPage = Math.min(totalPages, currentPage + 3)
@@ -439,24 +545,6 @@ export default function StockCountPage() {
         </div>
 
         <div>
-          <Label htmlFor="shelf-filter" className="text-sm font-semibold">Filter shelf</Label>
-          <select
-            id="shelf-filter"
-            className="mt-1 w-full rounded-md border bg-background px-3 py-2 text-sm text-foreground"
-            value={selectedShelfFilter}
-            onChange={(e) => setSelectedShelfFilter(e.target.value)}
-          >
-            <option className="bg-background text-foreground" value="all">All shelves</option>
-            {shelves.map((s) => (
-              <option key={s.id} className="bg-background text-foreground" value={s.name}>
-                {s.name} {s.number ? `(#${s.number})` : ""}
-              </option>
-            ))}
-            <option className="bg-background text-foreground" value="Unassigned">Unassigned</option>
-          </select>
-        </div>
-
-        <div>
           <Label htmlFor="sort-by" className="text-sm font-semibold">Sort by</Label>
           <select
             id="sort-by"
@@ -475,34 +563,65 @@ export default function StockCountPage() {
       </div>
 
       {/* Action & Date Controls */}
-      <div className="sticky top-2 z-30 flex flex-wrap items-center justify-between gap-3 rounded-lg border bg-card/95 p-4 shadow-md backdrop-blur">
-        <div className="flex items-center gap-3">
-          <Label htmlFor="count-date" className="whitespace-nowrap text-sm font-semibold">Count date:</Label>
-          <input
-            id="count-date"
-            type="date"
-            className="rounded border bg-transparent px-3 py-1.5 text-sm"
-            value={format(countDate, "yyyy-MM-dd")}
-            onChange={(e) => setCountDate(new Date(`${e.target.value}T00:00:00`))}
-          />
-          <span className="text-xs text-muted-foreground">({filteredProducts.length} products listed)</span>
+      <div className="sticky top-2 z-30 flex flex-col gap-3 rounded-lg border bg-card/95 p-4 shadow-md backdrop-blur">
+        <div className="flex flex-wrap items-center justify-between gap-3">
+          <div className="flex items-center gap-3">
+            <Label htmlFor="count-date" className="whitespace-nowrap text-sm font-semibold">Count date:</Label>
+            <input
+              id="count-date"
+              type="date"
+              className="rounded border bg-transparent px-3 py-1.5 text-sm"
+              value={format(countDate, "yyyy-MM-dd")}
+              onChange={(e) => setCountDate(new Date(`${e.target.value}T00:00:00`))}
+            />
+            <span className="text-xs text-muted-foreground">({filteredProducts.length} products listed)</span>
+          </div>
+          <Button onClick={handleSaveStockCount} disabled={saving || saveState === "saved" || !selectedShelfFilter.trim() || selectedShelfFilter === ADD_TO_SHELF_OPTION}>
+            {saving ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Check className="mr-2 h-4 w-4" />}
+            {saveState === "saved" ? "Saved" : editId ? "Update stock count" : "Save stock count"}
+          </Button>
         </div>
-        <Button onClick={handleSaveStockCount} disabled={saving || saveState === "saved"}>
-          {saving ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Check className="mr-2 h-4 w-4" />}
-          {saveState === "saved" ? "Saved" : editId ? "Update stock count" : "Save stock count"}
-        </Button>
+
+        <div className="max-w-sm">
+          <Label htmlFor="shelf-filter" className="text-sm font-semibold">Select shelf</Label>
+          <select
+            id="shelf-filter"
+            className="mt-1 w-full rounded-md border bg-background px-3 py-2 text-sm text-foreground"
+            value={selectedShelfFilter}
+            onChange={(e) => setSelectedShelfFilter(e.target.value)}
+          >
+            <option className="bg-background text-foreground" value="">Select shelf</option>
+            {shelves.map((s) => (
+              <option key={s.id} className="bg-background text-foreground" value={s.name}>
+                {s.name} {s.number ? `(#${s.number})` : ""}
+              </option>
+            ))}
+            <option className="bg-background text-foreground" value={ADD_TO_SHELF_OPTION}>Add to shelf</option>
+          </select>
+        </div>
       </div>
 
+      {!selectedShelfFilter ? (
+        <div className="rounded-lg border border-dashed bg-card p-8 text-center text-sm text-muted-foreground">
+          Select a shelf to load all products assigned to it and begin the stock count.
+        </div>
+      ) : null}
+
       {/* Main Table */}
-      <div ref={tableTopRef} className="w-full max-w-full overflow-x-auto touch-pan-x touch-pan-y scrollbar-thin [webkit-overflow-scrolling:touch] [overscroll-behavior-x:contain] rounded-lg border">
-        <Table className="bg-foreground/10 min-w-[1100px]">
+      {selectedShelfFilter ? (
+        <div ref={tableTopRef} className="w-full max-w-full overflow-x-auto touch-pan-x touch-pan-y scrollbar-thin [webkit-overflow-scrolling:touch] [overscroll-behavior-x:contain] rounded-lg border">
+          <Table className="bg-foreground/10 min-w-[1100px]">
           <TableHeader>
             <TableRow>
               <TableHead className="w-12">S/N</TableHead>
               <TableHead className="w-[240px]">Product name</TableHead>
-              <TableHead className="w-[120px]">Count (Pcs)</TableHead>
-              <TableHead className="w-16 text-center">Merge</TableHead>
-              <TableHead className="w-[160px]">Shelf</TableHead>
+              {selectedShelfFilter !== ADD_TO_SHELF_OPTION ? <TableHead className="w-[120px]">Count (Pcs)</TableHead> : null}
+              {canMergeProducts ? <TableHead className="w-16 text-center"><span className="sr-only">Merge</span><GitMerge className="mx-auto h-4 w-4" /></TableHead> : null}
+              {selectedShelfFilter === ADD_TO_SHELF_OPTION ? (
+                <TableHead className="w-[120px] text-center">Add to shelf</TableHead>
+              ) : (
+                <TableHead className="w-[160px]">Shelf</TableHead>
+              )}
               <TableHead className="w-[150px]">Shortest expiry</TableHead>
               <TableHead className="w-[220px]">Expected quantity</TableHead>
               <TableHead className="w-[220px]">Difference</TableHead>
@@ -512,13 +631,13 @@ export default function StockCountPage() {
           <TableBody>
             {loading ? (
               <TableRow>
-                <TableCell colSpan={9} className="py-8 justify-center items-center text-center text-muted-foreground">
+                <TableCell colSpan={canMergeProducts ? (selectedShelfFilter === ADD_TO_SHELF_OPTION ? 8 : 9) : (selectedShelfFilter === ADD_TO_SHELF_OPTION ? 7 : 8)} className="py-8 justify-center items-center text-center text-muted-foreground">
                   Loading stock count products...
                 </TableCell>
               </TableRow>
             ) : filteredProducts.length === 0 ? (
               <TableRow>
-                <TableCell colSpan={9} className="py-8 justify-center items-center text-center text-muted-foreground">
+                <TableCell colSpan={canMergeProducts ? (selectedShelfFilter === ADD_TO_SHELF_OPTION ? 8 : 9) : (selectedShelfFilter === ADD_TO_SHELF_OPTION ? 7 : 8)} className="py-8 justify-center items-center text-center text-muted-foreground">
                   No stock products found for audit.
                 </TableCell>
               </TableRow>
@@ -538,7 +657,7 @@ export default function StockCountPage() {
                   <TableRow key={p.productName} className={hasCount ? "bg-muted/30" : "hover:bg-muted/40"}>
                     <TableCell className="justify-center items-center text-center">{(currentPage - 1) * productsPerPage + index + 1}</TableCell>
                     <TableCell className="font-medium justify-center items-center text-center">{p.productName}</TableCell>
-                    <TableCell className="justify-center items-center text-center">
+                    {selectedShelfFilter !== ADD_TO_SHELF_OPTION ? <TableCell className="justify-center items-center text-center">
                       <Input
                         type="number"
                         min="0"
@@ -547,36 +666,56 @@ export default function StockCountPage() {
                         value={p.countedPcs ?? ""}
                         onChange={(e) => handleCountChange(p.productName, e.target.value)}
                       />
-                    </TableCell>
-                    <TableCell className="justify-center items-center text-center">
-                      <input
-                        type="checkbox"
+                    </TableCell> : null}
+                    {canMergeProducts ? <TableCell className="justify-center items-center text-center">
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        size="icon"
                         aria-label={`Merge ${p.productName}`}
-                        className="h-4 w-4 rounded border-gray-300 text-primary focus:ring-primary cursor-pointer"
-                        onChange={(e) => {
-                          if (e.target.checked) {
-                            setMergeSource(p.productName)
-                            setMergeTarget("")
-                            setMergeDialogOpen(true)
-                            e.target.checked = false
-                          }
+                        title={`Merge ${p.productName}`}
+                        onClick={() => {
+                          setMergeSource(p.productName)
+                          setMergeTarget("")
+                          setMergeDialogOpen(true)
                         }}
-                      />
-                    </TableCell>
-                    <TableCell className="justify-center items-center text-center">
-                      <select
-                        className="w-full rounded border bg-transparent px-2 py-1 text-xs"
-                        value={p.shelfId || ""}
-                        onChange={(e) => handleShelfAssign(p.productName, e.target.value)}
                       >
-                        <option value="">Select shelf</option>
-                        {shelves.map((s) => (
-                          <option key={s.id} value={s.id}>
-                            {s.name} {s.number ? `(#${s.number})` : ""}
-                          </option>
-                        ))}
-                      </select>
-                    </TableCell>
+                        <GitMerge className="h-4 w-4 text-amber-600" />
+                      </Button>
+                    </TableCell> : null}
+                    {selectedShelfFilter === ADD_TO_SHELF_OPTION ? (
+                      <TableCell className="justify-center items-center text-center">
+                        <Button
+                          type="button"
+                          variant="ghost"
+                          size="icon"
+                          aria-label={`Add ${p.productName} to a shelf`}
+                          title={`Add ${p.productName} to a shelf`}
+                          onClick={() => {
+                            setAssignProductName(p.productName)
+                            setAssignShelfId("")
+                            setAssignShelfOpen(true)
+                          }}
+                        >
+                          <span className="text-lg font-bold text-emerald-500">+</span>
+                        </Button>
+                      </TableCell>
+                    ) : (
+                      <TableCell className="justify-center items-center text-center">
+                        <select
+                          className="w-full rounded border bg-transparent px-2 py-1 text-xs"
+                          value={p.shelfId || ""}
+                          onChange={(e) => handleShelfAssign(p.productName, e.target.value)}
+                        >
+                          <option value="">Select shelf</option>
+                          {shelves.map((s) => (
+                            <option key={s.id} value={s.id}>
+                              {s.name} {s.number ? `(#${s.number})` : ""}
+                            </option>
+                          ))}
+                        </select>
+                      </TableCell>
+                    )}
                     <TableCell className="justify-center items-center text-center">
                       <input
                         type="date"
@@ -607,8 +746,19 @@ export default function StockCountPage() {
             )}
           </TableBody>
         </Table>
-      </div>
-      {totalPages > 1 ? <div className="flex flex-wrap items-center justify-center gap-2"><Button variant="outline" onClick={() => { setCurrentPage((page) => Math.max(1, page - 1)); tableTopRef.current?.scrollIntoView({ behavior: "smooth", block: "start" }) }} disabled={currentPage === 1}>Previous</Button>{pageNumbers.map((page) => <Button key={page} type="button" variant={page === currentPage ? "default" : "outline"} className="h-9 w-9 p-0" onClick={() => { setCurrentPage(page); tableTopRef.current?.scrollIntoView({ behavior: "smooth", block: "start" }) }}>{page}</Button>)}<Button variant="outline" onClick={() => { setCurrentPage((page) => Math.min(totalPages, page + 1)); tableTopRef.current?.scrollIntoView({ behavior: "smooth", block: "start" }) }} disabled={currentPage === totalPages}>Next</Button><span className="ml-1 text-sm text-muted-foreground">Page {currentPage} of {totalPages}</span></div> : null}
+        </div>
+      ) : null}
+
+      {selectedShelfFilter && !loading && paginatedProducts.length > 0 && totalPages > 1 ? (
+        <div className="flex flex-wrap items-center justify-center gap-2">
+          <Button variant="outline" onClick={() => { setCurrentPage((page) => Math.max(1, page - 1)); tableTopRef.current?.scrollIntoView({ behavior: "smooth", block: "start" }) }} disabled={currentPage === 1}>Previous</Button>
+          {pageNumbers.map((page) => (
+            <Button key={page} type="button" variant={page === currentPage ? "default" : "outline"} className="h-9 w-9 p-0" onClick={() => { setCurrentPage(page); tableTopRef.current?.scrollIntoView({ behavior: "smooth", block: "start" }) }}>{page}</Button>
+          ))}
+          <Button variant="outline" onClick={() => { setCurrentPage((page) => Math.min(totalPages, page + 1)); tableTopRef.current?.scrollIntoView({ behavior: "smooth", block: "start" }) }} disabled={currentPage === totalPages}>Next</Button>
+          <span className="ml-1 text-sm text-muted-foreground">Page {currentPage} of {totalPages}</span>
+        </div>
+      ) : null}
 
       {/* Modal 1: Create Shelf */}
       <Dialog open={createShelfOpen} onOpenChange={setCreateShelfOpen}>
@@ -657,7 +807,7 @@ export default function StockCountPage() {
       </Dialog>
 
       {/* Modal 2: Merge Product Confirmation */}
-      <Dialog open={mergeDialogOpen} onOpenChange={setMergeDialogOpen}>
+      {canMergeProducts ? <Dialog open={mergeDialogOpen} onOpenChange={setMergeDialogOpen}>
         <DialogContent className="max-w-md">
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2">
@@ -717,9 +867,45 @@ export default function StockCountPage() {
             </Button>
           </DialogFooter>
         </DialogContent>
+      </Dialog> : null}
+
+      {/* Modal 3: Assign Product To Shelf */}
+      <Dialog open={assignShelfOpen} onOpenChange={setAssignShelfOpen}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle>Add product to shelf</DialogTitle>
+            <DialogDescription>Select a shelf to assign <strong className="text-foreground">{assignProductName}</strong> to.</DialogDescription>
+          </DialogHeader>
+          <div className="space-y-3 py-3">
+            <div>
+              <Label htmlFor="assign-shelf-select">Available shelves</Label>
+              <select
+                id="assign-shelf-select"
+                className="mt-1 w-full rounded-md border bg-background px-3 py-2 text-sm text-foreground"
+                value={assignShelfId}
+                onChange={(e) => setAssignShelfId(e.target.value)}
+              >
+                <option value="">Select shelf</option>
+                {shelves.map((shelf) => (
+                  <option key={shelf.id} value={shelf.id}>
+                    {shelf.name} {shelf.number ? `(#${shelf.number})` : ""}
+                  </option>
+                ))}
+              </select>
+            </div>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" type="button" onClick={() => setAssignShelfOpen(false)}>
+              Cancel
+            </Button>
+            <Button type="button" onClick={handleAssignShelfToProduct} disabled={!assignShelfId.trim()}>
+              Save shelf
+            </Button>
+          </DialogFooter>
+        </DialogContent>
       </Dialog>
 
-      {/* Modal 3: View Stock Counts Dialog */}
+      {/* Modal 4: View Stock Counts Dialog */}
       <Dialog open={dateRangeOpen} onOpenChange={setDateRangeOpen}>
         <DialogContent className="max-w-md">
           <DialogHeader>
