@@ -1,6 +1,15 @@
 import { NextResponse } from "next/server"
 import { prisma } from "@/lib/prisma"
 
+const parseExpiry = (value: unknown) => {
+  if (typeof value !== "string" || !value.trim()) return null
+  const expiry = /^\d{4}-\d{2}-\d{2}$/.test(value)
+    ? new Date(`${value}T00:00:00.000Z`)
+    : new Date(value)
+  if (Number.isNaN(expiry.getTime())) throw new Error("Invalid expiry date")
+  return expiry
+}
+
 export async function GET(_request: Request, { params }: { params: Promise<{ id: string }> }) {
   const { id } = await params
   if (!/^[a-f\d]{24}$/i.test(id)) {
@@ -51,14 +60,13 @@ export async function PUT(request: Request, { params }: { params: Promise<{ id: 
               costPrice: row.costPrice === "" || row.costPrice === undefined || row.costPrice === null ? undefined : Number(row.costPrice),
               cartonCostPrice: carton && row.cartonCostPrice !== "" && row.cartonCostPrice !== undefined && row.cartonCostPrice !== null ? Number(row.cartonCostPrice) : undefined,
               packCostPrice: pack && row.packCostPrice !== "" && row.packCostPrice !== undefined && row.packCostPrice !== null ? Number(row.packCostPrice) : undefined,
-              pcsCostPrice: row.pcsCostPrice === "" || row.pcsCostPrice !== undefined && row.pcsCostPrice !== null ? Number(row.pcsCostPrice) : undefined,
               cartonSalesPrice: carton ? (row.retailCartonSalesPrice ? Number(row.retailCartonSalesPrice) : (!isWs && row.cartonSalesPrice ? Number(row.cartonSalesPrice) : undefined)) : undefined,
               packSalesPrice: pack ? (row.retailPackSalesPrice ? Number(row.retailPackSalesPrice) : (!isWs && row.packSalesPrice ? Number(row.packSalesPrice) : undefined)) : undefined,
               pcsSalesPrice: row.retailPcsSalesPrice ? Number(row.retailPcsSalesPrice) : (!isWs && row.pcsSalesPrice ? Number(row.pcsSalesPrice) : undefined),
               wholesaleCartonSalesPrice: carton ? (row.wholesaleCartonSalesPrice ? Number(row.wholesaleCartonSalesPrice) : (isWs && row.cartonSalesPrice ? Number(row.cartonSalesPrice) : undefined)) : undefined,
               wholesalePackSalesPrice: pack ? (row.wholesalePackSalesPrice ? Number(row.wholesalePackSalesPrice) : (isWs && row.packSalesPrice ? Number(row.packSalesPrice) : undefined)) : undefined,
               wholesalePcsSalesPrice: row.wholesalePcsSalesPrice ? Number(row.wholesalePcsSalesPrice) : (isWs && row.pcsSalesPrice ? Number(row.pcsSalesPrice) : undefined),
-              expiry: row.expiry ? new Date(`${row.expiry}T00:00:00.000Z`) : undefined,
+              expiry: parseExpiry(row.expiry),
             }
           }),
         },

@@ -21,6 +21,7 @@ export type TableColumn = {
   label: string
   type: "text" | "number" | "boolean" | "date"
   previousValueKey?: string
+  previousValueToggleKey?: string
   autoValueKey?: string
   required?: boolean
   className?: string
@@ -275,13 +276,19 @@ export function Tables({
                       </div>
                     ) : (
                       <div className="relative mx-auto space-y-1">
-                        {column.previousValueKey && row[column.previousValueKey] !== undefined && row[column.previousValueKey] !== "" && (!column.autoValueKey || Number(row[column.previousValueKey]) !== Number(row[column.autoValueKey])) ? (
+                        {column.previousValueKey && row[column.previousValueKey] !== undefined && row[column.previousValueKey] !== "" && ((!column.autoValueKey || Number(row[column.previousValueKey]) !== Number(row[column.autoValueKey])) || Boolean(column.previousValueToggleKey)) ? (
                           <label className="flex items-center gap-1.5 text-xs font-semibold text-amber-600 dark:text-amber-400 cursor-pointer select-none py-0.5">
                             <Checkbox
-                              checked={Number(value) === Number(row[column.previousValueKey])}
+                              checked={column.previousValueToggleKey ? Boolean(row[column.previousValueToggleKey]) : Number(value) === Number(row[column.previousValueKey])}
                               disabled={readOnly}
                               onCheckedChange={(checked) => {
                                 if (readOnly) return
+                                if (column.previousValueToggleKey) {
+                                  const updatedRows = [...activeRows]
+                                  updatedRows[rowIndex] = { ...updatedRows[rowIndex], [column.previousValueToggleKey]: Boolean(checked) }
+                                  updateRows(updatedRows)
+                                  return
+                                }
                                 handleCellChange(rowIndex, column, checked ? String(row[column.previousValueKey]) : String(row[column.autoValueKey] ?? ""))
                               }}
                             />

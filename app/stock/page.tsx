@@ -38,6 +38,7 @@ const stockColumns: TableColumn[] = [
   { key: "pcsQty", label: "Pcs Qty", type: "number", className: "min-w-[100px] w-28" },
   { key: "totalPcs", label: "Total Pcs", type: "number", readOnly: true, className: "min-w-[100px] w-28" },
   { key: "costPrice", label: "Purchase Cost", type: "number", className: "min-w-[100px] w-32" },
+  { key: "pcsRate", label: "Pcs Rate", type: "number", readOnly: true, previousValueKey: "_oldPcsRate", previousValueToggleKey: "usePreviousPcsRate", autoValueKey: "_calculatedPcsRate", className: "min-w-[100px] w-32" },
   { key: "wholesale", label: "Wholesale", type: "boolean", className: "w-24" },
   { key: "cartonSalesPrice", label: "Carton Sales Price", type: "number", previousValueKey: "_lastSavedCartonSalesPrice", autoValueKey: "_markupCartonSalesPrice", className: "min-w-[100px] w-36" },
   { key: "packSalesPrice", label: "Pack Sales Price", type: "number", previousValueKey: "_lastSavedPackSalesPrice", autoValueKey: "_markupPackSalesPrice", className: "min-w-[100px] w-36" },
@@ -48,6 +49,7 @@ const stockColumns: TableColumn[] = [
 type InventoryProductName = string
 type SavedStockPricing = {
   costPrice?: number
+  pcsCostPrice?: number
   cartonSalesPrice?: number
   packSalesPrice?: number
   pcsSalesPrice?: number
@@ -68,6 +70,8 @@ const createBlankStockRow = () => ({
   pcsQty: "",
   totalPcs: "",
   costPrice: "",
+  pcsRate: "",
+  usePreviousPcsRate: false,
   cartonCostPrice: "",
   packCostPrice: "",
   pcsCostPrice: "",
@@ -121,6 +125,7 @@ const StockPage = () => {
           if (item?.productName) {
             acc[String(item.productName).trim().toLowerCase()] = {
               costPrice: item.costPrice,
+              pcsCostPrice: item.pcsCostPrice,
               cartonSalesPrice: item.cartonSalesPrice,
               packSalesPrice: item.packSalesPrice,
               pcsSalesPrice: item.pcsSalesPrice,
@@ -138,6 +143,28 @@ const StockPage = () => {
       .then((data) => setCompanies(Array.isArray(data) ? data : []))
       .catch(() => setCompanies([]))
   }, [])
+
+  useEffect(() => {
+    if (!Object.keys(savedStockPricing).length) return
+    setTableRows((current) => current.map((row) => {
+      const productName = typeof row.productName === "string" ? row.productName.trim().toLowerCase() : ""
+      const previousRate = Number(savedStockPricing[productName]?.pcsCostPrice)
+      if (!productName || !Number.isFinite(previousRate) || previousRate <= 0) return row
+
+      const totalPieces = Number(row.totalPcs) || 0
+      const calculatedRate = totalPieces > 0 && Number(row.costPrice) > 0
+        ? Number((Number(row.costPrice) / totalPieces).toFixed(2))
+        : Number(row.pcsRate) || ""
+      const usePreviousRate = Boolean(row.usePreviousPcsRate)
+      return {
+        ...row,
+        _oldPcsRate: previousRate,
+        _calculatedPcsRate: calculatedRate,
+        pcsRate: usePreviousRate ? previousRate : calculatedRate,
+        ...(usePreviousRate && totalPieces > 0 ? { costPrice: Number((previousRate * totalPieces).toFixed(2)) } : {}),
+      }
+    }))
+  }, [savedStockPricing])
 
   const filteredCompanies = useMemo(() => {
     const query = companyName.trim().toLowerCase()
@@ -159,6 +186,7 @@ const StockPage = () => {
           const isWs = Boolean(stock.wholesale)
           const isCarton = Boolean(stock.carton)
           const isPack = Boolean(stock.pack)
+          const savedPcsRate = stock.pcsCostPrice ?? (Number(stock.totalPcs) > 0 ? Number(stock.costPrice) / Number(stock.totalPcs) : "")
           return {
             ...stock,
             carton: isCarton,
@@ -170,6 +198,11 @@ const StockPage = () => {
             pcsCount: (isCarton || isPack) ? (stock.pcsCount ?? "") : "",
             pcsQty: stock.pcsQty ?? "",
             totalPcs: stock.totalPcs ?? "",
+            pcsRate: savedPcsRate,
+            _oldPcsRate: savedPcsRate,
+            _calculatedPcsRate: savedPcsRate,
+            usePreviousPcsRate: false,
+            expiry: stock.expiry ? new Date(String(stock.expiry)).toISOString().slice(0, 10) : "",
             cartonSalesPrice: isCarton ? (isWs ? (stock.wholesaleCartonSalesPrice ?? stock.cartonSalesPrice ?? "") : (stock.cartonSalesPrice ?? "")) : "",
             packSalesPrice: isPack ? (isWs ? (stock.wholesalePackSalesPrice ?? stock.packSalesPrice ?? "") : (stock.packSalesPrice ?? "")) : "",
             pcsSalesPrice: isWs ? (stock.wholesalePcsSalesPrice ?? stock.pcsSalesPrice ?? "") : (stock.pcsSalesPrice ?? ""),
@@ -240,11 +273,26 @@ const StockPage = () => {
       const totalPacks = (isCarton ? cQty * ppc : 0) + (isPack ? pkQty : 0) + ((isCarton || isPack) && pCount > 0 ? pcQty / pCount : 0)
       const totalPieces = hasQuantity ? calculatedTotalPcs : (Number(row.totalPcs) || 0)
 
-      const costValue = row.costPrice === "" || row.costPrice === undefined || row.costPrice === null ? undefined : Number(row.costPrice)
-      const costPerPiece = costValue !== undefined && !Number.isNaN(costValue) && totalPieces > 0
+      const usePreviousPcsRate = Boolean(row.usePreviousPcsRate)
+      const wasUsingPreviousPcsRate = Boolean(previousRow?.usePreviousPcsRate)
+      const oldPcsRateValue = stockInfo?.pcsCostPrice ?? row._oldPcsRate
+      const oldPcsRate = oldPcsRateValue === "" || oldPcsRateValue == null ? undefined : Number(oldPcsRateValue)
+      let manualCostValue = row._costPriceBeforePreviousRate ?? row.costPrice
+      if (usePreviousPcsRate && !wasUsingPreviousPcsRate) manualCostValue = row.costPrice
+      if (!usePreviousPcsRate && wasUsingPreviousPcsRate) {
+        manualCostValue = previousRow?._costPriceBeforePreviousRate ?? row._costPriceBeforePreviousRate ?? row.costPrice
+      }
+      if (!usePreviousPcsRate && !wasUsingPreviousPcsRate && row.costPrice !== previousRow?.costPrice) manualCostValue = row.costPrice
+      const manualCostNumber = manualCostValue === "" || manualCostValue === undefined || manualCostValue === null ? undefined : Number(manualCostValue)
+      const costValue = usePreviousPcsRate && oldPcsRate !== undefined && Number.isFinite(oldPcsRate)
+        ? Number((oldPcsRate * totalPieces).toFixed(2))
+        : manualCostNumber
+      const costPerPiece = usePreviousPcsRate && oldPcsRate !== undefined && Number.isFinite(oldPcsRate)
+        ? oldPcsRate
+        : costValue !== undefined && !Number.isNaN(costValue) && totalPieces > 0
         ? costValue / totalPieces
         : undefined
-      const costPerPack = isPack && costPerPiece !== undefined
+      const costPerPack = (isPack || isCarton) && costPerPiece !== undefined
         ? costPerPiece * pCount
         : (isPack && costValue !== undefined && totalPacks > 0 ? costValue / totalPacks : undefined)
       const costPerCarton = isCarton && costPerPack !== undefined && ppc > 0
@@ -330,6 +378,11 @@ const StockPage = () => {
         packQty: isPack ? row.packQty : "",
         pcsCount: (isCarton || isPack) ? row.pcsCount : "",
         totalPcs: computedTotalPcs,
+        costPrice: usePreviousPcsRate ? (costValue ?? row.costPrice) : (manualCostValue ?? ""),
+        pcsRate: costPerPiece !== undefined ? Number(costPerPiece.toFixed(2)) : "",
+        _oldPcsRate: oldPcsRate ?? "",
+        _calculatedPcsRate: costPerPiece !== undefined ? Number(costPerPiece.toFixed(2)) : "",
+        _costPriceBeforePreviousRate: usePreviousPcsRate ? manualCostValue : undefined,
         cartonCostPrice: isCarton && costPerCarton !== undefined ? Number(costPerCarton.toFixed(2)) : "",
         packCostPrice: isPack && costPerPack !== undefined ? Number(costPerPack.toFixed(2)) : "",
         pcsCostPrice: costPerPiece !== undefined ? Number(costPerPiece.toFixed(2)) : "",
