@@ -7,7 +7,7 @@ import { Button } from "@/components/ui/button"
 import { Label } from "@/components/ui/label"
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog"
 import { Tables, AutocompleteOption, TableColumn, TableRow } from "@/components/myComponents/tables"
-import { SalesCsvImporter } from "@/components/myComponents/sales-csv-importer"
+import { formatReceiptMoney, openSalesReceiptPrintWindow, type SalesReceipt, type SalesReceiptLine } from "@/lib/sales-receipts"
 import { toast } from "sonner"
 
 const salesColumns: TableColumn[] = [
@@ -99,9 +99,14 @@ const SalesPage = () => {
   const [dateMode, setDateMode] = useState<"single" | "range">("single")
   const [selectedRange, setSelectedRange] = useState<{ from: Date | undefined; to: Date | undefined }>({ from: undefined, to: undefined })
   const [cachedProducts, setCachedProducts] = useState<InventoryProductName[]>([])
+  const [customerNames, setCustomerNames] = useState<string[]>([])
+  const [customerNamesLoading, setCustomerNamesLoading] = useState(true)
+  const [activeCustomerSectionId, setActiveCustomerSectionId] = useState<string | null>(null)
   const [stockPricing, setStockPricing] = useState<Record<string, { costPrice?: number; cartonSalesPrice?: number; packSalesPrice?: number; pcsSalesPrice?: number; wholesaleCartonSalesPrice?: number; wholesalePackSalesPrice?: number; wholesalePcsSalesPrice?: number }>>({})
   const [loadingProducts, setLoadingProducts] = useState(false)
   const [saveState, setSaveState] = useState<"idle" | "saving" | "saved" | "error">("idle")
+  const [receiptDialogOpen, setReceiptDialogOpen] = useState(false)
+  const [pendingReceipts, setPendingReceipts] = useState<SalesReceipt[]>([])
   const [focusRowIndex, setFocusRowIndex] = useState<number | undefined>(undefined)
   const router = useRouter()
   const searchParams = useSearchParams()
@@ -117,6 +122,7 @@ const SalesPage = () => {
   useEffect(() => {
     loadInventoryProducts()
     loadStockPricing()
+    loadCustomerNames()
   }, [])
 
   useEffect(() => {
@@ -211,6 +217,27 @@ const SalesPage = () => {
     }
   }
 
+  const loadCustomerNames = async () => {
+    try {
+      const response = await fetch("/api/inventory/customers")
+      if (!response.ok) throw new Error("Customer suggestions request failed")
+      const data = await response.json()
+      setCustomerNames(Array.isArray(data) ? data.filter((name): name is string => typeof name === "string") : [])
+    } catch (error) {
+      console.error("Unable to load customer suggestions", error)
+    } finally {
+      setCustomerNamesLoading(false)
+    }
+  }
+
+  const hasThreeCustomerLetters = (query: string) => (query.match(/[a-z]/gi)?.length ?? 0) >= 3
+
+  const customerMatches = (query: string) => {
+    const normalizedQuery = query.trim().toLocaleLowerCase()
+    if (!hasThreeCustomerLetters(query) || !normalizedQuery) return []
+    return customerNames.filter((name) => name.toLocaleLowerCase().includes(normalizedQuery)).slice(0, 8)
+  }
+
   const totalCustomers = customerSections.reduce((count, section) => {
     const rows = section.rows.filter((row) => row.productName)
     return count + (rows.length ? 1 + rows.filter((row) => Boolean(row.newCustomer)).length : 0)
@@ -281,6 +308,24 @@ const SalesPage = () => {
     }
     return format(selectedDate, "PPP")
   }, [dateMode, selectedDate, selectedRange])
+
+  const finishReceiptFlow = () => {
+    setReceiptDialogOpen(false)
+    setCustomerSections([createCustomerSection()])
+    setPaymentDialogSectionId(null)
+    setPendingReceipts([])
+    setSaveState("idle")
+    if (editId) router.push("/sales")
+  }
+
+  const printPendingReceipts = () => {
+    if (!openSalesReceiptPrintWindow(pendingReceipts)) {
+      toast.error("Allow pop-ups for this site to print the receipt.")
+      return
+    }
+
+    finishReceiptFlow()
+  }
 
   const handleRowChange = (section: SalesCustomerSection, rows: TableRow[], wholesaleOverride = section.globalWholesale) => {
     setSaveState((current) => current === "saving" ? current : "idle")
@@ -439,17 +484,41 @@ const SalesPage = () => {
       if (!result.ok) {
         throw new Error("Failed to save sales")
       }
+
+      const receiptTimestamp = Date.now()
+      const receipts = groupedSections.map((section, index): SalesReceipt => {
+        const payment = paymentForGroup(section, section.groupIndex)
+        const rows = section.validRows.map((row): SalesReceiptLine => {
+          const quantityParts = [
+            Number(row.cartonQty) > 0 ? `${row.cartonQty} carton${Number(row.cartonQty) === 1 ? "" : "s"}` : "",
+            Number(row.packQty) > 0 ? `${row.packQty} pack${Number(row.packQty) === 1 ? "" : "s"}` : "",
+            Number(row.pcsQty) > 0 ? `${row.pcsQty} piece${Number(row.pcsQty) === 1 ? "" : "s"}` : "",
+          ].filter(Boolean)
+          return {
+            productName: String(row.productName || "Item"),
+            quantity: quantityParts.join(" + ") || `${Number(row.totalPcs) || 0} pieces`,
+            unitPrice: Number(row.salesPrice) || 0,
+            total: Number(row.total) || 0,
+          }
+        })
+        const total = rows.reduce((sum, row) => sum + row.total, 0)
+        return {
+          receiptNumber: `HC-${receiptTimestamp}-${String(index + 1).padStart(2, "0")}`,
+          customerName: section.customerName.trim(),
+          date: currentLabel,
+          paymentMethod: payment.paymentMethod === "cash&pos" ? "Cash & transfer" : payment.paymentMethod.toUpperCase(),
+          cashPaid: Number(payment.cashPaid) || 0,
+          posPayment: Number(payment.posPayment) || 0,
+          change: Number(payment.change) || 0,
+          total,
+          rows,
+        }
+      })
+
       toast.success(editId ? "Sales updated" : "Sales saved")
       setSaveState("saved")
-      setCustomerSections([createCustomerSection()])
-      setPaymentDialogSectionId(null)
-      window.setTimeout(() => {
-        if (editId) {
-          router.push("/sales")
-        } else {
-          setSaveState("idle")
-        }
-      }, 3000)
+      setPendingReceipts(receipts)
+      setReceiptDialogOpen(true)
     } catch (error) {
       console.error(error)
       setSaveState("error")
@@ -464,7 +533,6 @@ const SalesPage = () => {
           <h1 className="text-3xl font-bold">Sales</h1>
           <p className="text-sm text-muted-foreground">Track daily and range-based sales.</p>
         </div>
-        <SalesCsvImporter products={productNames} pricing={stockPricing} loadingProducts={loadingProducts} />
         <Button variant="outline" onClick={() => router.push(`/sales/daily?date=${format(selectedDate, "yyyy-MM-dd")}`)}>Today's sales</Button>
         <Dialog open={dateRangeOpen} onOpenChange={setDateRangeOpen}>
           <DialogTrigger asChild>
@@ -536,6 +604,49 @@ const SalesPage = () => {
               <label className="flex items-center gap-2 rounded border px-3 py-2 text-sm"><input type="checkbox" checked={section.globalWholesale} onChange={(event) => { const enabled = event.target.checked; handleRowChange(section, section.rows.map((row) => ({ ...row, wholesale: enabled })), enabled) }} />Wholesale</label>
             </div>
             <div className="rounded-lg border bg-card p-2 sm:p-4 max-w-full">
+              <div className="relative mb-4 max-w-md">
+                <Label htmlFor={`sales-customer-${section.id}`}>Customer name</Label>
+                <input
+                  id={`sales-customer-${section.id}`}
+                  type="text"
+                  autoComplete="off"
+                  placeholder="Enter customer name"
+                  className="mt-1 w-full rounded-md border bg-background px-3 py-2 text-sm text-foreground outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                  value={section.customerName}
+                  onFocus={() => setActiveCustomerSectionId(section.id)}
+                  onBlur={() => window.setTimeout(() => setActiveCustomerSectionId((activeId) => activeId === section.id ? null : activeId), 120)}
+                  onChange={(event) => {
+                    setSaveState("idle")
+                    updateSection(section.id, { customerName: event.target.value })
+                  }}
+                  aria-autocomplete="list"
+                  aria-controls={`sales-customer-options-${section.id}`}
+                  aria-expanded={activeCustomerSectionId === section.id && hasThreeCustomerLetters(section.customerName)}
+                />
+                {activeCustomerSectionId === section.id && hasThreeCustomerLetters(section.customerName) ? (
+                  <ul id={`sales-customer-options-${section.id}`} role="listbox" className="absolute inset-x-0 top-full z-30 mt-1 max-h-56 overflow-auto rounded-md border bg-popover p-1 text-popover-foreground shadow-lg">
+                    {customerNamesLoading ? <li className="px-3 py-2 text-sm text-muted-foreground">Loading customer names…</li> : null}
+                    {!customerNamesLoading && customerMatches(section.customerName).length === 0 ? <li className="px-3 py-2 text-sm text-muted-foreground">No matching saved customer names. You can keep typing a new name.</li> : null}
+                    {!customerNamesLoading && customerMatches(section.customerName).map((name) => (
+                      <li key={name} role="presentation">
+                        <button
+                          type="button"
+                          role="option"
+                          aria-selected={name === section.customerName}
+                          className="w-full rounded px-3 py-2 text-left text-sm hover:bg-accent hover:text-accent-foreground focus:bg-accent focus:outline-none"
+                          onMouseDown={(event) => event.preventDefault()}
+                          onClick={() => {
+                            updateSection(section.id, { customerName: name })
+                            setActiveCustomerSectionId(null)
+                          }}
+                        >
+                          {name}
+                        </button>
+                      </li>
+                    ))}
+                  </ul>
+                ) : null}
+              </div>
               <Tables columns={salesColumns} defaultRowCount={4} rows={section.rows} onRowsChange={(rows) => handleRowChange(section, rows)} autocomplete={{ productName: productOptions }} minWidth="1400px" focusRowIndex={sectionIndex === 0 ? focusRowIndex : undefined} snRestartKey="newCustomer" groupTotalKey="newCustomer" groupTotalContent={({ startIndex, total }) => groupPaymentControls(section, startIndex, total)} />
             </div>
             <div className="mt-4 flex flex-wrap items-end gap-4 border-t pt-4">
@@ -563,6 +674,55 @@ const SalesPage = () => {
           </div>
           <DialogFooter>
             <Button type="button" onClick={() => setPaymentDialogSectionId(null)}>Done</Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={receiptDialogOpen} onOpenChange={(open) => {
+        setReceiptDialogOpen(open)
+        if (!open) finishReceiptFlow()
+      }}>
+        <DialogContent className="flex max-h-[92vh] max-w-3xl flex-col overflow-hidden">
+          <DialogHeader>
+            <DialogTitle>Sales saved — print receipt?</DialogTitle>
+            <DialogDescription>
+              {pendingReceipts.length === 1
+                ? "Review the receipt, then print it or cancel. Print opens your system dialog; choose the physical printer instead of Save as PDF."
+                : `Review ${pendingReceipts.length} customer receipts. Print opens your system dialog; choose the physical printer instead of Save as PDF.`}
+            </DialogDescription>
+          </DialogHeader>
+          <div className="min-h-0 flex-1 space-y-4 overflow-auto rounded-md bg-muted/40 p-3 sm:p-5">
+            {pendingReceipts.map((receipt) => (
+              <article key={receipt.receiptNumber} className="mx-auto max-w-md border bg-white p-5 text-slate-900 shadow-sm">
+                <header className="border-b border-dashed pb-3 text-center">
+                  <div className="mx-auto mb-2 grid h-9 w-9 place-items-center rounded-xl bg-sky-100 font-bold text-sky-700">H</div>
+                  <h2 className="text-lg font-bold text-sky-800">HealthClique</h2>
+                  <p className="text-[10px] uppercase tracking-[0.2em] text-slate-500">Pharmacy · Sales receipt</p>
+                </header>
+                <div className="my-3 flex justify-between gap-3 text-xs">
+                  <div><span className="text-slate-500">Receipt</span><strong className="block">{receipt.receiptNumber}</strong></div>
+                  <div className="text-right"><span className="text-slate-500">Date</span><strong className="block">{receipt.date}</strong></div>
+                </div>
+                <div className="mb-3 rounded bg-sky-50 px-3 py-2 text-xs"><span className="text-slate-500">Customer</span><strong className="block text-sm">{receipt.customerName || "Walk-in customer"}</strong></div>
+                <table className="w-full text-left text-xs">
+                  <thead><tr className="border-b text-[10px] uppercase tracking-wide text-slate-500"><th className="py-2">Item</th><th className="py-2">Price</th><th className="py-2 text-right">Amount</th></tr></thead>
+                  <tbody>{receipt.rows.map((row, index) => <tr key={`${row.productName}-${index}`} className="border-b border-slate-100 align-top"><td className="py-2 pr-2"><strong>{row.productName}</strong><span className="block text-[10px] text-slate-500">{row.quantity}</span></td><td className="py-2">{formatReceiptMoney(row.unitPrice)}</td><td className="py-2 text-right">{formatReceiptMoney(row.total)}</td></tr>)}</tbody>
+                </table>
+                <div className="ml-auto mt-3 w-3/4 space-y-1 text-xs">
+                  <div className="flex justify-between"><span>Payment</span><span>{receipt.paymentMethod || "Not specified"}</span></div>
+                  <div className="flex justify-between"><span>Cash</span><span>{formatReceiptMoney(receipt.cashPaid)}</span></div>
+                  <div className="flex justify-between"><span>POS / transfer</span><span>{formatReceiptMoney(receipt.posPayment)}</span></div>
+                  <div className="flex justify-between"><span>Change</span><span>{formatReceiptMoney(receipt.change)}</span></div>
+                  <div className="flex justify-between"><span>Balance due</span><span>{formatReceiptMoney(Math.max(0, receipt.total - receipt.cashPaid - receipt.posPayment + receipt.change))}</span></div>
+                  <div className="flex justify-between border-t pt-2 text-base font-bold text-sky-800"><span>Total</span><span>{formatReceiptMoney(receipt.total)}</span></div>
+                </div>
+                <footer className="mt-4 border-t border-dashed pt-3 text-center text-[10px] text-slate-500"><strong className="block text-xs text-sky-800">Thank you for patronizing us!</strong>We appreciate your trust in HealthClique. Please keep this receipt for your records.</footer>
+              </article>
+            ))}
+          </div>
+          <DialogFooter className="gap-2">
+            <Button type="button" variant="outline" onClick={finishReceiptFlow}>Cancel</Button>
+            <Button type="button" onClick={printPendingReceipts}>Print receipt{pendingReceipts.length === 1 ? "" : "s"}</Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>

@@ -4,16 +4,24 @@ import { prisma } from "@/lib/prisma"
 export async function GET() {
   try {
     const sales = await prisma.inventorySale.findMany({
-      select: {
-        customerName: true,
-      },
+      where: { customerName: { isSet: true } },
+      select: { customerName: true },
       orderBy: { createdAt: "desc" },
+    })
+
+    const accounts = await prisma.user.findMany({
+      where: { role: "customer", name: { isSet: true } },
+      select: { name: true },
+    }).catch((error) => {
+      console.error("Unable to load customer account names", error)
+      return []
     })
 
     const customerSet = new Set<string>()
 
-    sales.forEach((sale) => {
-      const name = sale.customerName?.trim()
+    const customerNames = [...sales.map((sale) => sale.customerName), ...accounts.map((account) => account.name)]
+    customerNames.forEach((customerName) => {
+      const name = customerName?.trim()
       if (name) {
         customerSet.add(name)
       }
