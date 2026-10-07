@@ -9,7 +9,7 @@ import { Label } from "@/components/ui/label"
 import { Tables, TableColumn, TableRow } from "@/components/myComponents/tables"
 import { toast } from "sonner"
 
-type SaleRecord = { id: string; date?: string; rangeFrom?: string; rangeTo?: string; paymentMethod?: string; cashPaid?: number; posPayment?: number; change?: number; sales: TableRow[] }
+type SaleRecord = { id: string; staffName?: string; date?: string; rangeFrom?: string; rangeTo?: string; paymentMethod?: string; cashPaid?: number; posPayment?: number; change?: number; sales: TableRow[] }
 
 const salesColumns: TableColumn[] = [
   { key: "sn", label: "S/N", type: "number", className: "w-10" },
@@ -59,7 +59,7 @@ export default function SaleDetailPage({ params }: { params: Promise<{ id: strin
     </div>
     <div className="flex flex-wrap items-end gap-4 text-sm">
       <div className="space-y-1"><Label htmlFor="sale-customer">Customer name</Label><Input id="sale-customer" value={customerName} readOnly /></div>
-      <span>Payment: {record.paymentMethod || "-"}</span><span>Cash: ₦{Number(record.cashPaid || 0).toLocaleString()}</span><span>POS: ₦{Number(record.posPayment || 0).toLocaleString()}</span><span>Change: ₦{Number(record.change || 0).toLocaleString()}</span>
+      <span>Staff: {record.staffName || "-"}</span><span>Payment: {record.paymentMethod || "-"}</span><span>Cash: ₦{Number(record.cashPaid || 0).toLocaleString()}</span><span>POS: ₦{Number(record.posPayment || 0).toLocaleString()}</span><span>Change: ₦{Number(record.change || 0).toLocaleString()}</span>
     </div>
     <div className="rounded-lg border bg-card p-2 sm:p-4 max-w-full"><Tables columns={salesColumns} rows={rows} showTotals minWidth="1200px" readOnly /></div>
   </main>

@@ -133,8 +133,9 @@ export async function GET() {
     return NextResponse.json([...balances.values()]
       .map((balance) => {
         const normalizedPieces = normalizedByProduct.get(balance.productName.replace(/\s+/g, " ").trim().toLowerCase())
-        const netPieces = Math.max(normalizedPieces ?? balance.availablePieces, 0)
-        let remaining = netPieces
+        const netPieces = normalizedPieces ?? balance.availablePieces
+        const sign = netPieces < 0 ? -1 : 1
+        let remaining = Math.abs(netPieces)
         let cartons = 0
         let packs = 0
 
@@ -151,7 +152,9 @@ export async function GET() {
           remaining = remaining % pCount
         }
 
-        const pieces = remaining
+        cartons *= sign
+        packs *= sign
+        const pieces = remaining * sign
 
         return {
           productName: balance.productName,

@@ -76,10 +76,14 @@ export async function getCountProducts(asOfDate?: Date) {
     saleGroups.get(key)!.push(row)
   })
 
-  const latestNormalized = new Map<string, { normalizedPcs: number; expiry: Date | null; date: Date }>()
+  const latestNormalized = new Map<string, { normalizedPcs: number; expiry: Date | null; date: Date; normalizedAt: Date | null }>()
   normalizedLines.forEach((line) => {
     const key = keyFor(line.productName)
-    if (!latestNormalized.has(key)) latestNormalized.set(key, { normalizedPcs: line.normalizedPcs ?? 0, expiry: line.expiry, date: line.count.date })
+    const current = latestNormalized.get(key)
+    const isNewer = !current || line.count.date.getTime() > current.date.getTime() || (
+      line.count.date.getTime() === current.date.getTime() && (line.normalizedAt?.getTime() ?? 0) > (current.normalizedAt?.getTime() ?? 0)
+    )
+    if (isNewer) latestNormalized.set(key, { normalizedPcs: line.normalizedPcs ?? 0, expiry: line.expiry, date: line.count.date, normalizedAt: line.normalizedAt })
   })
   const latestShelves = new Map<string, string>()
   shelfLines.forEach((line) => {
@@ -118,13 +122,13 @@ export async function getCountProducts(asOfDate?: Date) {
     const normalized = latestNormalized.get(key)
     const expectedPcs = normalized
       ? normalized.normalizedPcs
-        + productStocks.filter((stock) => eventDate(stock) > normalized.date).reduce((sum, stock) => sum + piecesFor(stock), 0)
-        - productSales.filter((sale) => eventDate(sale) > normalized.date).reduce((sum, sale) => sum + piecesFor(sale), 0)
+        + productStocks.filter((stock) => eventDate(stock) >= normalized.date).reduce((sum, stock) => sum + piecesFor(stock), 0)
+        - productSales.filter((sale) => eventDate(sale) >= normalized.date).reduce((sum, sale) => sum + piecesFor(sale), 0)
       : remainingLots.reduce((sum, lot) => sum + lot.remaining, 0)
     return {
       productName: latestStock?.productName ?? productStocks[0].productName,
       productKey: key,
-      expectedPcs: Math.max(expectedPcs, 0),
+      expectedPcs,
       expiry: normalized?.expiry ?? expiry,
       packsPerCarton: latestStock?.packsPerCarton ?? 0,
       pcsCount: latestStock?.pcsCount ?? 0,

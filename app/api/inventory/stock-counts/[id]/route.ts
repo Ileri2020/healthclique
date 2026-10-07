@@ -46,14 +46,15 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ id
     }
 
     const lineIds = action === "normalize-all"
-      ? count.lines.map((line) => line.id)
+      ? count.lines.filter((line) => line.countedPcs != null).map((line) => line.id)
       : [String(body.lineId)]
     if (!lineIds[0]) return NextResponse.json({ error: "Count line is required" }, { status: 400 })
     const now = new Date()
     const updates = await prisma.$transaction(lineIds.map((lineId) => {
       const line = count.lines.find((item) => item.id === lineId)
       if (!line) throw new Error("Count line not found")
-      const normalizedPcs = line.countedPcs == null || Number(line.countedPcs) <= 0 ? 0 : Number(line.countedPcs)
+      if (line.countedPcs == null) throw new Error("This product was not counted")
+      const normalizedPcs = Number(line.countedPcs) <= 0 ? 0 : Number(line.countedPcs)
       return prisma.stockCountLine.update({ where: { id: lineId }, data: { normalizedPcs, normalizedAt: now, normalizedById: session.user?.id } })
     }))
     return NextResponse.json({ updated: updates.length })

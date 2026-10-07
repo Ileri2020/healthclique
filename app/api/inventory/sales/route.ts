@@ -49,6 +49,7 @@ export async function GET(req: Request) {
 
     return NextResponse.json(inventories.map((inventory) => ({
       id: inventory.id,
+      staffName: inventory.staffName,
       date: inventory.date,
       rangeFrom: inventory.rangeFrom,
       rangeTo: inventory.rangeTo,

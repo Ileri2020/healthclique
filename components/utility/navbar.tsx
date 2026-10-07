@@ -26,6 +26,7 @@ import { useAppContext } from "@/hooks/useAppContext";
 import { useEffect } from "react";
 import { usePathname } from "next/navigation";
 import { initializeAffiliateTracking } from "@/lib/affiliate-tracking";
+import { LocalSalesSyncButton } from "@/components/utility/LocalSalesSyncButton";
 
 const Navbar = (): JSX.Element => {
   const { setUser, user } = useAppContext();
@@ -62,6 +63,7 @@ const Navbar = (): JSX.Element => {
           >
             <Image src={logo} alt="" className="w-[100px] h-auto" />
           </Link>
+          <div className="lg:hidden"><LocalSalesSyncButton /></div>
 
           {!inventoryMode && <div className="flex items-center gap-2 lg:hidden">
             <Dialog>
@@ -91,6 +93,7 @@ const Navbar = (): JSX.Element => {
 
           <div className="hidden lg:flex items-center gap-8">
             <Nav />
+            <LocalSalesSyncButton />
             {/*
                 <Link to="/contact">
                   <Button className="">Hire me</Button>

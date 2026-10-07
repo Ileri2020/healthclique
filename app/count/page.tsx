@@ -27,6 +27,9 @@ import {
 import { Check, Calendar as CalendarIcon, Loader2, Plus, Search, Layers, X, GitMerge } from "lucide-react"
 import { toast } from "sonner"
 
+const ADD_TO_SHELF_OPTION = "__add_to_shelf__"
+const ALL_PRODUCTS_OPTION = "__all_products__"
+
 type ProductCountItem = {
   productName: string
   availablePieces: number
@@ -97,7 +100,7 @@ export default function StockCountPage() {
   // Header controls state
   const [searchTerm, setSearchTerm] = useState("")
   const [searchDropdownOpen, setSearchDropdownOpen] = useState(false)
-  const [selectedShelfFilter, setSelectedShelfFilter] = useState<string>("")
+  const [selectedShelfFilter, setSelectedShelfFilter] = useState<string>(ALL_PRODUCTS_OPTION)
   const [sortBy, setSortBy] = useState<"name" | "shelf" | "price" | "expected" | "status" | "expiry">("name")
   const [countDate, setCountDate] = useState<Date>(new Date())
   const [assignShelfOpen, setAssignShelfOpen] = useState(false)
@@ -131,8 +134,6 @@ export default function StockCountPage() {
 
   useEffect(() => { loadCountData() }, [editId, countDate, selectedShelfFilter])
 
-  const ADD_TO_SHELF_OPTION = "__add_to_shelf__"
-
   const loadCountData = async () => {
     setLoading(true)
     try {
@@ -142,7 +143,7 @@ export default function StockCountPage() {
         setShelves(Array.isArray(shelvesData) ? shelvesData : [])
       }
 
-      if (!selectedShelfFilter.trim() || selectedShelfFilter === ADD_TO_SHELF_OPTION) {
+      if (!selectedShelfFilter.trim() || selectedShelfFilter === ADD_TO_SHELF_OPTION || selectedShelfFilter === ALL_PRODUCTS_OPTION) {
         const response = await fetch(`/api/inventory/count?date=${format(countDate, "yyyy-MM-dd")}`)
         if (!response.ok) throw new Error("Unable to load count data")
         const data = await response.json()
@@ -363,35 +364,41 @@ export default function StockCountPage() {
   }
 
   const handleSaveStockCount = async () => {
-    if (!selectedShelfFilter.trim() || selectedShelfFilter === ADD_TO_SHELF_OPTION) {
-      toast.error("Select a shelf before saving the stock count")
-      return
-    }
-
     setSaving(true)
     setSaveState("saving")
     try {
-      const lines = products.map((p) => {
-        const cVal = p.countedPcs !== "" && p.countedPcs !== undefined && p.countedPcs !== null ? Number(p.countedPcs) : 0
+      const lines = products.filter((p) =>
+        p.countedPcs !== "" && p.countedPcs !== undefined && p.countedPcs !== null
+        || (p.expiryInput || "") !== (p.shortestExpiry ? p.shortestExpiry.split("T")[0] : "")
+      ).map((p) => {
+        const countedPcs = p.countedPcs !== "" && p.countedPcs !== undefined && p.countedPcs !== null ? Number(p.countedPcs) : null
+        const shelfName = selectedShelfFilter !== ADD_TO_SHELF_OPTION && selectedShelfFilter !== ALL_PRODUCTS_OPTION
+          ? selectedShelfFilter
+          : p.shelfName || undefined
         return {
           productName: p.productName,
-          shelfName: p.shelfName || selectedShelfFilter,
+          shelfName,
           shelfId: p.shelfId || undefined,
           expectedPcs: p.availablePieces,
-          countedPcs: Number.isFinite(cVal) ? cVal : 0,
+          countedPcs: countedPcs != null && Number.isFinite(countedPcs) ? countedPcs : null,
           expiry: p.expiryInput ? new Date(p.expiryInput).toISOString() : undefined,
           packsPerCarton: p.packsPerCarton || undefined,
           piecesPerPack: p.piecesPerPack || undefined,
         }
       })
+      if (!lines.length) {
+        toast.error("Enter a count or change an expiry date before saving")
+        setSaveState("idle")
+        return
+      }
 
       const response = await fetch(editId ? "/api/inventory/count" : "/api/inventory/count", {
         method: editId ? "PUT" : "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           id: editId || undefined,
-          date: countDate.toISOString(),
-          shelfName: selectedShelfFilter,
+          date: format(countDate, "yyyy-MM-dd"),
+          shelfName: selectedShelfFilter !== ADD_TO_SHELF_OPTION && selectedShelfFilter !== ALL_PRODUCTS_OPTION ? selectedShelfFilter : undefined,
           lines,
         }),
       })
@@ -432,7 +439,7 @@ export default function StockCountPage() {
       list = list.filter((p) => p.productName.toLowerCase().includes(query))
     }
 
-    if (selectedShelfFilter && selectedShelfFilter !== ADD_TO_SHELF_OPTION) {
+    if (selectedShelfFilter && selectedShelfFilter !== ADD_TO_SHELF_OPTION && selectedShelfFilter !== ALL_PRODUCTS_OPTION) {
       list = list.filter((p) => (p.shelfName || "Unassigned") === selectedShelfFilter)
     }
 
@@ -576,21 +583,21 @@ export default function StockCountPage() {
             />
             <span className="text-xs text-muted-foreground">({filteredProducts.length} products listed)</span>
           </div>
-          <Button onClick={handleSaveStockCount} disabled={saving || saveState === "saved" || !selectedShelfFilter.trim() || selectedShelfFilter === ADD_TO_SHELF_OPTION}>
+          <Button onClick={handleSaveStockCount} disabled={saving || saveState === "saved"}>
             {saving ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Check className="mr-2 h-4 w-4" />}
             {saveState === "saved" ? "Saved" : editId ? "Update stock count" : "Save stock count"}
           </Button>
         </div>
 
         <div className="max-w-sm">
-          <Label htmlFor="shelf-filter" className="text-sm font-semibold">Select shelf</Label>
+          <Label htmlFor="shelf-filter" className="text-sm font-semibold">Shelf filter <span className="font-normal text-muted-foreground">(optional)</span></Label>
           <select
             id="shelf-filter"
             className="mt-1 w-full rounded-md border bg-background px-3 py-2 text-sm text-foreground"
             value={selectedShelfFilter}
             onChange={(e) => setSelectedShelfFilter(e.target.value)}
           >
-            <option className="bg-background text-foreground" value="">Select shelf</option>
+            <option className="bg-background text-foreground" value={ALL_PRODUCTS_OPTION}>All products — no shelf required</option>
             {shelves.map((s) => (
               <option key={s.id} className="bg-background text-foreground" value={s.name}>
                 {s.name} {s.number ? `(#${s.number})` : ""}
@@ -600,12 +607,6 @@ export default function StockCountPage() {
           </select>
         </div>
       </div>
-
-      {!selectedShelfFilter ? (
-        <div className="rounded-lg border border-dashed bg-card p-8 text-center text-sm text-muted-foreground">
-          Select a shelf to load all products assigned to it and begin the stock count.
-        </div>
-      ) : null}
 
       {/* Main Table */}
       {selectedShelfFilter ? (

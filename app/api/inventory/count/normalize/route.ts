@@ -27,8 +27,8 @@ export async function POST(req: Request) {
     if (normalizeAll) {
       // Normalize all lines in session
       await Promise.all(
-        stockCount.lines.map(async (line) => {
-          const approvedCount = line.countedPcs == null || Number(line.countedPcs) <= 0 ? 0 : Number(line.countedPcs)
+        stockCount.lines.filter((line) => line.countedPcs != null).map(async (line) => {
+          const approvedCount = Number(line.countedPcs) <= 0 ? 0 : Number(line.countedPcs)
           await prisma.stockCountLine.update({
             where: { id: line.id },
             data: {
@@ -56,8 +56,9 @@ export async function POST(req: Request) {
       if (!line) {
         return NextResponse.json({ error: "Line not found" }, { status: 404 })
       }
+      if (line.countedPcs == null) return NextResponse.json({ error: "This product was not counted" }, { status: 400 })
 
-      const approvedCount = line.countedPcs == null || Number(line.countedPcs) <= 0 ? 0 : Number(line.countedPcs)
+      const approvedCount = Number(line.countedPcs) <= 0 ? 0 : Number(line.countedPcs)
 
       const updatedLine = await prisma.stockCountLine.update({
         where: { id: lineId },

@@ -15,6 +15,7 @@ export async function GET(req: Request) {
     const requestedDate = url.searchParams.get("date")
     const requestedShelf = url.searchParams.get("shelf")?.trim()
     const asOfDate = requestedDate ? new Date(requestedDate) : undefined
+    if (asOfDate && !Number.isNaN(asOfDate.getTime())) asOfDate.setUTCMilliseconds(asOfDate.getUTCMilliseconds() - 1)
     const calculatedProducts = await getCountProducts(asOfDate)
     const shelves = await prisma.shelf.findMany({ orderBy: { name: "asc" } })
     const filteredProducts = requestedShelf
@@ -173,7 +174,7 @@ export async function GET(req: Request) {
         }
       })
 
-      netAvailablePieces = Math.max(netAvailablePieces - totalSoldPieces, 0)
+      netAvailablePieces -= totalSoldPieces
 
       const psInfo = shelfMap.get(productName.toLowerCase())
 
@@ -208,22 +209,23 @@ export async function PUT(req: Request) {
     const body = await req.json()
     const id = String(body.id || "")
     if (!id || !Array.isArray(body.lines) || body.lines.length === 0) return NextResponse.json({ error: "Count id and lines are required" }, { status: 400 })
+    const countDate = body.date ? new Date(`${String(body.date).slice(0, 10)}T00:00:00.000Z`) : undefined
     const updated = await prisma.stockCount.update({
       where: { id },
       data: {
-        date: body.date ? new Date(body.date) : undefined,
+        date: countDate,
         shelfId: body.shelfId || undefined,
         shelfName: body.shelfName || undefined,
         lines: {
           deleteMany: {},
           create: body.lines.map((line: any) => {
-            const countedPcs = line.countedPcs === "" || line.countedPcs == null ? 0 : Number(line.countedPcs)
+            const countedPcs = line.countedPcs === "" || line.countedPcs == null ? null : Number(line.countedPcs)
             return {
               productName: String(line.productName || ""),
               shelfName: line.shelfName || undefined,
               expectedPcs: Number(line.expectedPcs) || 0,
               countedPcs,
-              differencePcs: countedPcs - (Number(line.expectedPcs) || 0),
+              differencePcs: countedPcs == null ? null : countedPcs - (Number(line.expectedPcs) || 0),
               expiry: line.expiry ? new Date(line.expiry) : null,
               packsPerCarton: line.packsPerCarton ? Number(line.packsPerCarton) : null,
               piecesPerPack: line.piecesPerPack ? Number(line.piecesPerPack) : null,
@@ -250,11 +252,9 @@ export async function POST(req: Request) {
     if (!Array.isArray(lines) || lines.length === 0) {
       return NextResponse.json({ error: "No count lines provided" }, { status: 400 })
     }
-    if (!shelfId && !shelfName) {
-      return NextResponse.json({ error: "A shelf is required to save a stock count" }, { status: 400 })
-    }
-
-    const countDate = date ? new Date(date) : new Date()
+    const dateText = date ? String(date).slice(0, 10) : new Date().toISOString().slice(0, 10)
+    const countDate = new Date(`${dateText}T00:00:00.000Z`)
+    if (Number.isNaN(countDate.getTime())) return NextResponse.json({ error: "Invalid count date" }, { status: 400 })
 
     // Persist product-shelf assignments
     await Promise.all(

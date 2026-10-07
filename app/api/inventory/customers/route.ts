@@ -10,24 +10,25 @@ export async function GET() {
     })
 
     const accounts = await prisma.user.findMany({
-      where: { role: "customer", name: { isSet: true } },
+      where: { name: { isSet: true } },
       select: { name: true },
     }).catch((error) => {
-      console.error("Unable to load customer account names", error)
+      console.error("Unable to load user account names", error)
       return []
     })
 
-    const customerSet = new Set<string>()
-
-    const customerNames = [...sales.map((sale) => sale.customerName), ...accounts.map((account) => account.name)]
-    customerNames.forEach((customerName) => {
-      const name = customerName?.trim()
-      if (name) {
-        customerSet.add(name)
-      }
+    const uniqueNames = new Map<string, string>()
+    const accountNames = accounts.map((account) => account.name)
+    const previousSalesNames = sales.map((sale) => sale.customerName)
+    ;[...accountNames, ...previousSalesNames].forEach((customerName) => {
+      const name = customerName?.replace(/\s+/g, " ").trim()
+      if (!name) return
+      const key = name.toLocaleLowerCase()
+      // Accounts are inserted first, so existing account spelling wins over older free-text variants.
+      if (!uniqueNames.has(key)) uniqueNames.set(key, name)
     })
 
-    const customers = Array.from(customerSet).sort((a, b) =>
+    const customers = Array.from(uniqueNames.values()).sort((a, b) =>
       a.localeCompare(b)
     )
 

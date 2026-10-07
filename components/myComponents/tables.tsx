@@ -7,6 +7,7 @@ import { Input } from "@/components/ui/input"
 import { Checkbox } from "@/components/ui/checkbox"
 import { Button } from "@/components/ui/button"
 import { Label } from "@/components/ui/label"
+import { GitMerge } from "lucide-react"
 import {
   Dialog,
   DialogContent,
@@ -32,7 +33,7 @@ export type TableColumn = {
   }[]
 }
 
-export type AutocompleteOption = string | { label: string; value: string }
+export type AutocompleteOption = string | { label: string; value: string; onAction?: () => void; actionLabel?: string }
 
 export type TableRow = Record<string, string | number | boolean | undefined>
 
@@ -330,18 +331,34 @@ export function Tables({
                             {filteredSuggestions.map((item) => {
                               const label = typeof item === "string" ? item : item.label
                               const value = typeof item === "string" ? item : item.value
-                              return <button
-                                key={value}
-                                type="button"
-                                className="block w-full rounded px-2 py-1.5 text-left text-sm hover:bg-accent"
-                                onMouseDown={(event) => {
-                                  event.preventDefault()
-                                  handleCellChange(rowIndex, column, value)
-                                  setActiveSuggestion(null)
-                                }}
-                              >
-                                {label}
-                              </button>
+                              const onAction = typeof item === "string" ? undefined : item.onAction
+                              const actionLabel = typeof item === "string" ? undefined : item.actionLabel
+                              return <div key={value} className="flex items-center gap-1 rounded pr-1 hover:bg-accent">
+                                <button
+                                  type="button"
+                                  className="min-w-0 flex-1 rounded px-2 py-1.5 text-left text-sm hover:bg-accent"
+                                  onMouseDown={(event) => {
+                                    event.preventDefault()
+                                    handleCellChange(rowIndex, column, value)
+                                    setActiveSuggestion(null)
+                                  }}
+                                >
+                                  {label}
+                                </button>
+                                {onAction ? <button
+                                  type="button"
+                                  aria-label={actionLabel ?? `Merge ${value}`}
+                                  title={actionLabel ?? `Merge ${value}`}
+                                  className="inline-flex h-7 w-7 shrink-0 items-center justify-center rounded text-amber-600 hover:bg-amber-500/10 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                                  onMouseDown={(event) => event.preventDefault()}
+                                  onClick={(event) => {
+                                    event.preventDefault()
+                                    event.stopPropagation()
+                                    setActiveSuggestion(null)
+                                    onAction()
+                                  }}
+                                ><GitMerge className="h-4 w-4" /></button> : null}
+                              </div>
                             })}
                           </div>
                         ) : null}

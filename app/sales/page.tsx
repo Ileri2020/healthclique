@@ -1,14 +1,17 @@
 "use client"
 
-import { useEffect, useMemo, useState } from "react"
+import { useCallback, useEffect, useMemo, useState } from "react"
 import { useRouter, useSearchParams } from "next/navigation"
+import { useSession } from "next-auth/react"
 import { format } from "date-fns"
 import { Button } from "@/components/ui/button"
 import { Label } from "@/components/ui/label"
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog"
 import { Tables, AutocompleteOption, TableColumn, TableRow } from "@/components/myComponents/tables"
 import { formatReceiptMoney, openSalesReceiptPrintWindow, type SalesReceipt, type SalesReceiptLine } from "@/lib/sales-receipts"
+import { GitMerge } from "lucide-react"
 import { toast } from "sonner"
+import { isLocalDevelopment, readLocalProductCatalog, readLocalStaffName, saveLocalProductCatalog, saveLocalSale, saveLocalStaffName } from "@/lib/local-sales"
 
 const salesColumns: TableColumn[] = [
   { key: "sn", label: "S/N", type: "number", required: true, className: "w-10" },
@@ -90,6 +93,8 @@ const createCustomerSection = (): SalesCustomerSection => ({
 })
 
 const SalesPage = () => {
+  const { data: session } = useSession()
+  const canMergeProducts = session?.user?.role === "admin" || session?.user?.role === "staff"
   const [customerSections, setCustomerSections] = useState<SalesCustomerSection[]>(() => [createCustomerSection()])
   const [paymentDialogSectionId, setPaymentDialogSectionId] = useState<string | null>(null)
   const [dateRangeOpen, setDateRangeOpen] = useState(false)
@@ -99,12 +104,19 @@ const SalesPage = () => {
   const [dateMode, setDateMode] = useState<"single" | "range">("single")
   const [selectedRange, setSelectedRange] = useState<{ from: Date | undefined; to: Date | undefined }>({ from: undefined, to: undefined })
   const [cachedProducts, setCachedProducts] = useState<InventoryProductName[]>([])
+  const [localStaffName, setLocalStaffName] = useState("")
+  const [localDev, setLocalDev] = useState(false)
   const [customerNames, setCustomerNames] = useState<string[]>([])
   const [customerNamesLoading, setCustomerNamesLoading] = useState(true)
   const [activeCustomerSectionId, setActiveCustomerSectionId] = useState<string | null>(null)
   const [stockPricing, setStockPricing] = useState<Record<string, { costPrice?: number; cartonSalesPrice?: number; packSalesPrice?: number; pcsSalesPrice?: number; wholesaleCartonSalesPrice?: number; wholesalePackSalesPrice?: number; wholesalePcsSalesPrice?: number }>>({})
+  const [mergeSource, setMergeSource] = useState<string | null>(null)
+  const [mergeTarget, setMergeTarget] = useState("")
+  const [mergeSearchOpen, setMergeSearchOpen] = useState(false)
+  const [mergeSaving, setMergeSaving] = useState(false)
   const [loadingProducts, setLoadingProducts] = useState(false)
   const [saveState, setSaveState] = useState<"idle" | "saving" | "saved" | "error">("idle")
+  const [savedLocally, setSavedLocally] = useState(false)
   const [receiptDialogOpen, setReceiptDialogOpen] = useState(false)
   const [pendingReceipts, setPendingReceipts] = useState<SalesReceipt[]>([])
   const [focusRowIndex, setFocusRowIndex] = useState<number | undefined>(undefined)
@@ -116,14 +128,25 @@ const SalesPage = () => {
   const productOptions = useMemo<AutocompleteOption[]>(() => productNames.map((productName) => {
     const pricing = stockPricing[productName.trim().toLowerCase()]
     const price = pricing?.pcsSalesPrice ?? pricing?.packSalesPrice ?? pricing?.cartonSalesPrice
-    return { value: productName, label: `(${price == null ? "-" : `₦${Number(price).toLocaleString()}`}) ${productName}` }
-  }), [productNames, stockPricing])
+    return {
+      value: productName,
+      label: `(${price == null ? "-" : `₦${Number(price).toLocaleString()}`}) ${productName}`,
+      ...(canMergeProducts ? { actionLabel: `Merge ${productName} into another product`, onAction: () => {
+        setMergeSource(productName)
+        setMergeTarget("")
+        setMergeSearchOpen(false)
+      } } : {}),
+    }
+  }), [productNames, stockPricing, canMergeProducts])
+
+  const mergeTargetSuggestions = mergeTarget.trim().length >= 3
+    ? productNames.filter((name) => name.toLowerCase().includes(mergeTarget.trim().toLowerCase()) && name.toLowerCase() !== mergeSource?.toLowerCase()).slice(0, 10)
+    : []
 
   useEffect(() => {
-    loadInventoryProducts()
-    loadStockPricing()
-    loadCustomerNames()
-  }, [])
+    setLocalDev(isLocalDevelopment())
+    setLocalStaffName(readLocalStaffName() || session?.user?.name || "Local Staff")
+  }, [session?.user?.name])
 
   useEffect(() => {
     if (!editId) return
@@ -176,27 +199,34 @@ const SalesPage = () => {
       .catch(() => toast.error("Unable to load saved sales"))
   }, [editId, searchParams])
 
-  const loadInventoryProducts = async () => {
+  const loadInventoryProducts = useCallback(async () => {
     setLoadingProducts(true)
     try {
       const response = await fetch("/api/inventory/products")
+      if (!response.ok) throw new Error("Product request failed")
       const data = await response.json()
-      setCachedProducts(Array.isArray(data) ? data.filter((item): item is string => typeof item === "string") : [])
+      const names = Array.isArray(data) ? data.filter((item): item is string => typeof item === "string") : []
+      if (names.length) {
+        setCachedProducts(names)
+        saveLocalProductCatalog({ productNames: names })
+      } else {
+        setCachedProducts(readLocalProductCatalog()?.productNames ?? [])
+      }
     } catch (error) {
       console.error(error)
-      toast.error("Unable to load inventory products")
+      setCachedProducts(readLocalProductCatalog()?.productNames ?? [])
     } finally {
       setLoadingProducts(false)
     }
-  }
+  }, [])
 
-  const loadStockPricing = async () => {
+  const loadStockPricing = useCallback(async () => {
     try {
       const response = await fetch("/api/inventory/stock")
+      if (!response.ok) throw new Error("Stock pricing request failed")
       const data = await response.json()
       if (Array.isArray(data)) {
-        setStockPricing(
-          data.reduce((acc, item: any) => {
+        const pricing = data.reduce((acc, item: any) => {
             if (item?.productName) {
               acc[String(item.productName).trim().toLowerCase()] = {
                 costPrice: item.costPrice,
@@ -209,15 +239,21 @@ const SalesPage = () => {
               }
             }
             return acc
-          }, {} as Record<string, { costPrice?: number; cartonSalesPrice?: number; packSalesPrice?: number; pcsSalesPrice?: number; wholesaleCartonSalesPrice?: number; wholesalePackSalesPrice?: number; wholesalePcsSalesPrice?: number }>)
-        )
+          }, {} as typeof stockPricing)
+        if (Object.keys(pricing).length) {
+          setStockPricing(pricing)
+          saveLocalProductCatalog({ stockPricing: pricing })
+        } else {
+          setStockPricing(readLocalProductCatalog()?.stockPricing ?? {})
+        }
       }
     } catch (error) {
       console.error(error)
+      setStockPricing(readLocalProductCatalog()?.stockPricing ?? {})
     }
-  }
+  }, [])
 
-  const loadCustomerNames = async () => {
+  const loadCustomerNames = useCallback(async () => {
     try {
       const response = await fetch("/api/inventory/customers")
       if (!response.ok) throw new Error("Customer suggestions request failed")
@@ -228,7 +264,13 @@ const SalesPage = () => {
     } finally {
       setCustomerNamesLoading(false)
     }
-  }
+  }, [])
+
+  useEffect(() => {
+    void loadInventoryProducts()
+    void loadStockPricing()
+    void loadCustomerNames()
+  }, [loadInventoryProducts, loadStockPricing, loadCustomerNames])
 
   const hasThreeCustomerLetters = (query: string) => (query.match(/[a-z]/gi)?.length ?? 0) >= 3
 
@@ -428,6 +470,58 @@ const SalesPage = () => {
     updateSection(section.id, { rows: normalizedRows, globalWholesale: wholesaleOverride })
   }
 
+  const mergeProduct = async () => {
+    const source = mergeSource?.trim() ?? ""
+    const target = mergeTarget.trim()
+    if (!canMergeProducts || !source || !target || source.toLowerCase() === target.toLowerCase()) {
+      toast.error("Choose a different target product")
+      return
+    }
+
+    setMergeSaving(true)
+    try {
+      const response = await fetch("/api/inventory/products/merge", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ sourceProductName: source, targetProductName: target }),
+      })
+      const result = await response.json().catch(() => null)
+      if (!response.ok) throw new Error(result?.error || "Unable to merge products")
+
+      customerSections.forEach((section) => {
+        const rows = section.rows.map((row) => String(row.productName ?? "").trim().toLowerCase() === source.toLowerCase()
+          ? { ...row, productName: target, salesPrice: "", total: "", _salesPriceManual: false, _totalManual: false }
+          : row)
+        if (rows.some((row, index) => row.productName !== section.rows[index]?.productName)) handleRowChange(section, rows)
+      })
+
+      const [productsResponse, pricingResponse] = await Promise.all([
+        fetch("/api/inventory/products"),
+        fetch("/api/inventory/stock"),
+      ])
+      if (productsResponse.ok) {
+        const products = await productsResponse.json()
+        setCachedProducts(Array.isArray(products) ? products.filter((name): name is string => typeof name === "string") : [])
+      }
+      if (pricingResponse.ok) {
+        const pricing = await pricingResponse.json()
+        if (Array.isArray(pricing)) setStockPricing(pricing.reduce((acc, item) => {
+          if (item?.productName) acc[String(item.productName).trim().toLowerCase()] = item
+          return acc
+        }, {} as typeof stockPricing))
+      }
+
+      toast.success(`Merged “${source}” into “${target}”`)
+      setMergeSource(null)
+      setMergeTarget("")
+      setMergeSearchOpen(false)
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "Unable to merge products")
+    } finally {
+      setMergeSaving(false)
+    }
+  }
+
   const handleSubmit = async () => {
     if (saveState === "saving") return
     const sectionsWithRows = customerSections.map((section) => ({ ...section, validRows: section.rows.filter((row) => row.productName) }))
@@ -476,13 +570,23 @@ const SalesPage = () => {
 
     setSaveState("saving")
     try {
-      const result = await fetch(editId ? `/api/inventory/sales/${editId}` : "/api/inventory/sales", {
-        method: editId ? "PUT" : "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(payload),
-      })
-      if (!result.ok) {
-        throw new Error("Failed to save sales")
+      const saveOffline = isLocalDevelopment() && !editId
+      if (saveOffline) {
+        const localId = typeof crypto !== "undefined" && "randomUUID" in crypto
+          ? crypto.randomUUID()
+          : `${Date.now()}-${Math.random().toString(36).slice(2)}`
+        const staffName = localStaffName.trim() || "Local Staff"
+        saveLocalStaffName(staffName)
+        saveLocalSale({ localId, savedAt: new Date().toISOString(), staffName, payload })
+        setSavedLocally(true)
+      } else {
+        const result = await fetch(editId ? `/api/inventory/sales/${editId}` : "/api/inventory/sales", {
+          method: editId ? "PUT" : "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(payload),
+        })
+        if (!result.ok) throw new Error("Failed to save sales")
+        setSavedLocally(false)
       }
 
       const receiptTimestamp = Date.now()
@@ -515,7 +619,7 @@ const SalesPage = () => {
         }
       })
 
-      toast.success(editId ? "Sales updated" : "Sales saved")
+      toast.success(saveOffline ? "Sales saved locally. Sync them when the database is available." : editId ? "Sales updated" : "Sales saved")
       setSaveState("saved")
       setPendingReceipts(receipts)
       setReceiptDialogOpen(true)
@@ -609,6 +713,7 @@ const SalesPage = () => {
                 <input
                   id={`sales-customer-${section.id}`}
                   type="text"
+                  role="combobox"
                   autoComplete="off"
                   placeholder="Enter customer name"
                   className="mt-1 w-full rounded-md border bg-background px-3 py-2 text-sm text-foreground outline-none focus-visible:ring-2 focus-visible:ring-ring"
@@ -678,13 +783,59 @@ const SalesPage = () => {
         </DialogContent>
       </Dialog>
 
+      {canMergeProducts ? <Dialog open={mergeSource !== null} onOpenChange={(open) => {
+        if (!open && !mergeSaving) {
+          setMergeSource(null)
+          setMergeTarget("")
+          setMergeSearchOpen(false)
+        }
+      }}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2"><GitMerge className="h-5 w-5 text-amber-500" />Merge product records</DialogTitle>
+            <DialogDescription>Merge all saved stock, sales, count, and shelf references for <strong className="text-foreground">{mergeSource}</strong> into its matching product.</DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4 py-2">
+            <div className="relative">
+              <Label htmlFor="sales-merge-target">Matching product</Label>
+              <input
+                id="sales-merge-target"
+                className="mt-1 h-10 w-full rounded-md border bg-background px-3 text-sm"
+                placeholder="Search another product (3+ letters)"
+                value={mergeTarget}
+                onFocus={() => setMergeSearchOpen(mergeTarget.trim().length >= 3)}
+                onChange={(event) => {
+                  setMergeTarget(event.target.value)
+                  setMergeSearchOpen(event.target.value.trim().length >= 3)
+                }}
+                onBlur={() => window.setTimeout(() => setMergeSearchOpen(false), 150)}
+              />
+              {mergeSearchOpen && mergeTargetSuggestions.length > 0 ? <div className="absolute left-0 right-0 top-full z-50 mt-1 max-h-48 overflow-y-auto rounded-md border bg-popover p-1 shadow-md">
+                {mergeTargetSuggestions.map((name) => <button key={name} type="button" className="block w-full rounded px-2 py-1.5 text-left text-sm hover:bg-accent" onMouseDown={(event) => {
+                  event.preventDefault()
+                  setMergeTarget(name)
+                  setMergeSearchOpen(false)
+                }}>{name}</button>)}
+              </div> : null}
+            </div>
+            <p className="rounded-md border border-amber-500/30 bg-amber-500/10 p-3 text-xs text-amber-800 dark:text-amber-300">This permanently changes saved references for this product name. Select the existing product record that should remain.</p>
+          </div>
+          <DialogFooter>
+            <Button type="button" variant="outline" onClick={() => setMergeSource(null)} disabled={mergeSaving}>Cancel</Button>
+            <Button type="button" variant="destructive" onClick={() => void mergeProduct()} disabled={mergeSaving || !mergeSource || !mergeTarget.trim() || mergeTarget.trim().toLowerCase() === mergeSource?.trim().toLowerCase()}>
+              {mergeSaving ? <><GitMerge className="mr-2 h-4 w-4 animate-pulse" />Merging…</> : "Confirm merge"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog> : null}
+
       <Dialog open={receiptDialogOpen} onOpenChange={(open) => {
         setReceiptDialogOpen(open)
         if (!open) finishReceiptFlow()
       }}>
         <DialogContent className="flex max-h-[92vh] max-w-3xl flex-col overflow-hidden">
           <DialogHeader>
-            <DialogTitle>Sales saved — print receipt?</DialogTitle>
+            <DialogTitle>{savedLocally ? "Sales saved locally — sync when online" : "Sales saved — print receipt?"}</DialogTitle>
             <DialogDescription>
               {pendingReceipts.length === 1
                 ? "Review the receipt, then print it or cancel. Print opens your system dialog; choose the physical printer instead of Save as PDF."
@@ -728,6 +879,7 @@ const SalesPage = () => {
       </Dialog>
 
       <div className="flex flex-wrap items-end gap-3">
+        {localDev ? <label className="grid gap-1 text-sm"><span className="text-muted-foreground">Staff identity</span><input value={localStaffName} onChange={(event) => { setLocalStaffName(event.target.value); saveLocalStaffName(event.target.value) }} placeholder="Staff name" className="h-10 w-48 rounded-md border bg-background px-3" /></label> : null}
         <Button onClick={handleSubmit} disabled={saveState === "saving" || saveState === "saved"}>{saveState === "saving" ? "Saving..." : saveState === "saved" ? "Saved" : editId ? "Update sales" : "Save sales"}</Button>
         <span className="text-sm text-muted-foreground">Selected: {currentLabel}</span>
         <span className="text-sm text-muted-foreground">Customers: {totalCustomers}</span>

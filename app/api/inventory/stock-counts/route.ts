@@ -13,7 +13,8 @@ export async function GET(request: Request) {
     const url = new URL(request.url)
     if (url.searchParams.get("mode") === "products") {
       const requestedDate = url.searchParams.get("date")
-      const asOfDate = requestedDate ? new Date(`${requestedDate}T23:59:59.999Z`) : undefined
+      const asOfDate = requestedDate ? new Date(`${requestedDate}T00:00:00.000Z`) : undefined
+      if (asOfDate) asOfDate.setUTCMilliseconds(asOfDate.getUTCMilliseconds() - 1)
       const [products, shelves] = await Promise.all([getCountProducts(asOfDate), prisma.shelf.findMany({ orderBy: [{ number: "asc" }, { name: "asc" }] })])
       return NextResponse.json({ products, shelves })
     }
@@ -45,7 +46,8 @@ export async function POST(request: Request) {
     if (Number.isNaN(date.getTime())) return NextResponse.json({ error: "Invalid count date" }, { status: 400 })
     const rows = Array.isArray(body.rows) ? body.rows.filter((row: any) => String(row.productName || "").trim()) : []
     if (!rows.length) return NextResponse.json({ error: "No count rows provided" }, { status: 400 })
-    const products = await getCountProducts(date)
+    const beforeCountDate = new Date(date.getTime() - 1)
+    const products = await getCountProducts(beforeCountDate)
     const productMap = new Map(products.map((product) => [product.productKey, product]))
 
     const count = await prisma.stockCount.create({
