@@ -176,7 +176,7 @@ export function Tables({
     if (!activeSuggestion) return []
     const { rowIndex, columnKey } = activeSuggestion
     const val = String(activeRows[rowIndex]?.[columnKey] ?? "").toLowerCase()
-    if (val.length < 4) return []
+    if (val.length < 3) return []
     const list = autocomplete?.[columnKey] ?? []
     return list.filter((item) => (typeof item === "string" ? item : item.label).toLowerCase().includes(val)).slice(0, 10)
   }, [activeSuggestion, activeRows, autocomplete])

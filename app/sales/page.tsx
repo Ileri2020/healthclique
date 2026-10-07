@@ -127,10 +127,11 @@ const SalesPage = () => {
   const productNames = useMemo(() => cachedProducts, [cachedProducts])
   const productOptions = useMemo<AutocompleteOption[]>(() => productNames.map((productName) => {
     const pricing = stockPricing[productName.trim().toLowerCase()]
-    const price = pricing?.pcsSalesPrice ?? pricing?.packSalesPrice ?? pricing?.cartonSalesPrice
+    const retailPrice = pricing?.pcsSalesPrice ?? pricing?.packSalesPrice ?? pricing?.cartonSalesPrice
+    const wholesalePrice = pricing?.wholesalePcsSalesPrice ?? pricing?.wholesalePackSalesPrice ?? pricing?.wholesaleCartonSalesPrice
     return {
       value: productName,
-      label: `(${price == null ? "-" : `₦${Number(price).toLocaleString()}`}) ${productName}`,
+      label: `(Retail ${retailPrice == null ? "-" : `₦${Number(retailPrice).toLocaleString()}`} · Wholesale ${wholesalePrice == null ? "-" : `₦${Number(wholesalePrice).toLocaleString()}`}) ${productName}`,
       ...(canMergeProducts ? { actionLabel: `Merge ${productName} into another product`, onAction: () => {
         setMergeSource(productName)
         setMergeTarget("")
@@ -146,6 +147,11 @@ const SalesPage = () => {
   useEffect(() => {
     setLocalDev(isLocalDevelopment())
     setLocalStaffName(readLocalStaffName() || session?.user?.name || "Local Staff")
+    const localCatalog = readLocalProductCatalog()
+    if (localCatalog) {
+      setCachedProducts(localCatalog.productNames)
+      setStockPricing(localCatalog.stockPricing)
+    }
   }, [session?.user?.name])
 
   useEffect(() => {
@@ -265,6 +271,29 @@ const SalesPage = () => {
       setCustomerNamesLoading(false)
     }
   }, [])
+
+  const getProductsFromDatabase = async () => {
+    setLoadingProducts(true)
+    try {
+      const response = await fetch("/api/inventory/sales/catalog", { cache: "no-store" })
+      const catalog = await response.json().catch(() => null)
+      if (!response.ok) throw new Error(catalog?.error || "Unable to get products from the database")
+      if (!Array.isArray(catalog?.productNames) || catalog.productNames.length === 0) {
+        throw new Error("The database returned no sales product names")
+      }
+
+      const names = catalog.productNames.filter((name: unknown): name is string => typeof name === "string" && Boolean(name.trim()))
+      const pricing = catalog.stockPricing && typeof catalog.stockPricing === "object" ? catalog.stockPricing : {}
+      saveLocalProductCatalog({ productNames: names, stockPricing: pricing })
+      setCachedProducts(names)
+      setStockPricing(pricing)
+      toast.success(`${names.length} products and their prices saved for offline sales`)
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "Could not get products. Check the database connection.")
+    } finally {
+      setLoadingProducts(false)
+    }
+  }
 
   useEffect(() => {
     void loadInventoryProducts()
@@ -880,6 +909,7 @@ const SalesPage = () => {
 
       <div className="flex flex-wrap items-end gap-3">
         {localDev ? <label className="grid gap-1 text-sm"><span className="text-muted-foreground">Staff identity</span><input value={localStaffName} onChange={(event) => { setLocalStaffName(event.target.value); saveLocalStaffName(event.target.value) }} placeholder="Staff name" className="h-10 w-48 rounded-md border bg-background px-3" /></label> : null}
+        {localDev ? <div className="grid gap-1"><span className="text-xs text-muted-foreground">Download current products and retail/wholesale prices for offline sales.</span><Button type="button" variant="outline" onClick={() => void getProductsFromDatabase()} disabled={loadingProducts}>{loadingProducts ? "Getting products…" : "Get products"}</Button></div> : null}
         <Button onClick={handleSubmit} disabled={saveState === "saving" || saveState === "saved"}>{saveState === "saving" ? "Saving..." : saveState === "saved" ? "Saved" : editId ? "Update sales" : "Save sales"}</Button>
         <span className="text-sm text-muted-foreground">Selected: {currentLabel}</span>
         <span className="text-sm text-muted-foreground">Customers: {totalCustomers}</span>
