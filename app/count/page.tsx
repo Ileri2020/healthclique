@@ -26,6 +26,8 @@ import {
 } from "@/components/ui/table"
 import { Check, Calendar as CalendarIcon, Loader2, Plus, Search, Layers, X, GitMerge } from "lucide-react"
 import { toast } from "sonner"
+import { isLocalDevelopment, readLocalStaffName } from "@/lib/local-sales"
+import { readLocalCountCatalog, saveLocalCount, saveLocalCountCatalog } from "@/lib/local-counts"
 
 const ADD_TO_SHELF_OPTION = "__add_to_shelf__"
 const ALL_PRODUCTS_OPTION = "__all_products__"
@@ -96,6 +98,7 @@ export default function StockCountPage() {
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
   const [saveState, setSaveState] = useState<"idle" | "saving" | "saved" | "error">("idle")
+  const [localDev, setLocalDev] = useState(false)
 
   // Header controls state
   const [searchTerm, setSearchTerm] = useState("")
@@ -132,15 +135,19 @@ export default function StockCountPage() {
   const productsPerPage = 75
   const tableTopRef = useRef<HTMLDivElement>(null)
 
+  useEffect(() => setLocalDev(isLocalDevelopment()), [])
+
   useEffect(() => { loadCountData() }, [editId, countDate, selectedShelfFilter])
 
   const loadCountData = async () => {
     setLoading(true)
     try {
+      let loadedShelves: ShelfItem[] = []
       const shelvesResponse = await fetch("/api/inventory/shelves")
       if (shelvesResponse.ok) {
         const shelvesData = await shelvesResponse.json()
-        setShelves(Array.isArray(shelvesData) ? shelvesData : [])
+        loadedShelves = Array.isArray(shelvesData) ? shelvesData : []
+        setShelves(loadedShelves)
       }
 
       if (!selectedShelfFilter.trim() || selectedShelfFilter === ADD_TO_SHELF_OPTION || selectedShelfFilter === ALL_PRODUCTS_OPTION) {
@@ -177,7 +184,14 @@ export default function StockCountPage() {
               }))
           }
         }
+        const nextShelves = Array.isArray(data.shelves) ? data.shelves : loadedShelves
         setProducts(nextProducts)
+        saveLocalCountCatalog({
+          date: format(countDate, "yyyy-MM-dd"),
+          shelfFilter: selectedShelfFilter,
+          products: nextProducts,
+          shelves: nextShelves,
+        })
         setLoading(false)
         return
       }
@@ -219,9 +233,29 @@ export default function StockCountPage() {
         }
       }
       setProducts(nextProducts)
-      setShelves(data.shelves || [])
+      const nextShelves = Array.isArray(data.shelves) ? data.shelves : loadedShelves
+      setShelves(nextShelves)
+      saveLocalCountCatalog({
+        date: format(countDate, "yyyy-MM-dd"),
+        shelfFilter: selectedShelfFilter,
+        products: nextProducts,
+        shelves: nextShelves,
+      })
     } catch {
-      toast.error("Unable to load stock products")
+      const countDateKey = format(countDate, "yyyy-MM-dd")
+      const cached = readLocalCountCatalog(countDateKey, selectedShelfFilter)
+        ?? readLocalCountCatalog(countDateKey, ALL_PRODUCTS_OPTION)
+      if (cached) {
+        setProducts(cached.products.map((product) => ({
+          ...(product as ProductCountItem),
+          countedPcs: "",
+          expiryInput: (product as ProductCountItem).shortestExpiry ? (product as ProductCountItem).shortestExpiry!.split("T")[0] : "",
+        })))
+        setShelves(cached.shelves as ShelfItem[])
+        toast.info(`Using locally cached stock data from ${new Date(cached.updatedAt).toLocaleString()}`)
+      } else {
+        toast.error("Unable to load stock products. Connect to the database once to cache count data for offline use.")
+      }
     } finally {
       setLoading(false)
     }
@@ -392,20 +426,32 @@ export default function StockCountPage() {
         return
       }
 
-      const response = await fetch(editId ? "/api/inventory/count" : "/api/inventory/count", {
-        method: editId ? "PUT" : "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          id: editId || undefined,
-          date: format(countDate, "yyyy-MM-dd"),
-          shelfName: selectedShelfFilter !== ADD_TO_SHELF_OPTION && selectedShelfFilter !== ALL_PRODUCTS_OPTION ? selectedShelfFilter : undefined,
-          lines,
-        }),
-      })
+      const shelfName = selectedShelfFilter !== ADD_TO_SHELF_OPTION && selectedShelfFilter !== ALL_PRODUCTS_OPTION ? selectedShelfFilter : undefined
+      const shelfId = shelfName ? shelves.find((shelf) => shelf.name === shelfName)?.id : undefined
+      const payload = { date: format(countDate, "yyyy-MM-dd"), shelfName, shelfId, lines }
+      const saveOffline = localDev && !editId
 
-      if (!response.ok) throw new Error()
+      if (saveOffline) {
+        const localId = typeof crypto !== "undefined" && "randomUUID" in crypto
+          ? crypto.randomUUID()
+          : `${Date.now()}-${Math.random().toString(36).slice(2)}`
+        saveLocalCount({
+          localId,
+          savedAt: new Date().toISOString(),
+          staffName: readLocalStaffName() || session?.user?.name || "Local Staff",
+          payload,
+        })
+      } else {
+        const response = await fetch("/api/inventory/count", {
+          method: editId ? "PUT" : "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ id: editId || undefined, ...payload }),
+        })
+        if (!response.ok) throw new Error()
+      }
+
       setSaveState("saved")
-      toast.success("Stock count session saved successfully")
+      toast.success(saveOffline ? "Stock count saved locally. Sync it when the database is available." : "Stock count session saved successfully")
       if (editId) router.push(`/count/${format(countDate, "yyyy-MM-dd")}`)
     } catch {
       setSaveState("error")
@@ -585,7 +631,7 @@ export default function StockCountPage() {
           </div>
           <Button onClick={handleSaveStockCount} disabled={saving || saveState === "saved"}>
             {saving ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Check className="mr-2 h-4 w-4" />}
-            {saveState === "saved" ? "Saved" : editId ? "Update stock count" : "Save stock count"}
+            {saveState === "saved" ? "Saved" : editId ? "Update stock count" : localDev ? "Save count locally" : "Save stock count"}
           </Button>
         </div>
 

@@ -32,7 +32,7 @@ const Navbar = (): JSX.Element => {
   const { setUser, user } = useAppContext();
   const { data: session, status, update } = useSession();
   const pathname = usePathname();
-  const inventoryMode = pathname.startsWith("/stock") || pathname.startsWith("/sales") || pathname.startsWith("/expenses");
+  const inventoryMode = pathname.startsWith("/stock") || pathname.startsWith("/sales") || pathname.startsWith("/count") || pathname.startsWith("/expenses");
 
   useEffect(() => {
     if (status === "authenticated" && session?.user && user.email === "nil") {

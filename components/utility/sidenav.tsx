@@ -8,7 +8,7 @@ import { usePathname } from 'next/navigation';
 import { GlobalSearch } from "../myComponents/subs/GlobalSearch"
 import { useEffect, useState } from "react"
 import axios from "axios"
-import { Archive, ChevronRight, ClipboardList, DollarSign, HeartPulse, LayoutGrid, Package, Stethoscope, Tag, ShoppingCart, MessageSquare, Camera, LogOut, UserPlus } from "lucide-react"
+import { Archive, ChevronRight, ClipboardCheck, ClipboardList, DollarSign, HeartPulse, LayoutGrid, Package, Stethoscope, Tag, ShoppingCart, MessageSquare, Camera, LogOut, UserPlus } from "lucide-react"
 import { Cart } from "../myComponents/subs/cart"
 import { Button } from "../ui/button";
 import { SnapPrescription } from "../myComponents/subs/SnapPrescription";
@@ -20,22 +20,23 @@ import { Login, Signup } from "../myComponents/subs";
 import { LocalSalesSyncButton } from "@/components/utility/LocalSalesSyncButton";
 
 const inventoryLinks = [
-    { path: "/inventory/analytics", name: "Analytics", title: "Analytics", icon: LayoutGrid },
     { path: "/stock", name: "Stock", title: "Stock", icon: Package },
     { path: "/sales", name: "Sales", title: "Sales", icon: ShoppingCart },
-    { path: "/vitals", name: "Vitals", title: "Blood pressure tracker", icon: HeartPulse },
-    { path: "/staff", name: "Staff signup", title: "Register a customer", icon: UserPlus },
-    { path: "/stock/all", name: "All stock", title: "All stock", icon: Archive },
-    { path: "/sales/all", name: "All sales", title: "All sales", icon: ClipboardList },
+    { path: "/count", name: "Stock count", title: "Stock count", icon: ClipboardCheck },
     { path: "/stock/products", name: "Products", title: "Products", icon: LayoutGrid },
     { path: "/expenses", name: "Expenses", title: "Expenses", icon: DollarSign },
+    { path: "/vitals", name: "Vitals", title: "Blood pressure tracker", icon: HeartPulse },
+    { path: "/staff", name: "Staff signup", title: "Register a customer", icon: UserPlus },
+    { path: "/sales/all", name: "All sales", title: "All sales", icon: ClipboardList },
+    { path: "/inventory/analytics", name: "Analytics", title: "Analytics", icon: LayoutGrid },
+    { path: "/stock/all", name: "All stock", title: "All stock", icon: Archive },
 ];
 
 const Sidenav = () => {
     const { user, setUser } = useAppContext();
     const { data: session } = useSession();
     const pathname = usePathname();
-    const inventoryMode = pathname.startsWith("/inventory/") || pathname.startsWith("/stock/") || pathname.startsWith("/sales/") || pathname.startsWith("/expenses") || pathname === "/stock" || pathname === "/sales" || pathname.startsWith("/vitals") || pathname.startsWith("/staff");
+    const inventoryMode = pathname.startsWith("/inventory/") || pathname.startsWith("/stock/") || pathname.startsWith("/sales/") || pathname.startsWith("/count") || pathname.startsWith("/expenses") || pathname === "/stock" || pathname === "/sales" || pathname.startsWith("/vitals") || pathname.startsWith("/staff");
     const canManageUsers = session?.user?.role === "admin" || session?.user?.role === "staff";
     const navigationLinks = inventoryMode ? inventoryLinks.filter((link) => link.path !== "/staff" || canManageUsers) : Links.Links;
     const [categories, setCategories] = useState<any[]>([]);
@@ -105,7 +106,7 @@ const Sidenav = () => {
                         <nav className="flex flex-col gap-1">
                             {navigationLinks.map((link, index) => (
                                 (() => {
-                                    const isActive = pathname === link.path || (link.path === "/stock" && pathname.startsWith("/stock/")) || (link.path === "/sales" && pathname.startsWith("/sales/")) || (link.path === "/expenses" && pathname.startsWith("/expenses")) || (link.path === "/vitals" && pathname.startsWith("/vitals")) || (link.path === "/staff" && pathname.startsWith("/staff"));
+                                    const isActive = pathname === link.path || (link.path === "/stock" && pathname.startsWith("/stock/")) || (link.path === "/sales" && pathname.startsWith("/sales/")) || (link.path === "/count" && pathname.startsWith("/count/")) || (link.path === "/expenses" && pathname.startsWith("/expenses")) || (link.path === "/vitals" && pathname.startsWith("/vitals")) || (link.path === "/staff" && pathname.startsWith("/staff"));
                                     return (
                                 <Link 
                                     href={link.path} 

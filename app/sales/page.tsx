@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useMemo, useState } from "react"
 import { useRouter, useSearchParams } from "next/navigation"
 import { useSession } from "next-auth/react"
+import Image from "next/image"
 import { format } from "date-fns"
 import { Button } from "@/components/ui/button"
 import { Label } from "@/components/ui/label"
@@ -15,13 +16,12 @@ import { isLocalDevelopment, readLocalProductCatalog, readLocalStaffName, saveLo
 
 const salesColumns: TableColumn[] = [
   { key: "sn", label: "S/N", type: "number", required: true, className: "w-10" },
-  { key: "newCustomer", label: "NC", type: "boolean", className: "w-20" },
-  { key: "productName", label: "Product Name", type: "text", required: true },
+  { key: "newCustomer", label: "NC", type: "boolean" },
+  { key: "productName", label: "Product Name", type: "text", required: true, className: "max-w-[200px]" },
   {
     key: "carton",
     label: "Carton",
     type: "boolean",
-    className: "w-28",
     conditionalFields: [
       { key: "cartonQty", label: "Carton Qty" },
     ],
@@ -30,14 +30,13 @@ const salesColumns: TableColumn[] = [
     key: "pack",
     label: "Pack",
     type: "boolean",
-    className: "w-28",
     conditionalFields: [
       { key: "packQty", label: "Pack Qty" },
     ],
   },
   { key: "pcsQty", label: "Pcs Qty", type: "number", className: "min-w-[100px] w-28" },
   { key: "totalPcs", label: "Total Pcs", type: "number", readOnly: true, className: "min-w-[100px] w-28" },
-  { key: "wholesale", label: "Wholesale", type: "boolean", className: "w-24" },
+  { key: "wholesale", label: "Wholesale", type: "boolean" },
   { key: "salesPrice", label: "Sales Price", type: "number", previousValueKey: "_lastSavedSalesPrice", autoValueKey: "_markupSalesPrice", className: "min-w-[100px] w-36" },
   { key: "total", label: "Total Price", type: "number", className: "min-w-[100px] w-36" },
 ]
@@ -736,7 +735,7 @@ const SalesPage = () => {
               {sectionIndex === 0 ? <div className="flex flex-col gap-2 md:max-w-xs"><Label htmlFor="sales-date">Date</Label><input id="sales-date" type="date" className="w-full rounded border bg-transparent px-3 py-2 text-sm" value={format(selectedDate, "yyyy-MM-dd")} onChange={(event) => { setDateMode("single"); setSelectedDate(new Date(event.target.value)); setSelectedRange({ from: undefined, to: undefined }) }} /></div> : null}
               <label className="flex items-center gap-2 rounded border px-3 py-2 text-sm"><input type="checkbox" checked={section.globalWholesale} onChange={(event) => { const enabled = event.target.checked; handleRowChange(section, section.rows.map((row) => ({ ...row, wholesale: enabled })), enabled) }} />Wholesale</label>
             </div>
-            <div className="rounded-lg border bg-card p-2 sm:p-4 max-w-full">
+            <div className="min-w-0 max-w-full overflow-hidden rounded-lg border bg-card p-2 sm:p-4">
               <div className="relative mb-4 max-w-md">
                 <Label htmlFor={`sales-customer-${section.id}`}>Customer name</Label>
                 <input
@@ -781,7 +780,7 @@ const SalesPage = () => {
                   </ul>
                 ) : null}
               </div>
-              <Tables columns={salesColumns} defaultRowCount={4} rows={section.rows} onRowsChange={(rows) => handleRowChange(section, rows)} autocomplete={{ productName: productOptions }} minWidth="1400px" focusRowIndex={sectionIndex === 0 ? focusRowIndex : undefined} snRestartKey="newCustomer" groupTotalKey="newCustomer" groupTotalContent={({ startIndex, total }) => groupPaymentControls(section, startIndex, total)} />
+              <Tables columns={salesColumns} defaultRowCount={4} rows={section.rows} onRowsChange={(rows) => handleRowChange(section, rows)} autocomplete={{ productName: productOptions }} minWidth="1400px" fixedLayout stickyHeader focusRowIndex={sectionIndex === 0 ? focusRowIndex : undefined} snRestartKey="newCustomer" groupTotalKey="newCustomer" groupTotalContent={({ startIndex, total }) => groupPaymentControls(section, startIndex, total)} />
             </div>
             <div className="mt-4 flex flex-wrap items-end gap-4 border-t pt-4">
               {(() => { const summary = groupPaymentSummary(section); return <><div className="mr-auto"><p className="text-xs uppercase tracking-wide text-muted-foreground">Total sales</p><p className="text-xl font-bold">₦{sectionTotalValue.toLocaleString()}</p></div><label className="flex items-center gap-2 text-sm">Cash<input readOnly type="number" className="w-28 rounded border bg-muted px-2 py-1" value={summary.cash} /></label><label className="flex items-center gap-2 text-sm">POS<input readOnly type="number" className="w-28 rounded border bg-muted px-2 py-1" value={summary.pos} /></label><label className="flex items-center gap-2 text-sm">Change<input readOnly type="number" className="w-28 rounded border bg-muted px-2 py-1" value={summary.change} /></label></> })()}
@@ -871,32 +870,33 @@ const SalesPage = () => {
                 : `Review ${pendingReceipts.length} customer receipts. Print opens your system dialog; choose the physical printer instead of Save as PDF.`}
             </DialogDescription>
           </DialogHeader>
-          <div className="min-h-0 flex-1 space-y-4 overflow-auto rounded-md bg-muted/40 p-3 sm:p-5">
+          <div className="min-h-0 flex-1 space-y-2 overflow-auto rounded-md bg-muted/40 p-2 sm:p-3">
             {pendingReceipts.map((receipt) => (
-              <article key={receipt.receiptNumber} className="mx-auto max-w-md border bg-white p-5 text-slate-900 shadow-sm">
-                <header className="border-b border-dashed pb-3 text-center">
-                  <div className="mx-auto mb-2 grid h-9 w-9 place-items-center rounded-xl bg-sky-100 font-bold text-sky-700">H</div>
-                  <h2 className="text-lg font-bold text-sky-800">HealthClique</h2>
-                  <p className="text-[10px] uppercase tracking-[0.2em] text-slate-500">Pharmacy · Sales receipt</p>
+              <article key={receipt.receiptNumber} className="mx-auto max-w-md border bg-white p-3 text-slate-900 shadow-sm">
+                <header className="border-b border-dashed pb-2 text-center">
+                  <Image src="/greenlogo.png" alt="HealthClique" width={160} height={64} className="mx-auto mb-1 h-8 w-auto object-contain" />
+                  <p className="text-[9px] uppercase tracking-[0.15em] text-slate-500">Pharmacy · Sales receipt</p>
+                  <p className="mt-1 text-[9px] text-slate-500">Ifelodun Bus Stop, Igbokuta Road</p>
+                  <p className="text-[9px] text-slate-500">Tel: 08067239228 · 09159814350</p>
+                  <a href="https://healthcliquecare.com/" className="text-[9px] text-sky-700">www.healthcliquecare.com</a>
                 </header>
-                <div className="my-3 flex justify-between gap-3 text-xs">
+                <div className="my-2 flex justify-between gap-3 text-[10px]">
                   <div><span className="text-slate-500">Receipt</span><strong className="block">{receipt.receiptNumber}</strong></div>
                   <div className="text-right"><span className="text-slate-500">Date</span><strong className="block">{receipt.date}</strong></div>
                 </div>
-                <div className="mb-3 rounded bg-sky-50 px-3 py-2 text-xs"><span className="text-slate-500">Customer</span><strong className="block text-sm">{receipt.customerName || "Walk-in customer"}</strong></div>
+                <div className="mb-2 rounded bg-sky-50 px-2 py-1.5 text-[10px]"><span className="text-slate-500">Customer</span><strong className="block text-xs">{receipt.customerName || "Walk-in customer"}</strong></div>
                 <table className="w-full text-left text-xs">
-                  <thead><tr className="border-b text-[10px] uppercase tracking-wide text-slate-500"><th className="py-2">Item</th><th className="py-2">Price</th><th className="py-2 text-right">Amount</th></tr></thead>
-                  <tbody>{receipt.rows.map((row, index) => <tr key={`${row.productName}-${index}`} className="border-b border-slate-100 align-top"><td className="py-2 pr-2"><strong>{row.productName}</strong><span className="block text-[10px] text-slate-500">{row.quantity}</span></td><td className="py-2">{formatReceiptMoney(row.unitPrice)}</td><td className="py-2 text-right">{formatReceiptMoney(row.total)}</td></tr>)}</tbody>
+                  <thead><tr className="border-b text-[9px] uppercase tracking-wide text-slate-500"><th className="py-1">Item</th><th className="py-1">Price</th><th className="py-1 text-right">Amount</th></tr></thead>
+                  <tbody>{receipt.rows.map((row, index) => <tr key={`${row.productName}-${index}`} className="border-b border-slate-100 align-top"><td className="py-1 pr-2"><strong>{row.productName}</strong><span className="block text-[9px] text-slate-500">{row.quantity}</span></td><td className="py-1">{formatReceiptMoney(row.unitPrice)}</td><td className="py-1 text-right">{formatReceiptMoney(row.total)}</td></tr>)}</tbody>
                 </table>
-                <div className="ml-auto mt-3 w-3/4 space-y-1 text-xs">
-                  <div className="flex justify-between"><span>Payment</span><span>{receipt.paymentMethod || "Not specified"}</span></div>
-                  <div className="flex justify-between"><span>Cash</span><span>{formatReceiptMoney(receipt.cashPaid)}</span></div>
-                  <div className="flex justify-between"><span>POS / transfer</span><span>{formatReceiptMoney(receipt.posPayment)}</span></div>
-                  <div className="flex justify-between"><span>Change</span><span>{formatReceiptMoney(receipt.change)}</span></div>
-                  <div className="flex justify-between"><span>Balance due</span><span>{formatReceiptMoney(Math.max(0, receipt.total - receipt.cashPaid - receipt.posPayment + receipt.change))}</span></div>
-                  <div className="flex justify-between border-t pt-2 text-base font-bold text-sky-800"><span>Total</span><span>{formatReceiptMoney(receipt.total)}</span></div>
+                <div className="mt-2 grid grid-cols-2 gap-x-3 gap-y-0.5 text-[10px]">
+                  <div className="flex justify-between gap-1"><span>Cash</span><span>{formatReceiptMoney(receipt.cashPaid)}</span></div>
+                  <div className="flex justify-between gap-1"><span>POS / transfer</span><span>{formatReceiptMoney(receipt.posPayment)}</span></div>
+                  <div className="flex justify-between gap-1"><span>Change</span><span>{formatReceiptMoney(receipt.change)}</span></div>
+                  <div className="flex justify-between gap-1"><span>Balance due</span><span>{formatReceiptMoney(Math.max(0, receipt.total - receipt.cashPaid - receipt.posPayment + receipt.change))}</span></div>
+                  <div className="col-span-2 mt-1 flex justify-between border-t pt-1 text-sm font-bold text-sky-800"><span>Total</span><span>{formatReceiptMoney(receipt.total)}</span></div>
                 </div>
-                <footer className="mt-4 border-t border-dashed pt-3 text-center text-[10px] text-slate-500"><strong className="block text-xs text-sky-800">Thank you for patronizing us!</strong>We appreciate your trust in HealthClique. Please keep this receipt for your records.</footer>
+                <footer className="mt-2 border-t border-dashed pt-2 text-center text-[9px] text-slate-500"><strong className="block text-[10px] text-sky-800">Thank you for patronizing us!</strong>We appreciate your trust in HealthClique. Please keep this receipt for your records.</footer>
               </article>
             ))}
           </div>

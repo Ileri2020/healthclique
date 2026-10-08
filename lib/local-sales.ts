@@ -42,7 +42,10 @@ export const isLocalDevelopment = () => {
   return ["localhost", "127.0.0.1", "::1"].includes(window.location.hostname)
 }
 
-const notifyLocalSalesChanged = () => window.dispatchEvent(new Event("healthclique:local-sales-changed"))
+const notifyLocalSalesChanged = () => {
+  window.dispatchEvent(new Event("healthclique:local-sales-changed"))
+  window.dispatchEvent(new Event("healthclique:local-data-changed"))
+}
 
 export const readLocalSales = (): LocalSale[] => {
   if (typeof window === "undefined") return []

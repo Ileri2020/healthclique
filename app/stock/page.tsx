@@ -13,12 +13,11 @@ import { Check, Loader2, X } from "lucide-react"
 
 const stockColumns: TableColumn[] = [
   { key: "sn", label: "S/N", type: "number", required: true, className: "w-10" },
-  { key: "productName", label: "Product Name", type: "text", required: true },
+  { key: "productName", label: "Product Name", type: "text", required: true, className: "max-w-sm" },
   {
     key: "carton",
     label: "Carton",
     type: "boolean",
-    className: "w-28",
     conditionalFields: [
       { key: "cartonQty", label: "Carton Qty" },
       { key: "packsPerCarton", label: "Packs/Carton" },
@@ -29,7 +28,6 @@ const stockColumns: TableColumn[] = [
     key: "pack",
     label: "Pack",
     type: "boolean",
-    className: "w-28",
     conditionalFields: [
       { key: "packQty", label: "Pack Qty" },
       { key: "pcsCount", label: "Pcs/Pack" },
@@ -39,7 +37,7 @@ const stockColumns: TableColumn[] = [
   { key: "totalPcs", label: "Total Pcs", type: "number", readOnly: true, className: "min-w-[100px] w-28" },
   { key: "costPrice", label: "Purchase Cost", type: "number", className: "min-w-[100px] w-32" },
   { key: "pcsRate", label: "Pcs Rate", type: "number", readOnly: true, previousValueKey: "_oldPcsRate", previousValueToggleKey: "usePreviousPcsRate", autoValueKey: "_calculatedPcsRate", className: "min-w-[100px] w-32" },
-  { key: "wholesale", label: "Wholesale", type: "boolean", className: "w-24" },
+  { key: "wholesale", label: "Wholesale", type: "boolean" },
   { key: "cartonSalesPrice", label: "Carton Sales Price", type: "number", previousValueKey: "_lastSavedCartonSalesPrice", autoValueKey: "_markupCartonSalesPrice", className: "min-w-[100px] w-36" },
   { key: "packSalesPrice", label: "Pack Sales Price", type: "number", previousValueKey: "_lastSavedPackSalesPrice", autoValueKey: "_markupPackSalesPrice", className: "min-w-[100px] w-36" },
   { key: "pcsSalesPrice", label: "Pcs Sales Price", type: "number", previousValueKey: "_lastSavedPcsSalesPrice", autoValueKey: "_markupPcsSalesPrice", className: "min-w-[100px] w-36" },
@@ -604,6 +602,7 @@ const StockPage = () => {
           restrictToOptions={["productName"]}
           showTotals
           minWidth="1050px"
+          stickyHeader
           focusRowIndex={focusRowIndex}
         />
       </div>

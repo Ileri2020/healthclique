@@ -1,7 +1,8 @@
 "use client"
 
-import { Fragment, useEffect, useMemo, useState } from "react"
+import { Fragment, useEffect, useMemo, useRef, useState } from "react"
 import type { ReactNode } from "react"
+import { createPortal } from "react-dom"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
 import { Input } from "@/components/ui/input"
 import { Checkbox } from "@/components/ui/checkbox"
@@ -46,6 +47,8 @@ interface TablesProps {
   restrictToOptions?: string[]
   showTotals?: boolean
   minWidth?: string
+  fixedLayout?: boolean
+  stickyHeader?: boolean
   readOnly?: boolean
   focusRowIndex?: number
   extraActions?: ReactNode
@@ -69,6 +72,8 @@ export function Tables({
   autocomplete,
   showTotals = false,
   minWidth = "1100px",
+  fixedLayout = false,
+  stickyHeader = false,
   readOnly = false,
   focusRowIndex,
   extraActions,
@@ -76,6 +81,9 @@ export function Tables({
   groupTotalKey,
   groupTotalContent,
 }: TablesProps) {
+  const tableRootRef = useRef<HTMLDivElement>(null)
+  const stickyHeaderHostRef = useRef<HTMLDivElement>(null)
+  const [portalReady, setPortalReady] = useState(false)
   const [activeSuggestion, setActiveSuggestion] = useState<{ rowIndex: number; columnKey: string } | null>(null)
   const [quantityDialog, setQuantityDialog] = useState<{ rowIndex: number; column: TableColumn } | null>(null)
   const [internalRows, setInternalRows] = useState<TableRow[]>(
@@ -84,6 +92,58 @@ export function Tables({
 
   const controlled = rows !== undefined
   const activeRows = controlled ? rows! : internalRows
+
+  useEffect(() => setPortalReady(true), [])
+
+  useEffect(() => {
+    if (!stickyHeader || !portalReady) return
+    const root = tableRootRef.current
+    const host = stickyHeaderHostRef.current
+    const scrollViewport = root?.querySelector<HTMLElement>(".sticky-table-scroll")
+    const sourceTable = scrollViewport?.querySelector<HTMLTableElement>("table")
+    const sourceHead = sourceTable?.querySelector<HTMLTableSectionElement>("thead")
+    if (!scrollViewport || !sourceTable || !sourceHead || !host) return
+
+    const floatingTable = sourceTable.cloneNode(false) as HTMLTableElement
+    floatingTable.style.cssText = sourceTable.style.cssText
+    floatingTable.style.width = `${sourceTable.scrollWidth}px`
+    floatingTable.style.minWidth = `${sourceTable.scrollWidth}px`
+    floatingTable.style.margin = "0"
+    floatingTable.appendChild(sourceHead.cloneNode(true))
+    host.replaceChildren(floatingTable)
+
+    const syncStickyHeader = () => {
+      const navbarHeader = document.querySelector<HTMLElement>("header.sticky")
+      const navbarBottom = navbarHeader?.getBoundingClientRect().bottom ?? 0
+      const viewportRect = scrollViewport.getBoundingClientRect()
+      const headerHeight = sourceHead.getBoundingClientRect().height
+      const shouldShow = viewportRect.top < navbarBottom && viewportRect.bottom > navbarBottom + headerHeight
+
+      host.style.display = shouldShow ? "block" : "none"
+      if (!shouldShow) return
+
+      host.style.top = `${navbarBottom}px`
+      host.style.left = `${viewportRect.left}px`
+      host.style.width = `${scrollViewport.clientWidth}px`
+      floatingTable.style.transform = `translateX(-${scrollViewport.scrollLeft}px)`
+    }
+
+    scrollViewport.addEventListener("scroll", syncStickyHeader, { passive: true })
+    window.addEventListener("scroll", syncStickyHeader, { passive: true, capture: true })
+    window.addEventListener("resize", syncStickyHeader)
+    const resizeObserver = new ResizeObserver(syncStickyHeader)
+    resizeObserver.observe(scrollViewport)
+    resizeObserver.observe(sourceTable)
+    syncStickyHeader()
+
+    return () => {
+      scrollViewport.removeEventListener("scroll", syncStickyHeader)
+      window.removeEventListener("scroll", syncStickyHeader, true)
+      window.removeEventListener("resize", syncStickyHeader)
+      resizeObserver.disconnect()
+      host.replaceChildren()
+    }
+  }, [stickyHeader, portalReady, activeRows.length, columns, minWidth])
 
   useEffect(() => {
     if (controlled) return
@@ -197,16 +257,25 @@ export function Tables({
     }, 0)
 
   return (
-    <div className="relative w-full max-w-full pb-14">
-      <div className="w-full max-w-full overflow-x-auto touch-pan-x touch-pan-y scrollbar-thin [webkit-overflow-scrolling:touch] [overscroll-behavior-x:contain]">
-      <div style={{ minWidth }}>
-        <Table className="bg-foreground/10">
+    <>
+      {stickyHeader && portalReady ? createPortal(
+        <div
+          ref={stickyHeaderHostRef}
+          aria-hidden="true"
+          className="pointer-events-none fixed z-20 overflow-hidden bg-background shadow-sm"
+          style={{ top: 0, left: 0, display: "none" }}
+        />,
+        document.body,
+      ) : null}
+    <div ref={tableRootRef} className="relative w-full max-w-full pb-14">
+      <div className="w-full max-w-full touch-pan-x touch-pan-y scrollbar-thin [webkit-overflow-scrolling:touch] [overscroll-behavior-x:contain]">
+        <Table className={`bg-foreground/10 ${fixedLayout ? "table-fixed" : ""}`} containerClassName={stickyHeader ? "sticky-table-scroll max-h-[65vh] overflow-auto overscroll-contain" : undefined} style={{ minWidth }}>
         <TableHeader>
           <TableRow className="border-b border-background border-2">
             {columns.map((column) => (
               <TableHead
                 key={column.key}
-                className={`${column.key === "productName" ? "w-[300px] min-w-[260px]" : ""} ${column.type === "boolean" ? "w-[100px] max-w-[100px] min-w-[100px]" : ""} ${column.className ?? ""}`}
+                className={`${column.key === "productName" ? (fixedLayout ? "w-96 max-w-sm min-w-0" : "w-[300px] min-w-[260px] max-w-sm") : ""} ${column.type === "boolean" ? "w-[50px] max-w-[50px] min-w-[50px] px-1 break-words" : ""} ${column.className ?? ""}`}
               >
                 <div className="flex items-center justify-center text-center">{column.label}</div>
               </TableHead>
@@ -236,10 +305,10 @@ export function Tables({
                 return (
                   <TableCell
                     key={column.key}
-                    className={`align-top py-2 justify-center items-center text-center ${column.key === "productName" ? "w-[300px] min-w-[260px]" : ""} ${column.type === "boolean" ? "w-[100px] max-w-[100px] min-w-[100px]" : ""} ${column.type === "number" ? "max-w-[120px]" : ""} ${column.className ?? ""}`}
+                    className={`align-top py-2 justify-center items-center text-center ${column.key === "productName" ? (fixedLayout ? "w-96 max-w-sm min-w-0" : "w-[300px] min-w-[260px] max-w-sm") : ""} ${column.type === "boolean" ? "w-[50px] max-w-[50px] min-w-[50px] px-1" : ""} ${column.type === "number" ? "max-w-[120px]" : ""} ${column.className ?? ""}`}
                   >
                     {column.type === "boolean" ? (
-                      <div className="flex w-[100px] max-w-[100px] items-center justify-center gap-2 whitespace-nowrap">
+                      <div className="flex w-full max-w-[42px] items-center justify-center gap-0.5 whitespace-nowrap">
                         <Checkbox
                           checked={Boolean(value)}
                           disabled={readOnly}
@@ -256,10 +325,12 @@ export function Tables({
                           <Button
                             type="button"
                             variant="outline"
-                            className="h-7 px-2 text-xs"
+                            className="h-5 w-5 p-0 text-xs"
+                            aria-label={`Edit ${column.label.toLowerCase()} quantities`}
+                            title={`Edit ${column.label.toLowerCase()} quantities`}
                             onClick={() => setQuantityDialog({ rowIndex, column })}
                           >
-                            🖊️edit
+                            🖊️
                           </Button>
                         ) : null}
                       </div>
@@ -276,7 +347,7 @@ export function Tables({
                         {rowIndex + 1}
                       </div>
                     ) : (
-                      <div className="relative mx-auto space-y-1">
+                      <div className={`relative mx-auto space-y-1 ${fixedLayout && column.key === "productName" ? "w-full max-w-sm" : ""}`}>
                         {column.previousValueKey && row[column.previousValueKey] !== undefined && row[column.previousValueKey] !== "" && ((!column.autoValueKey || Number(row[column.previousValueKey]) !== Number(row[column.autoValueKey])) || Boolean(column.previousValueToggleKey)) ? (
                           <label className="flex items-center gap-1.5 text-xs font-semibold text-amber-600 dark:text-amber-400 cursor-pointer select-none py-0.5">
                             <Checkbox
@@ -303,13 +374,13 @@ export function Tables({
                           value={displayValue}
                           placeholder={column.label}
                           onFocus={() => {
-                            if (column.type === "text" && displayValue.length >= 4) {
+                            if (column.type === "text" && displayValue.length >= 3) {
                               setActiveSuggestion({ rowIndex, columnKey: column.key })
                             }
                           }}
                           onChange={(event) => {
                             handleCellChange(rowIndex, column, event.target.value)
-                            if (column.type === "text" && event.target.value.length >= 4) {
+                            if (column.type === "text" && event.target.value.length >= 3) {
                               setActiveSuggestion({ rowIndex, columnKey: column.key })
                             } else {
                               setActiveSuggestion(null)
@@ -389,7 +460,6 @@ export function Tables({
         </TableBody>
       </Table>
       </div>
-      </div>
       {!readOnly && <div className="absolute bottom-2 right-2 z-20 flex items-center justify-end gap-2">
         {extraActions}
         <Button type="button" variant="secondary" onClick={addRow}>Add row</Button>
@@ -451,6 +521,7 @@ export function Tables({
         </DialogContent>
       </Dialog>
     </div>
+    </>
   )
 }
 
