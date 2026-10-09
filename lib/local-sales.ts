@@ -28,6 +28,8 @@ export type LocalProductCatalog = {
     wholesaleCartonSalesPrice?: number
     wholesalePackSalesPrice?: number
     wholesalePcsSalesPrice?: number
+    packsPerCarton?: number
+    pcsCount?: number
   }>
   updatedAt: string
 }

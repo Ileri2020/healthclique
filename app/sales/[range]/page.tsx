@@ -8,6 +8,8 @@ import Link from "next/link"
 import { Printer, Trash2 } from "lucide-react"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
 import { formatReceiptMoney, openSalesReceiptPrintWindow, type SalesReceipt } from "@/lib/sales-receipts"
+import { isLocalDevelopment } from "@/lib/local-sales"
+import { readLocalSalesHistory, type LocalSalesHistoryItem } from "@/lib/local-sales-history"
 
 type SaleHistoryRow = {
   productName: string
@@ -37,6 +39,8 @@ type SaleHistory = {
   cashPaid?: number | null
   posPayment?: number | null
   change?: number | null
+  isLocal?: boolean
+  localSaleId?: string
 }
 
 export default function SalesHistoryPage({ params }: { params: Promise<{ range: string }> }) {
@@ -47,16 +51,36 @@ export default function SalesHistoryPage({ params }: { params: Promise<{ range: 
   const [from, to] = token === "all" ? ["", ""] : token.includes("_to_") ? token.split("_to_") : [token, token]
 
   useEffect(() => {
-    fetch(`/api/inventory/sales?${from ? `from=${from}&to=${to}` : ""}`)
-      .then((response) => response.json())
-      .then((data) => setSales(Array.isArray(data) ? data : []))
-      .finally(() => setLoading(false))
+    let active = true
+    const loadSales = () => {
+      setLoading(true)
+      fetch(`/api/inventory/sales?${from ? `from=${from}&to=${to}` : ""}`)
+        .then((response) => response.json())
+        .then((data) => {
+          if (!active) return
+          const databaseSales = Array.isArray(data) ? data : []
+          const localSales: LocalSalesHistoryItem[] = isLocalDevelopment() ? readLocalSalesHistory(from || undefined, to || undefined) : []
+          setSales([...databaseSales, ...localSales])
+        })
+        .catch(() => { if (active) setSales(isLocalDevelopment() ? readLocalSalesHistory(from || undefined, to || undefined) : []) })
+        .finally(() => { if (active) setLoading(false) })
+    }
+    loadSales()
+    window.addEventListener("healthclique:local-data-changed", loadSales)
+    window.addEventListener("storage", loadSales)
+    return () => {
+      active = false
+      window.removeEventListener("healthclique:local-data-changed", loadSales)
+      window.removeEventListener("storage", loadSales)
+    }
   }, [from, to])
 
   const totalSales = useMemo(() =>
     sales.reduce((sum, sale) => sum + Number(sale.total || 0), 0),
     [sales],
   )
+  const totalCash = useMemo(() => sales.reduce((sum, sale) => sum + Number(sale.cashPaid || 0), 0), [sales])
+  const totalPos = useMemo(() => sales.reduce((sum, sale) => sum + Number(sale.posPayment || 0), 0), [sales])
 
   const selectedRangeDays = from && to
     ? differenceInCalendarDays(parseISO(to), parseISO(from)) + 1
@@ -141,9 +165,9 @@ export default function SalesHistoryPage({ params }: { params: Promise<{ range: 
           <TableHeader><TableRow><TableHead className="w-[120px] max-w-[120px]">Date</TableHead><TableHead className="min-w-[180px]">Customer name</TableHead><TableHead className="min-w-[240px]">Products</TableHead><TableHead>Total</TableHead><TableHead>Payment</TableHead><TableHead>Cash</TableHead><TableHead>POS</TableHead><TableHead>Change</TableHead><TableHead>Receipt</TableHead><TableHead>Delete</TableHead></TableRow></TableHeader>
           <TableBody>
             {loading ? <TableRow><TableCell colSpan={10}>Loading sales...</TableCell></TableRow> : sales.length === 0 ? <TableRow><TableCell colSpan={10}>No sales found.</TableCell></TableRow> : sales.map((sale, index) => (
-              <TableRow key={`${sale.id}-${index}`} role="link" tabIndex={0} className="cursor-pointer hover:bg-muted/50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring" onClick={() => router.push(`/sales?edit=${encodeURIComponent(sale.id)}`)} onKeyDown={(event) => { if (event.target === event.currentTarget && (event.key === "Enter" || event.key === " ")) { event.preventDefault(); router.push(`/sales?edit=${encodeURIComponent(sale.id)}`) } }}>
+              <TableRow key={`${sale.id}-${index}`} role={sale.isLocal ? undefined : "link"} tabIndex={sale.isLocal ? undefined : 0} className={sale.isLocal ? "bg-amber-500/[0.03]" : "cursor-pointer hover:bg-muted/50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"} onClick={() => { if (!sale.isLocal) router.push(`/sales?edit=${encodeURIComponent(sale.id)}`) }} onKeyDown={(event) => { if (!sale.isLocal && event.target === event.currentTarget && (event.key === "Enter" || event.key === " ")) { event.preventDefault(); router.push(`/sales?edit=${encodeURIComponent(sale.id)}`) } }}>
                 <TableCell className="w-[120px] max-w-[120px] truncate">{sale.date ? format(new Date(sale.date), "MMM d, yyyy") : sale.rangeFrom && sale.rangeTo ? `${format(new Date(sale.rangeFrom), "MMM d, yyyy")} - ${format(new Date(sale.rangeTo), "MMM d, yyyy")}` : "-"}</TableCell>
-                <TableCell>{sale.customerName || "-"}</TableCell>
+                <TableCell>{sale.customerName || "-"}{sale.isLocal ? <span className="ml-2 rounded bg-amber-500/10 px-1.5 py-0.5 text-xs text-amber-700">Local · pending sync</span> : null}</TableCell>
                 <TableCell>{sale.products.join(", ") || "-"}</TableCell>
                 <TableCell>₦{Number(sale.total || 0).toLocaleString()}</TableCell>
                 <TableCell>{sale.paymentMethod || "-"}</TableCell>
@@ -152,9 +176,11 @@ export default function SalesHistoryPage({ params }: { params: Promise<{ range: 
                 <TableCell>₦{Number(sale.change || 0).toLocaleString()}</TableCell>
                 <TableCell><Button type="button" size="sm" variant="outline" onClick={(event) => { event.stopPropagation(); printSale(sale) }}><Printer className="mr-2 h-4 w-4" />Print</Button></TableCell>
                 <TableCell>
+                  {!sale.isLocal ? <>
                   <button type="button" title="Delete sale" className="rounded p-2 text-destructive hover:bg-destructive/10" onClick={(event) => { event.stopPropagation(); deleteSale(sale.id) }}>
                     <Trash2 className="h-4 w-4" />
                   </button>
+                  </> : <span className="text-xs text-muted-foreground">Sync first</span>}
                 </TableCell>
               </TableRow>
             ))}
@@ -175,9 +201,10 @@ export default function SalesHistoryPage({ params }: { params: Promise<{ range: 
       </div>
       {!loading && sales.length > 0 && (
         <div className="flex justify-end">
-          <div className="rounded-lg border bg-muted/30 px-4 py-3 text-right">
-            <p className="text-sm text-muted-foreground">Total sales for this range</p>
-            <p className="text-xl font-semibold">{formatReceiptMoney(totalSales)}</p>
+          <div className="grid grid-cols-3 gap-6 rounded-lg border bg-muted/30 px-4 py-3 text-right">
+            <div><p className="text-sm text-muted-foreground">Total sales</p><p className="text-xl font-semibold">{formatReceiptMoney(totalSales)}</p></div>
+            <div><p className="text-sm text-muted-foreground">Total cash</p><p className="text-xl font-semibold">{formatReceiptMoney(totalCash)}</p></div>
+            <div><p className="text-sm text-muted-foreground">Total POS</p><p className="text-xl font-semibold">{formatReceiptMoney(totalPos)}</p></div>
           </div>
         </div>
       )}

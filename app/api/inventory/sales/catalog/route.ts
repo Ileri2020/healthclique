@@ -15,6 +15,8 @@ export async function GET() {
           wholesaleCartonSalesPrice: true,
           wholesalePackSalesPrice: true,
           wholesalePcsSalesPrice: true,
+          packsPerCarton: true,
+          pcsCount: true,
         },
       }),
       prisma.inventorySale.findMany({ select: { productName: true } }),
@@ -34,6 +36,8 @@ export async function GET() {
       wholesaleCartonSalesPrice?: number
       wholesalePackSalesPrice?: number
       wholesalePcsSalesPrice?: number
+      packsPerCarton?: number
+      pcsCount?: number
     }> = {}
 
     for (const stock of inventoryStocks) {
@@ -47,6 +51,8 @@ export async function GET() {
         wholesaleCartonSalesPrice: stock.wholesaleCartonSalesPrice ?? undefined,
         wholesalePackSalesPrice: stock.wholesalePackSalesPrice ?? undefined,
         wholesalePcsSalesPrice: stock.wholesalePcsSalesPrice ?? undefined,
+        packsPerCarton: stock.packsPerCarton ?? undefined,
+        pcsCount: stock.pcsCount ?? undefined,
       }
     }
 

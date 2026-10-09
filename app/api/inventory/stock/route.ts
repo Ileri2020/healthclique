@@ -79,12 +79,15 @@ export async function GET(req: Request) {
         wholesalePackSalesPrice?: number
         wholesalePcsSalesPrice?: number
         totalPcs?: number
+        packsPerCarton?: number
+        pcsCount?: number
       }
     >()
 
     inventoryStocks.forEach((stock: any) => {
-      if (stock?.productName && !latestByProduct.has(stock.productName)) {
-        latestByProduct.set(stock.productName, {
+      const productKey = typeof stock?.productName === "string" ? stock.productName.trim().toLowerCase() : ""
+      if (productKey && !latestByProduct.has(productKey)) {
+        latestByProduct.set(productKey, {
           productName: stock.productName,
           costPrice: stock.costPrice ?? undefined,
           cartonCostPrice: stock.cartonCostPrice ?? undefined,
@@ -97,6 +100,8 @@ export async function GET(req: Request) {
           wholesalePackSalesPrice: stock.wholesalePackSalesPrice ?? undefined,
           wholesalePcsSalesPrice: stock.wholesalePcsSalesPrice ?? undefined,
           totalPcs: stock.totalPcs ?? undefined,
+          packsPerCarton: stock.packsPerCarton ?? undefined,
+          pcsCount: stock.pcsCount ?? undefined,
         })
       }
     })

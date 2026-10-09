@@ -7,6 +7,8 @@ import Link from "next/link"
 import { Button } from "@/components/ui/button"
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
+import { isLocalDevelopment } from "@/lib/local-sales"
+import { readLocalSalesHistory, type LocalSalesHistoryItem } from "@/lib/local-sales-history"
 
 type DailySaleRow = {
   sn?: number | null
@@ -18,8 +20,11 @@ type DailySaleRow = {
 
 type DailySale = {
   id: string
+  isLocal?: boolean
   customerName?: string | null
   total?: number | null
+  cashPaid?: number | null
+  posPayment?: number | null
   rows?: DailySaleRow[]
 }
 
@@ -27,6 +32,7 @@ type DailyProductSale = DailySaleRow & {
   saleId: string
   customer: string
   rowIndex: number
+  isLocal?: boolean
 }
 
 export default function DailySalesPage() {
@@ -57,22 +63,49 @@ export default function DailySalesPage() {
   }, [])
 
   useEffect(() => {
-    setLoading(true)
     const query = filterMode === "range" && fromDate && toDate
       ? `from=${fromDate}&to=${toDate}`
       : `date=${date}`
-    fetch(`/api/inventory/sales?${query}`)
-      .then((response) => response.json())
-      .then((data) => setSales(Array.isArray(data) ? data : []))
-      .finally(() => setLoading(false))
+    let active = true
+    const loadSales = () => {
+      setLoading(true)
+      fetch(`/api/inventory/sales?${query}`)
+        .then((response) => response.json())
+        .then((data) => {
+          if (!active) return
+          const databaseSales = Array.isArray(data) ? data : []
+          const localSales: LocalSalesHistoryItem[] = isLocalDevelopment()
+            ? readLocalSalesHistory(filterMode === "range" ? fromDate : date, filterMode === "range" ? toDate : date)
+            : []
+          setSales([...databaseSales, ...localSales])
+        })
+        .catch(() => {
+          if (!active) return
+          setSales(isLocalDevelopment()
+            ? readLocalSalesHistory(filterMode === "range" ? fromDate : date, filterMode === "range" ? toDate : date)
+            : [])
+        })
+        .finally(() => { if (active) setLoading(false) })
+    }
+    loadSales()
+    window.addEventListener("healthclique:local-data-changed", loadSales)
+    window.addEventListener("storage", loadSales)
+    return () => {
+      active = false
+      window.removeEventListener("healthclique:local-data-changed", loadSales)
+      window.removeEventListener("storage", loadSales)
+    }
   }, [date, filterMode, fromDate, toDate])
 
   const totalSales = useMemo(() => sales.reduce((sum, sale) => sum + Number(sale.total || 0), 0), [sales])
+  const totalCash = useMemo(() => sales.reduce((sum, sale) => sum + Number(sale.cashPaid || 0), 0), [sales])
+  const totalPos = useMemo(() => sales.reduce((sum, sale) => sum + Number(sale.posPayment || 0), 0), [sales])
   const productSales = useMemo<DailyProductSale[]>(() => sales.flatMap((sale) => (sale.rows ?? []).map((row, rowIndex) => ({
     ...row,
     saleId: sale.id,
     customer: row.customerName || sale.customerName || "",
     rowIndex,
+    isLocal: sale.isLocal,
   }))), [sales])
   const changeDate = (days: number) => {
     const start = new Date(`${filterMode === "range" ? fromDate : date}T00:00:00`)
@@ -132,19 +165,19 @@ export default function DailySalesPage() {
             {loading ? <TableRow><TableCell colSpan={5} className="text-center">Loading daily product sales...</TableCell></TableRow> : productSales.length === 0 ? <TableRow><TableCell colSpan={5} className="text-center">No product sales recorded for this date.</TableCell></TableRow> : productSales.map((row, index) => (
               <TableRow
                 key={`${row.saleId}-${row.rowIndex}`}
-                role="link"
-                tabIndex={0}
-                className="cursor-pointer hover:bg-muted/50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-                onClick={() => router.push(`/sales?edit=${encodeURIComponent(row.saleId)}&product=${encodeURIComponent(row.productName || "")}`)}
+                role={row.isLocal ? undefined : "link"}
+                tabIndex={row.isLocal ? undefined : 0}
+                className={row.isLocal ? "bg-amber-500/[0.03]" : "cursor-pointer hover:bg-muted/50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"}
+                onClick={() => { if (!row.isLocal) router.push(`/sales?edit=${encodeURIComponent(row.saleId)}&product=${encodeURIComponent(row.productName || "")}`) }}
                 onKeyDown={(event) => {
-                  if (event.key === "Enter" || event.key === " ") {
+                  if (!row.isLocal && (event.key === "Enter" || event.key === " ")) {
                     event.preventDefault()
                     router.push(`/sales?edit=${encodeURIComponent(row.saleId)}&product=${encodeURIComponent(row.productName || "")}`)
                   }
                 }}
               >
                 <TableCell>{index + 1}</TableCell>
-                <TableCell>{row.customer || "-"}</TableCell>
+                <TableCell>{row.customer || "-"}{row.isLocal ? <span className="ml-2 rounded bg-amber-500/10 px-1.5 py-0.5 text-xs text-amber-700">Local · pending sync</span> : null}</TableCell>
                 <TableCell>{row.productName || "-"}</TableCell>
                 <TableCell>{Number(row.qty || 0).toLocaleString()}</TableCell>
                 <TableCell>₦{Number(row.amount || 0).toLocaleString()}</TableCell>
@@ -154,7 +187,7 @@ export default function DailySalesPage() {
         </Table>
       </div>
 
-      {!loading ? <div className="flex justify-end"><div className="rounded-lg border bg-muted/30 px-4 py-3 text-right"><p className="text-sm text-muted-foreground">{filterMode === "range" ? "Total sales for the range" : "Total sales for the day"}</p><p className="text-xl font-semibold">₦{totalSales.toLocaleString()}</p></div></div> : null}
+      {!loading ? <div className="flex justify-end"><div className="grid grid-cols-3 gap-6 rounded-lg border bg-muted/30 px-4 py-3 text-right"><div><p className="text-sm text-muted-foreground">{filterMode === "range" ? "Total sales" : "Daily sales"}</p><p className="text-xl font-semibold">₦{totalSales.toLocaleString()}</p></div><div><p className="text-sm text-muted-foreground">Total cash</p><p className="text-xl font-semibold">₦{totalCash.toLocaleString()}</p></div><div><p className="text-sm text-muted-foreground">Total POS</p><p className="text-xl font-semibold">₦{totalPos.toLocaleString()}</p></div></div></div> : null}
     </main>
   )
 }

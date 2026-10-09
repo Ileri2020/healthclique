@@ -7,6 +7,7 @@ export type LocalCountLine = {
   expiry?: string
   packsPerCarton?: number
   piecesPerPack?: number
+  countOrder?: number
 }
 
 export type LocalCountPayload = {
@@ -29,6 +30,7 @@ export type LocalCountCatalog = {
   shelfFilter: string
   products: Array<Record<string, unknown>>
   shelves: Array<Record<string, unknown>>
+  maxCountOrder?: number
   updatedAt: string
 }
 
@@ -94,4 +96,31 @@ export const saveLocalCountCatalog = (catalog: Omit<LocalCountCatalog, "updatedA
   const next = existing.filter((entry) => entry.date !== catalog.date || entry.shelfFilter !== catalog.shelfFilter)
   next.push({ ...catalog, updatedAt: new Date().toISOString() })
   window.localStorage.setItem(COUNT_CATALOG_STORAGE_KEY, JSON.stringify(next.slice(-20)))
+}
+
+export const readLocalCountForDate = (date: string): LocalStockCount | null =>
+  readLocalCounts().find((count) => count.payload.date === date) ?? null
+
+export const saveLocalDailyCount = (count: LocalStockCount) => {
+  const previousCounts = readLocalCounts()
+  const sameDay = previousCounts.filter((existing) => existing.payload.date === count.payload.date)
+  const mergedLines = new Map<string, LocalCountLine>()
+
+  sameDay.forEach((existing) => existing.payload.lines.forEach((line) => {
+    mergedLines.set(line.productName.replace(/\s+/g, " ").trim().toLowerCase(), line)
+  }))
+  count.payload.lines.forEach((line) => {
+    const key = line.productName.replace(/\s+/g, " ").trim().toLowerCase()
+    const previous = mergedLines.get(key)
+    mergedLines.set(key, { ...previous, ...line, countOrder: previous?.countOrder ?? line.countOrder })
+  })
+
+  const retained = previousCounts.filter((existing) => existing.payload.date !== count.payload.date)
+  const mergedCount: LocalStockCount = {
+    ...count,
+    payload: { ...count.payload, lines: [...mergedLines.values()] },
+  }
+  window.localStorage.setItem(COUNTS_STORAGE_KEY, JSON.stringify([...retained, mergedCount]))
+  notifyLocalDataChanged()
+  return mergedCount
 }

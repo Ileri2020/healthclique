@@ -27,7 +27,7 @@ import {
 import { Check, Calendar as CalendarIcon, Loader2, Plus, Search, Layers, X, GitMerge } from "lucide-react"
 import { toast } from "sonner"
 import { isLocalDevelopment, readLocalStaffName } from "@/lib/local-sales"
-import { readLocalCountCatalog, saveLocalCount, saveLocalCountCatalog } from "@/lib/local-counts"
+import { readLocalCountCatalog, readLocalCountForDate, readLocalCounts, saveLocalDailyCount, saveLocalCountCatalog } from "@/lib/local-counts"
 
 const ADD_TO_SHELF_OPTION = "__add_to_shelf__"
 const ALL_PRODUCTS_OPTION = "__all_products__"
@@ -45,6 +45,9 @@ type ProductCountItem = {
   pcsSalesPrice?: number
   packSalesPrice?: number
   cartonSalesPrice?: number
+  countOrder?: number | null
+  savedCountedPcs?: number | null
+  savedExpiry?: string | null
   // Local state fields
   countedPcs?: string | number
   expiryInput?: string
@@ -99,12 +102,14 @@ export default function StockCountPage() {
   const [saving, setSaving] = useState(false)
   const [saveState, setSaveState] = useState<"idle" | "saving" | "saved" | "error">("idle")
   const [localDev, setLocalDev] = useState(false)
+  const [dailyCountSaved, setDailyCountSaved] = useState(false)
+  const [editingSavedCount, setEditingSavedCount] = useState(false)
 
   // Header controls state
   const [searchTerm, setSearchTerm] = useState("")
   const [searchDropdownOpen, setSearchDropdownOpen] = useState(false)
   const [selectedShelfFilter, setSelectedShelfFilter] = useState<string>(ALL_PRODUCTS_OPTION)
-  const [sortBy, setSortBy] = useState<"name" | "shelf" | "price" | "expected" | "status" | "expiry">("name")
+  const [sortBy, setSortBy] = useState<"countOrder" | "name" | "shelf" | "price" | "expected" | "status" | "expiry">("countOrder")
   const [countDate, setCountDate] = useState<Date>(new Date())
   const [assignShelfOpen, setAssignShelfOpen] = useState(false)
   const [assignProductName, setAssignProductName] = useState<string | null>(null)
@@ -134,6 +139,7 @@ export default function StockCountPage() {
   const [currentPage, setCurrentPage] = useState(1)
   const productsPerPage = 75
   const tableTopRef = useRef<HTMLDivElement>(null)
+  const nextCountOrderRef = useRef(0)
 
   useEffect(() => setLocalDev(isLocalDevelopment()), [])
 
@@ -141,6 +147,8 @@ export default function StockCountPage() {
 
   const loadCountData = async () => {
     setLoading(true)
+    setDailyCountSaved(false)
+    setEditingSavedCount(Boolean(editId))
     try {
       let loadedShelves: ShelfItem[] = []
       const shelvesResponse = await fetch("/api/inventory/shelves")
@@ -154,10 +162,16 @@ export default function StockCountPage() {
         const response = await fetch(`/api/inventory/count?date=${format(countDate, "yyyy-MM-dd")}`)
         if (!response.ok) throw new Error("Unable to load count data")
         const data = await response.json()
-        let nextProducts = (data.products || []).map((p: any) => ({
+        const localCount = readLocalCountForDate(format(countDate, "yyyy-MM-dd"))
+        const savedLines = new Map<string, any>()
+        data.savedCount?.lines?.forEach((line: any) => savedLines.set(line.productName.trim().toLowerCase(), line))
+        localCount?.payload.lines.forEach((line) => savedLines.set(line.productName.trim().toLowerCase(), line))
+        const localOrders = getLocalCountOrders(format(countDate, "yyyy-MM-dd"))
+        let nextProducts = (data.products || []).map((p: ProductCountItem) => ({
           ...p,
-          countedPcs: "",
-          expiryInput: p.shortestExpiry ? p.shortestExpiry.split("T")[0] : "",
+          countOrder: savedLines.get(p.productName.trim().toLowerCase())?.countOrder ?? p.countOrder ?? localOrders.get(p.productName.trim().toLowerCase()) ?? null,
+          countedPcs: savedLines.get(p.productName.trim().toLowerCase())?.countedPcs ?? p.savedCountedPcs ?? "",
+          expiryInput: (savedLines.get(p.productName.trim().toLowerCase())?.expiry || p.savedExpiry || p.shortestExpiry)?.split("T")[0] ?? "",
         }))
         if (editId) {
           const savedResponse = await fetch(`/api/inventory/count?id=${editId}`)
@@ -171,6 +185,7 @@ export default function StockCountPage() {
               .filter((line: any) => !savedShelfName || !line.shelfName || line.shelfName === savedShelfName)
               .map((line: any) => ({
                 productName: line.productName,
+                countOrder: line.countOrder ?? null,
                 availablePieces: line.expectedPcs,
                 shortestExpiry: line.expiry,
                 shelfId: null,
@@ -186,11 +201,14 @@ export default function StockCountPage() {
         }
         const nextShelves = Array.isArray(data.shelves) ? data.shelves : loadedShelves
         setProducts(nextProducts)
+        setDailyCountSaved(Boolean(data.savedCount || localCount))
+        nextCountOrderRef.current = Math.max(Number(data.maxCountOrder) || 0, ...nextProducts.map((product: ProductCountItem) => Number(product.countOrder) || 0), ...[...localOrders.values()])
         saveLocalCountCatalog({
           date: format(countDate, "yyyy-MM-dd"),
           shelfFilter: selectedShelfFilter,
           products: nextProducts,
           shelves: nextShelves,
+          maxCountOrder: Number(data.maxCountOrder) || 0,
         })
         setLoading(false)
         return
@@ -202,10 +220,16 @@ export default function StockCountPage() {
       const response = await fetch(`/api/inventory/count?${query.toString()}`)
       if (!response.ok) throw new Error("Unable to load count data")
       const data = await response.json()
-      let nextProducts = (data.products || []).map((p: any) => ({
+      const localCount = readLocalCountForDate(format(countDate, "yyyy-MM-dd"))
+      const savedLines = new Map<string, any>()
+      data.savedCount?.lines?.forEach((line: any) => savedLines.set(line.productName.trim().toLowerCase(), line))
+      localCount?.payload.lines.forEach((line) => savedLines.set(line.productName.trim().toLowerCase(), line))
+        const localOrders = getLocalCountOrders(format(countDate, "yyyy-MM-dd"))
+        let nextProducts = (data.products || []).map((p: ProductCountItem) => ({
           ...p,
-          countedPcs: "",
-          expiryInput: p.shortestExpiry ? p.shortestExpiry.split("T")[0] : "",
+          countOrder: savedLines.get(p.productName.trim().toLowerCase())?.countOrder ?? p.countOrder ?? localOrders.get(p.productName.trim().toLowerCase()) ?? null,
+          countedPcs: savedLines.get(p.productName.trim().toLowerCase())?.countedPcs ?? p.savedCountedPcs ?? "",
+          expiryInput: (savedLines.get(p.productName.trim().toLowerCase())?.expiry || p.savedExpiry || p.shortestExpiry)?.split("T")[0] ?? "",
         }))
       if (editId) {
         const savedResponse = await fetch(`/api/inventory/count?id=${editId}`)
@@ -219,6 +243,7 @@ export default function StockCountPage() {
             .filter((line: any) => !savedShelfName || !line.shelfName || line.shelfName === savedShelfName)
             .map((line: any) => ({
               productName: line.productName,
+              countOrder: line.countOrder ?? null,
               availablePieces: line.expectedPcs,
               shortestExpiry: line.expiry,
               shelfId: null,
@@ -233,6 +258,8 @@ export default function StockCountPage() {
         }
       }
       setProducts(nextProducts)
+      setDailyCountSaved(Boolean(data.savedCount || localCount))
+      nextCountOrderRef.current = Math.max(Number(data.maxCountOrder) || 0, ...nextProducts.map((product: ProductCountItem) => Number(product.countOrder) || 0), ...[...localOrders.values()])
       const nextShelves = Array.isArray(data.shelves) ? data.shelves : loadedShelves
       setShelves(nextShelves)
       saveLocalCountCatalog({
@@ -240,17 +267,23 @@ export default function StockCountPage() {
         shelfFilter: selectedShelfFilter,
         products: nextProducts,
         shelves: nextShelves,
+        maxCountOrder: Number(data.maxCountOrder) || 0,
       })
     } catch {
       const countDateKey = format(countDate, "yyyy-MM-dd")
       const cached = readLocalCountCatalog(countDateKey, selectedShelfFilter)
         ?? readLocalCountCatalog(countDateKey, ALL_PRODUCTS_OPTION)
       if (cached) {
+        const localCount = readLocalCountForDate(countDateKey)
+        const savedLines = new Map(localCount?.payload.lines.map((line) => [line.productName.trim().toLowerCase(), line]) ?? [])
         setProducts(cached.products.map((product) => ({
           ...(product as ProductCountItem),
-          countedPcs: "",
-          expiryInput: (product as ProductCountItem).shortestExpiry ? (product as ProductCountItem).shortestExpiry!.split("T")[0] : "",
+          countOrder: savedLines.get((product as ProductCountItem).productName.trim().toLowerCase())?.countOrder ?? (product as ProductCountItem).countOrder ?? null,
+          countedPcs: savedLines.get((product as ProductCountItem).productName.trim().toLowerCase())?.countedPcs ?? (product as ProductCountItem).countedPcs ?? "",
+          expiryInput: savedLines.get((product as ProductCountItem).productName.trim().toLowerCase())?.expiry?.slice(0, 10) || (product as ProductCountItem).expiryInput || ((product as ProductCountItem).shortestExpiry ? (product as ProductCountItem).shortestExpiry!.split("T")[0] : ""),
         })))
+        setDailyCountSaved(Boolean(localCount || cached.products.some((product) => (product as ProductCountItem).countedPcs !== "" && (product as ProductCountItem).countedPcs != null)))
+        nextCountOrderRef.current = Math.max(Number(cached.maxCountOrder) || 0, ...cached.products.map((product) => Number((product as ProductCountItem).countOrder) || 0), ...[...(localCount?.payload.lines.map((line) => line.countOrder ?? 0) ?? [])])
         setShelves(cached.shelves as ShelfItem[])
         toast.info(`Using locally cached stock data from ${new Date(cached.updatedAt).toLocaleString()}`)
       } else {
@@ -296,6 +329,7 @@ export default function StockCountPage() {
   }
 
   const handleExpiryChange = async (productName: string, dateStr: string) => {
+    setSaveState("idle")
     setProducts((prev) =>
       prev.map((p) => (p.productName === productName ? { ...p, expiryInput: dateStr } : p))
     )
@@ -314,9 +348,26 @@ export default function StockCountPage() {
 
   const handleCountChange = (productName: string, val: string) => {
     setSaveState("idle")
-    setProducts((prev) =>
-      prev.map((p) => (p.productName === productName ? { ...p, countedPcs: val } : p))
-    )
+    const currentProduct = products.find((product) => product.productName === productName)
+    const localOrder = getLocalCountOrders(format(countDate, "yyyy-MM-dd")).get(productName.trim().toLowerCase())
+    const countOrder = currentProduct?.countOrder ?? localOrder ?? (val !== "" ? ++nextCountOrderRef.current : null)
+    setProducts((prev) => prev.map((product) => {
+      if (product.productName !== productName) return product
+      return { ...product, countOrder, countedPcs: val }
+    }))
+  }
+
+  const getLocalCountOrders = (dateText: string) => {
+    const orders = new Map<string, number>()
+    readLocalCounts().filter((count) => count.payload.date === dateText).forEach((count) => {
+      count.payload.lines.forEach((line) => {
+        if (line.countOrder != null) {
+          const key = line.productName.trim().toLowerCase()
+          if (!orders.has(key) || (orders.get(key) ?? Number.MAX_SAFE_INTEGER) > line.countOrder) orders.set(key, line.countOrder)
+        }
+      })
+    })
+    return orders
   }
 
   const handleShelfAssign = (productName: string, shelfId: string) => {
@@ -397,7 +448,7 @@ export default function StockCountPage() {
     }
   }
 
-  const handleSaveStockCount = async () => {
+  const handleSaveStockCount = async (saveMode: "online" | "offline" = "online") => {
     setSaving(true)
     setSaveState("saving")
     try {
@@ -415,6 +466,7 @@ export default function StockCountPage() {
           shelfId: p.shelfId || undefined,
           expectedPcs: p.availablePieces,
           countedPcs: countedPcs != null && Number.isFinite(countedPcs) ? countedPcs : null,
+          countOrder: p.countOrder,
           expiry: p.expiryInput ? new Date(p.expiryInput).toISOString() : undefined,
           packsPerCarton: p.packsPerCarton || undefined,
           piecesPerPack: p.piecesPerPack || undefined,
@@ -429,13 +481,13 @@ export default function StockCountPage() {
       const shelfName = selectedShelfFilter !== ADD_TO_SHELF_OPTION && selectedShelfFilter !== ALL_PRODUCTS_OPTION ? selectedShelfFilter : undefined
       const shelfId = shelfName ? shelves.find((shelf) => shelf.name === shelfName)?.id : undefined
       const payload = { date: format(countDate, "yyyy-MM-dd"), shelfName, shelfId, lines }
-      const saveOffline = localDev && !editId
+      const saveOffline = saveMode === "offline" && localDev
 
       if (saveOffline) {
         const localId = typeof crypto !== "undefined" && "randomUUID" in crypto
           ? crypto.randomUUID()
           : `${Date.now()}-${Math.random().toString(36).slice(2)}`
-        saveLocalCount({
+        saveLocalDailyCount({
           localId,
           savedAt: new Date().toISOString(),
           staffName: readLocalStaffName() || session?.user?.name || "Local Staff",
@@ -451,6 +503,8 @@ export default function StockCountPage() {
       }
 
       setSaveState("saved")
+      setDailyCountSaved(true)
+      setEditingSavedCount(false)
       toast.success(saveOffline ? "Stock count saved locally. Sync it when the database is available." : "Stock count session saved successfully")
       if (editId) router.push(`/count/${format(countDate, "yyyy-MM-dd")}`)
     } catch {
@@ -495,6 +549,12 @@ export default function StockCountPage() {
     list.sort((a, b) => {
       const aHasCount = a.countedPcs !== "" && a.countedPcs !== undefined && a.countedPcs !== null
       const bHasCount = b.countedPcs !== "" && b.countedPcs !== undefined && b.countedPcs !== null
+
+      if (sortBy === "countOrder") {
+        const aOrder = a.countOrder ?? Number.POSITIVE_INFINITY
+        const bOrder = b.countOrder ?? Number.POSITIVE_INFINITY
+        return aOrder - bOrder || a.productName.localeCompare(b.productName)
+      }
 
       if (!aHasCount && bHasCount) return -1
       if (aHasCount && !bHasCount) return 1
@@ -605,6 +665,7 @@ export default function StockCountPage() {
             value={sortBy}
             onChange={(e) => setSortBy(e.target.value as any)}
           >
+            <option className="bg-background text-foreground" value="countOrder">Count order (shelf order)</option>
             <option className="bg-background text-foreground" value="name">Product name</option>
             <option className="bg-background text-foreground" value="shelf">Shelf name</option>
             <option className="bg-background text-foreground" value="expected">Expected quantity</option>
@@ -625,14 +686,10 @@ export default function StockCountPage() {
               type="date"
               className="rounded border bg-transparent px-3 py-1.5 text-sm"
               value={format(countDate, "yyyy-MM-dd")}
-              onChange={(e) => setCountDate(new Date(`${e.target.value}T00:00:00`))}
+              onChange={(e) => { setSaveState("idle"); setCountDate(new Date(`${e.target.value}T00:00:00`)) }}
             />
             <span className="text-xs text-muted-foreground">({filteredProducts.length} products listed)</span>
           </div>
-          <Button onClick={handleSaveStockCount} disabled={saving || saveState === "saved"}>
-            {saving ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Check className="mr-2 h-4 w-4" />}
-            {saveState === "saved" ? "Saved" : editId ? "Update stock count" : localDev ? "Save count locally" : "Save stock count"}
-          </Button>
         </div>
 
         <div className="max-w-sm">
@@ -703,7 +760,7 @@ export default function StockCountPage() {
                 return (
                   <TableRow key={p.productName} className={hasCount ? "bg-muted/30" : "hover:bg-muted/40"}>
                     <TableCell className="justify-center items-center text-center">{(currentPage - 1) * productsPerPage + index + 1}</TableCell>
-                    <TableCell className="font-medium justify-center items-center text-center">{p.productName}</TableCell>
+                    <TableCell className="font-medium justify-center items-center text-center">{p.countOrder ? <span className="mr-2 inline-flex min-w-7 justify-center rounded bg-primary/10 px-1.5 py-0.5 text-xs font-bold text-primary">{p.countOrder}</span> : null}{p.productName}</TableCell>
                     {selectedShelfFilter !== ADD_TO_SHELF_OPTION ? <TableCell className="justify-center items-center text-center">
                       <Input
                         type="number"
@@ -711,6 +768,7 @@ export default function StockCountPage() {
                         placeholder="Count pcs"
                         className="h-8 text-xs font-semibold"
                         value={p.countedPcs ?? ""}
+                        disabled={dailyCountSaved && !editingSavedCount}
                         onChange={(e) => handleCountChange(p.productName, e.target.value)}
                       />
                     </TableCell> : null}
@@ -752,6 +810,7 @@ export default function StockCountPage() {
                         <select
                           className="w-full rounded border bg-transparent px-2 py-1 text-xs"
                           value={p.shelfId || ""}
+                          disabled={dailyCountSaved && !editingSavedCount}
                           onChange={(e) => handleShelfAssign(p.productName, e.target.value)}
                         >
                           <option value="">Select shelf</option>
@@ -768,6 +827,7 @@ export default function StockCountPage() {
                         type="date"
                         className="w-full rounded border bg-transparent px-2 py-1 text-xs"
                         value={p.expiryInput || ""}
+                        disabled={dailyCountSaved && !editingSavedCount}
                         onChange={(e) => handleExpiryChange(p.productName, e.target.value)}
                       />
                     </TableCell>
@@ -795,6 +855,23 @@ export default function StockCountPage() {
         </Table>
         </div>
       ) : null}
+
+      <div className="fixed bottom-5 right-5 z-40 flex gap-2">
+        {dailyCountSaved && !editingSavedCount ? (
+          <Button type="button" onClick={() => { setEditingSavedCount(true); setSaveState("idle") }} className="h-12 gap-2 rounded-full px-6 shadow-xl">
+            <Check className="h-4 w-4" />Edit count for this day
+          </Button>
+        ) : localDev ? <>
+          <Button type="button" variant="outline" onClick={() => void handleSaveStockCount("online")} disabled={saving || saveState === "saved"} className="h-12 rounded-full px-5 shadow-xl">
+            {saving ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}{editingSavedCount ? "Save edits online" : "Save online"}
+          </Button>
+          <Button type="button" onClick={() => void handleSaveStockCount("offline")} disabled={saving || saveState === "saved"} className="h-12 gap-2 rounded-full px-5 shadow-xl">
+            {saving ? <Loader2 className="h-4 w-4 animate-spin" /> : <Check className="h-4 w-4" />}{editingSavedCount ? "Save edits offline" : "Save offline"}
+          </Button>
+        </> : <Button type="button" onClick={() => void handleSaveStockCount("online")} disabled={saving || saveState === "saved"} className="h-12 gap-2 rounded-full px-6 shadow-xl">
+          {saving ? <Loader2 className="h-4 w-4 animate-spin" /> : <Check className="h-4 w-4" />}{editingSavedCount ? "Save count edits" : "Save count"}
+        </Button>}
+      </div>
 
       {selectedShelfFilter && !loading && paginatedProducts.length > 0 && totalPages > 1 ? (
         <div className="flex flex-wrap items-center justify-center gap-2">

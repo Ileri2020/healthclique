@@ -292,6 +292,7 @@ model StockCountLine {
   countId         String      @db.ObjectId
   productName     String
   shelfName       String?
+  countOrder      Int?
   expectedPcs     Int         @default(0)
   countedPcs      Int?
   differencePcs   Int?

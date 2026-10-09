@@ -609,6 +609,7 @@ const StockPage = () => {
 
       <div className="flex flex-wrap items-center gap-3">
         <Button
+          type="button"
           onClick={handleSubmit}
           disabled={saveState === "saving" || saveState === "saved"}
           className={saveState === "error" ? "bg-red-600 text-white hover:bg-red-700" : saveState === "saved" ? "bg-green-600 text-white hover:bg-green-700" : ""}

@@ -2,6 +2,8 @@ import { NextResponse } from "next/server"
 import { auth } from "@/auth"
 import { prisma } from "@/lib/prisma"
 import { getCountProducts } from "@/lib/stock-counts"
+import { assignStockCountOrders, getStockCountOrders } from "@/lib/stock-count-order"
+import { saveDailyStockCount } from "@/lib/save-daily-stock-count"
 
 export async function GET(req: Request) {
   try {
@@ -18,6 +20,18 @@ export async function GET(req: Request) {
     if (asOfDate && !Number.isNaN(asOfDate.getTime())) asOfDate.setUTCMilliseconds(asOfDate.getUTCMilliseconds() - 1)
     const calculatedProducts = await getCountProducts(asOfDate)
     const shelves = await prisma.shelf.findMany({ orderBy: { name: "asc" } })
+    const dailyCountOrders = requestedDate ? await getStockCountOrders(requestedDate) : new Map<string, number>()
+    const requestedDateStart = requestedDate ? new Date(`${requestedDate}T00:00:00.000Z`) : null
+    const requestedDateEnd = requestedDate ? new Date(`${requestedDate}T23:59:59.999Z`) : null
+    const daySessions = requestedDateStart && requestedDateEnd
+      ? await prisma.stockCount.findMany({
+          where: { date: { gte: requestedDateStart, lte: requestedDateEnd } },
+          orderBy: { createdAt: "asc" },
+          include: { lines: true },
+        })
+      : []
+    const savedLines = new Map<string, (typeof daySessions)[number]["lines"][number]>()
+    daySessions.forEach((count) => count.lines.forEach((line) => savedLines.set(line.productName.replace(/\s+/g, " ").trim().toLowerCase(), line)))
     const filteredProducts = requestedShelf
       ? calculatedProducts.filter((product) => product.shelfName && product.shelfName.toLowerCase() === requestedShelf.toLowerCase())
       : calculatedProducts
@@ -36,8 +50,19 @@ export async function GET(req: Request) {
         pcsSalesPrice: product.salesPrice,
         packSalesPrice: product.salesPrice,
         cartonSalesPrice: product.salesPrice,
+        countOrder: dailyCountOrders.get(product.productKey) ?? null,
+        ...(savedLines.has(product.productKey) ? {
+          savedCountedPcs: savedLines.get(product.productKey)?.countedPcs ?? null,
+          savedExpiry: savedLines.get(product.productKey)?.expiry ?? null,
+        } : {}),
       })),
       shelves,
+      savedCount: daySessions.length ? {
+        id: daySessions[0].id,
+        date: daySessions[0].date,
+        lines: [...savedLines.values()],
+      } : null,
+      maxCountOrder: Math.max(0, ...dailyCountOrders.values()),
     })
     /*
     const [stocks, sales, productShelves, shelves] = await Promise.all([
@@ -210,6 +235,8 @@ export async function PUT(req: Request) {
     const id = String(body.id || "")
     if (!id || !Array.isArray(body.lines) || body.lines.length === 0) return NextResponse.json({ error: "Count id and lines are required" }, { status: 400 })
     const countDate = body.date ? new Date(`${String(body.date).slice(0, 10)}T00:00:00.000Z`) : undefined
+    const dateText = countDate?.toISOString().slice(0, 10)
+    const orderedLines = dateText ? await assignStockCountOrders(dateText, body.lines) : body.lines
     const updated = await prisma.stockCount.update({
       where: { id },
       data: {
@@ -218,10 +245,11 @@ export async function PUT(req: Request) {
         shelfName: body.shelfName || undefined,
         lines: {
           deleteMany: {},
-          create: body.lines.map((line: any) => {
+          create: orderedLines.map((line: any) => {
             const countedPcs = line.countedPcs === "" || line.countedPcs == null ? null : Number(line.countedPcs)
             return {
               productName: String(line.productName || ""),
+              countOrder: line.countOrder ?? undefined,
               shelfName: line.shelfName || undefined,
               expectedPcs: Number(line.expectedPcs) || 0,
               countedPcs,
@@ -252,50 +280,25 @@ export async function POST(req: Request) {
     if (!Array.isArray(lines) || lines.length === 0) {
       return NextResponse.json({ error: "No count lines provided" }, { status: 400 })
     }
-    const dateText = date ? String(date).slice(0, 10) : new Date().toISOString().slice(0, 10)
-    const countDate = new Date(`${dateText}T00:00:00.000Z`)
-    if (Number.isNaN(countDate.getTime())) return NextResponse.json({ error: "Invalid count date" }, { status: 400 })
-
-    // Persist product-shelf assignments
-    await Promise.all(
-      lines.map(async (line: any) => {
-        const pName = line.productName?.trim()
-        const sName = line.shelfName?.trim()
-        if (pName && sName) {
-          await prisma.productShelf.upsert({
-            where: { productName: pName },
-            update: { shelfName: sName, shelfId: line.shelfId || undefined },
-            create: { productName: pName, shelfName: sName, shelfId: line.shelfId || undefined },
-          }).catch(() => {})
-        }
-      })
-    )
-
-    const stockCount = await prisma.stockCount.create({
-      data: {
-        date: countDate,
-        shelfId: shelfId || undefined,
-        shelfName: shelfName || undefined,
-        note: note ? String(note).trim() : undefined,
-        lines: {
-          create: lines.map((line: any) => ({
-            productName: String(line.productName || ""),
-            shelfName: line.shelfName ? String(line.shelfName) : undefined,
-            expectedPcs: Number(line.expectedPcs) || 0,
-            countedPcs: line.countedPcs !== "" && line.countedPcs !== undefined && line.countedPcs !== null ? Number(line.countedPcs) : null,
-            differencePcs: line.countedPcs !== "" && line.countedPcs !== undefined && line.countedPcs !== null
-              ? Number(line.countedPcs) - (Number(line.expectedPcs) || 0)
-              : null,
-            expiry: line.expiry ? new Date(line.expiry) : null,
-            packsPerCarton: line.packsPerCarton ? Number(line.packsPerCarton) : null,
-            piecesPerPack: line.piecesPerPack ? Number(line.piecesPerPack) : null,
-          })),
-        },
-      },
-      include: { lines: true },
+    const result = await saveDailyStockCount({
+      date: date ? String(date) : new Date().toISOString().slice(0, 10),
+      shelfId: shelfId || undefined,
+      shelfName: shelfName || undefined,
+      note: note ? String(note) : undefined,
+      lines,
+      createdById: session.user.id,
+      staffName: session.user.name || undefined,
     })
 
-    return NextResponse.json(stockCount)
+    await Promise.all(lines.filter((line: any) => line.shelfName?.trim()).map((line: any) =>
+      prisma.productShelf.upsert({
+        where: { productName: String(line.productName).trim() },
+        update: { shelfName: String(line.shelfName).trim(), ...(line.shelfId ? { shelfId: line.shelfId } : {}) },
+        create: { productName: String(line.productName).trim(), shelfName: String(line.shelfName).trim(), ...(line.shelfId ? { shelfId: line.shelfId } : {}) },
+      }).catch(() => {}),
+    ))
+
+    return NextResponse.json({ ...result.count, updatedForDay: result.updated })
   } catch (error) {
     console.error(error)
     return NextResponse.json({ error: "Unable to save stock count" }, { status: 500 })

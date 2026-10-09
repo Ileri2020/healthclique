@@ -61,6 +61,18 @@ type SalesCustomerSection = {
   groupPayments: GroupPayment[]
 }
 
+type StockPricingInfo = {
+  costPrice?: number
+  cartonSalesPrice?: number
+  packSalesPrice?: number
+  pcsSalesPrice?: number
+  wholesaleCartonSalesPrice?: number
+  wholesalePackSalesPrice?: number
+  wholesalePcsSalesPrice?: number
+  packsPerCarton?: number
+  pcsCount?: number
+}
+
 const createBlankSalesRow = () => ({
   sn: "",
   productName: "",
@@ -108,7 +120,7 @@ const SalesPage = () => {
   const [customerNames, setCustomerNames] = useState<string[]>([])
   const [customerNamesLoading, setCustomerNamesLoading] = useState(true)
   const [activeCustomerSectionId, setActiveCustomerSectionId] = useState<string | null>(null)
-  const [stockPricing, setStockPricing] = useState<Record<string, { costPrice?: number; cartonSalesPrice?: number; packSalesPrice?: number; pcsSalesPrice?: number; wholesaleCartonSalesPrice?: number; wholesalePackSalesPrice?: number; wholesalePcsSalesPrice?: number }>>({})
+  const [stockPricing, setStockPricing] = useState<Record<string, StockPricingInfo>>({})
   const [mergeSource, setMergeSource] = useState<string | null>(null)
   const [mergeTarget, setMergeTarget] = useState("")
   const [mergeSearchOpen, setMergeSearchOpen] = useState(false)
@@ -241,6 +253,8 @@ const SalesPage = () => {
                 wholesaleCartonSalesPrice: item.wholesaleCartonSalesPrice,
                 wholesalePackSalesPrice: item.wholesalePackSalesPrice,
                 wholesalePcsSalesPrice: item.wholesalePcsSalesPrice,
+                packsPerCarton: item.packsPerCarton,
+                pcsCount: item.pcsCount,
               }
             }
             return acc
@@ -404,6 +418,11 @@ const SalesPage = () => {
       const stockInfo = productName ? stockPricing[productName.trim().toLowerCase()] : undefined
       const previousRow = section.rows[rowIndex]
       const productChanged = productName.trim().toLowerCase() !== String(previousRow?.productName ?? "").trim().toLowerCase()
+      const cartonEnabled = Boolean(row.carton)
+      const packEnabled = Boolean(row.pack)
+      const cartonChanged = cartonEnabled !== Boolean(previousRow?.carton)
+      const packChanged = packEnabled !== Boolean(previousRow?.pack)
+      const unitModeJustEnabled = (cartonChanged && cartonEnabled) || (packChanged && packEnabled)
       const rowWholesale = Boolean(row.wholesale) || wholesaleOverride
       const previousWholesale = Boolean(previousRow?.wholesale) || section.globalWholesale
       const wholesaleChanged = rowWholesale !== previousWholesale
@@ -411,13 +430,17 @@ const SalesPage = () => {
         ? stockInfo?.costPrice
         : Number(row.costPrice)
 
-      const cartonQty = row.cartonQty !== "" && row.cartonQty !== undefined && row.cartonQty !== null ? Number(row.cartonQty) : 0
-      const packsPerCarton = row.packsPerCarton !== "" && row.packsPerCarton !== undefined && row.packsPerCarton !== null ? Number(row.packsPerCarton) : 1
-      const packQty = row.packQty !== "" && row.packQty !== undefined && row.packQty !== null ? Number(row.packQty) : 0
-      const pCount = row.pcsCount !== "" && row.pcsCount !== undefined && row.pcsCount !== null ? Number(row.pcsCount) : 1
+      const cartonQty = cartonEnabled && !cartonChanged && row.cartonQty !== "" && row.cartonQty !== undefined && row.cartonQty !== null ? Number(row.cartonQty) : 0
+      const packsPerCarton = cartonEnabled
+        ? ((cartonChanged ? Number(stockInfo?.packsPerCarton) : 0) || Number(row.packsPerCarton) || Number(stockInfo?.packsPerCarton) || 1)
+        : 0
+      const packQty = packEnabled && !packChanged && row.packQty !== "" && row.packQty !== undefined && row.packQty !== null ? Number(row.packQty) : 0
+      const pCount = cartonEnabled || packEnabled
+        ? ((unitModeJustEnabled ? Number(stockInfo?.pcsCount) : 0) || Number(row.pcsCount) || Number(stockInfo?.pcsCount) || 1)
+        : 1
       const pcQty = row.pcsQty !== "" && row.pcsQty !== undefined && row.pcsQty !== null ? Number(row.pcsQty) : 0
       const computedTotalPcs = cartonQty > 0 || packQty > 0 || pcQty > 0 ? (cartonQty * packsPerCarton * pCount) + (packQty * pCount) + pcQty : ""
-      const quantityChanged = cartonQty !== Number(previousRow?.cartonQty || 0) || packQty !== Number(previousRow?.packQty || 0) || pcQty !== Number(previousRow?.pcsQty || 0) || packsPerCarton !== Number(previousRow?.packsPerCarton || 1) || pCount !== Number(previousRow?.pcsCount || 1)
+      const quantityChanged = cartonQty !== Number(previousRow?.cartonQty || 0) || packQty !== Number(previousRow?.packQty || 0) || pcQty !== Number(previousRow?.pcsQty || 0) || packsPerCarton !== Number(previousRow?.packsPerCarton || 0) || pCount !== Number(previousRow?.pcsCount || 1) || cartonChanged || packChanged
 
       // Last-saved prices from stock (respects wholesale flag, unit-type aware)
       const lastSavedCarton = rowWholesale
@@ -446,8 +469,8 @@ const SalesPage = () => {
       const defaultCarton = lastSavedCarton !== undefined ? lastSavedCarton : (markupCarton ?? undefined)
       const defaultPack = lastSavedPack !== undefined ? lastSavedPack : (markupPack ?? undefined)
       const defaultPcs = lastSavedPcs !== undefined ? lastSavedPcs : (markupPcs ?? undefined)
-      const isCartonMode = cartonQty > 0 || Boolean(row.carton)
-      const isPackMode = packQty > 0 || Boolean(row.pack)
+      const isCartonMode = cartonEnabled
+      const isPackMode = packEnabled
       const defaultPrice = isCartonMode ? defaultCarton : isPackMode ? defaultPack : defaultPcs
 
       // The markup price for the active unit (for checkbox comparison)
@@ -484,6 +507,12 @@ const SalesPage = () => {
 
       return {
         ...row,
+        carton: cartonEnabled,
+        cartonQty,
+        packsPerCarton: cartonEnabled ? packsPerCarton : 0,
+        pack: packEnabled,
+        packQty,
+        pcsCount: cartonEnabled || packEnabled ? pCount : 1,
         wholesale: rowWholesale,
         totalPcs: computedTotalPcs,
         costPrice: costValue ?? row.costPrice,
@@ -550,7 +579,7 @@ const SalesPage = () => {
     }
   }
 
-  const handleSubmit = async () => {
+  const handleSubmit = async (saveMode: "online" | "offline" = "online") => {
     if (saveState === "saving") return
     const sectionsWithRows = customerSections.map((section) => ({ ...section, validRows: section.rows.filter((row) => row.productName) }))
     const validSections = sectionsWithRows.filter((section) => section.validRows.length > 0)
@@ -598,7 +627,7 @@ const SalesPage = () => {
 
     setSaveState("saving")
     try {
-      const saveOffline = isLocalDevelopment() && !editId
+      const saveOffline = saveMode === "offline" && isLocalDevelopment() && !editId
       if (saveOffline) {
         const localId = typeof crypto !== "undefined" && "randomUUID" in crypto
           ? crypto.randomUUID()
@@ -910,7 +939,14 @@ const SalesPage = () => {
       <div className="flex flex-wrap items-end gap-3">
         {localDev ? <label className="grid gap-1 text-sm"><span className="text-muted-foreground">Staff identity</span><input value={localStaffName} onChange={(event) => { setLocalStaffName(event.target.value); saveLocalStaffName(event.target.value) }} placeholder="Staff name" className="h-10 w-48 rounded-md border bg-background px-3" /></label> : null}
         {localDev ? <div className="grid gap-1"><span className="text-xs text-muted-foreground">Download current products and retail/wholesale prices for offline sales.</span><Button type="button" variant="outline" onClick={() => void getProductsFromDatabase()} disabled={loadingProducts}>{loadingProducts ? "Getting products…" : "Get products"}</Button></div> : null}
-        <Button onClick={handleSubmit} disabled={saveState === "saving" || saveState === "saved"}>{saveState === "saving" ? "Saving..." : saveState === "saved" ? "Saved" : editId ? "Update sales" : "Save sales"}</Button>
+        {localDev && !editId ? <>
+          <Button type="button" variant="outline" onClick={() => void handleSubmit("online")} disabled={saveState === "saving" || saveState === "saved"}>
+            {saveState === "saving" ? "Saving…" : "Save sales online"}
+          </Button>
+          <Button type="button" onClick={() => void handleSubmit("offline")} disabled={saveState === "saving" || saveState === "saved"}>
+            {saveState === "saving" ? "Saving…" : "Save sales offline"}
+          </Button>
+        </> : <Button type="button" onClick={() => void handleSubmit("online")} disabled={saveState === "saving" || saveState === "saved"}>{saveState === "saving" ? "Saving..." : saveState === "saved" ? "Saved" : editId ? "Update sales" : "Save sales"}</Button>}
         <span className="text-sm text-muted-foreground">Selected: {currentLabel}</span>
         <span className="text-sm text-muted-foreground">Customers: {totalCustomers}</span>
         {loadingProducts ? <span className="text-sm">Loading products...</span> : null}
