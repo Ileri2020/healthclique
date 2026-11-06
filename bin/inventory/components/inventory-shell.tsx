@@ -6,7 +6,7 @@ import { Toaster, toast } from "sonner"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
-import { InventoryColumn, InventoryRow, InventoryTable } from "@/components/inventory-table"
+import { InventoryColumn, InventoryRow, InventoryTable } from "./inventory-table"
 
 type Props = { mode: "sales" | "stock"; columns: InventoryColumn[] }
 const asNumber = (value: unknown) => value === "" || value == null ? 0 : Number(value) || 0

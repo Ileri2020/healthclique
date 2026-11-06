@@ -2,6 +2,7 @@
 
 import { use, useEffect, useMemo, useState } from "react"
 import { useRouter } from "next/navigation"
+import { useSession } from "next-auth/react"
 import { differenceInCalendarDays, format, parseISO } from "date-fns"
 import { Button } from "@/components/ui/button"
 import Link from "next/link"
@@ -45,6 +46,8 @@ type SaleHistory = {
 
 export default function SalesHistoryPage({ params }: { params: Promise<{ range: string }> }) {
   const router = useRouter()
+  const { data: session } = useSession()
+  const isAdmin = session?.user?.role === "admin"
   const [sales, setSales] = useState<SaleHistory[]>([])
   const [loading, setLoading] = useState(true)
   const token = use(params).range
@@ -135,6 +138,7 @@ export default function SalesHistoryPage({ params }: { params: Promise<{ range: 
   }
 
   const deleteSale = async (id: string) => {
+    if (!isAdmin) return
     if (!window.confirm("Delete this saved sale?")) return
     const response = await fetch(`/api/inventory/sales/${id}`, { method: "DELETE" })
     if (!response.ok) {
@@ -162,10 +166,10 @@ export default function SalesHistoryPage({ params }: { params: Promise<{ range: 
       </div>
       <div className="overflow-x-auto rounded-lg border">
         <Table>
-          <TableHeader><TableRow><TableHead className="w-[120px] max-w-[120px]">Date</TableHead><TableHead className="min-w-[180px]">Customer name</TableHead><TableHead className="min-w-[240px]">Products</TableHead><TableHead>Total</TableHead><TableHead>Payment</TableHead><TableHead>Cash</TableHead><TableHead>POS</TableHead><TableHead>Change</TableHead><TableHead>Receipt</TableHead><TableHead>Delete</TableHead></TableRow></TableHeader>
+          <TableHeader><TableRow><TableHead className="w-[120px] max-w-[120px]">Date</TableHead><TableHead className="min-w-[180px]">Customer name</TableHead><TableHead className="min-w-[240px]">Products</TableHead><TableHead>Total</TableHead><TableHead>Payment</TableHead><TableHead>Cash</TableHead><TableHead>POS</TableHead><TableHead>Change</TableHead><TableHead>Receipt</TableHead>{isAdmin ? <TableHead>Delete</TableHead> : null}</TableRow></TableHeader>
           <TableBody>
-            {loading ? <TableRow><TableCell colSpan={10}>Loading sales...</TableCell></TableRow> : sales.length === 0 ? <TableRow><TableCell colSpan={10}>No sales found.</TableCell></TableRow> : sales.map((sale, index) => (
-              <TableRow key={`${sale.id}-${index}`} role={sale.isLocal ? undefined : "link"} tabIndex={sale.isLocal ? undefined : 0} className={sale.isLocal ? "bg-amber-500/[0.03]" : "cursor-pointer hover:bg-muted/50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"} onClick={() => { if (!sale.isLocal) router.push(`/sales?edit=${encodeURIComponent(sale.id)}`) }} onKeyDown={(event) => { if (!sale.isLocal && event.target === event.currentTarget && (event.key === "Enter" || event.key === " ")) { event.preventDefault(); router.push(`/sales?edit=${encodeURIComponent(sale.id)}`) } }}>
+            {loading ? <TableRow><TableCell colSpan={isAdmin ? 10 : 9}>Loading sales...</TableCell></TableRow> : sales.length === 0 ? <TableRow><TableCell colSpan={isAdmin ? 10 : 9}>No sales found.</TableCell></TableRow> : sales.map((sale, index) => (
+              <TableRow key={`${sale.id}-${index}`} role={isAdmin && !sale.isLocal ? "link" : undefined} tabIndex={isAdmin && !sale.isLocal ? 0 : undefined} className={sale.isLocal ? "bg-amber-500/[0.03]" : isAdmin ? "cursor-pointer hover:bg-muted/50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring" : "hover:bg-muted/50"} onClick={() => { if (isAdmin && !sale.isLocal) router.push(`/sales?edit=${encodeURIComponent(sale.id)}`) }} onKeyDown={(event) => { if (isAdmin && !sale.isLocal && event.target === event.currentTarget && (event.key === "Enter" || event.key === " ")) { event.preventDefault(); router.push(`/sales?edit=${encodeURIComponent(sale.id)}`) } }}>
                 <TableCell className="w-[120px] max-w-[120px] truncate">{sale.date ? format(new Date(sale.date), "MMM d, yyyy") : sale.rangeFrom && sale.rangeTo ? `${format(new Date(sale.rangeFrom), "MMM d, yyyy")} - ${format(new Date(sale.rangeTo), "MMM d, yyyy")}` : "-"}</TableCell>
                 <TableCell>{sale.customerName || "-"}{sale.isLocal ? <span className="ml-2 rounded bg-amber-500/10 px-1.5 py-0.5 text-xs text-amber-700">Local · pending sync</span> : null}</TableCell>
                 <TableCell>{sale.products.join(", ") || "-"}</TableCell>
@@ -175,13 +179,13 @@ export default function SalesHistoryPage({ params }: { params: Promise<{ range: 
                 <TableCell>₦{Number(sale.posPayment || 0).toLocaleString()}</TableCell>
                 <TableCell>₦{Number(sale.change || 0).toLocaleString()}</TableCell>
                 <TableCell><Button type="button" size="sm" variant="outline" onClick={(event) => { event.stopPropagation(); printSale(sale) }}><Printer className="mr-2 h-4 w-4" />Print</Button></TableCell>
-                <TableCell>
+                {isAdmin ? <TableCell>
                   {!sale.isLocal ? <>
                   <button type="button" title="Delete sale" className="rounded p-2 text-destructive hover:bg-destructive/10" onClick={(event) => { event.stopPropagation(); deleteSale(sale.id) }}>
                     <Trash2 className="h-4 w-4" />
                   </button>
                   </> : <span className="text-xs text-muted-foreground">Sync first</span>}
-                </TableCell>
+                </TableCell> : null}
               </TableRow>
             ))}
           </TableBody>

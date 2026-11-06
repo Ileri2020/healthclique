@@ -81,8 +81,12 @@ export async function GET(req: Request) {
         totalPcs?: number
         packsPerCarton?: number
         pcsCount?: number
+        cheapestRecentPcsCostPrice?: number
+        recentPcsCostPrices?: number[]
       }
     >()
+    const recentCostsByProduct = new Map<string, number[]>()
+    const recentEntriesSeenByProduct = new Map<string, number>()
 
     inventoryStocks.forEach((stock: any) => {
       const productKey = typeof stock?.productName === "string" ? stock.productName.trim().toLowerCase() : ""
@@ -104,9 +108,36 @@ export async function GET(req: Request) {
           pcsCount: stock.pcsCount ?? undefined,
         })
       }
+
+      if (productKey) {
+        const entriesSeen = recentEntriesSeenByProduct.get(productKey) ?? 0
+        if (entriesSeen >= 3) return
+        recentEntriesSeenByProduct.set(productKey, entriesSeen + 1)
+        const recentCosts = recentCostsByProduct.get(productKey) ?? []
+        const totalPcs = Number(stock.totalPcs) > 0
+          ? Number(stock.totalPcs)
+          : (Number(stock.cartonQty) || 0) * (Number(stock.packsPerCarton) || 1) * (Number(stock.pcsCount) || 1)
+            + (Number(stock.packQty) || 0) * (Number(stock.pcsCount) || 1)
+            + (Number(stock.pcsQty) || 0)
+        const pcsCost = Number(stock.pcsCostPrice) > 0
+          ? Number(stock.pcsCostPrice)
+          : Number(stock.costPrice) > 0 && totalPcs > 0
+            ? Number(stock.costPrice) / totalPcs
+            : 0
+        if (pcsCost > 0 && Number.isFinite(pcsCost)) recentCosts.push(Number(pcsCost.toFixed(2)))
+        recentCostsByProduct.set(productKey, recentCosts)
+      }
     })
 
-    return NextResponse.json(Array.from(latestByProduct.values()))
+    const products = Array.from(latestByProduct.entries()).map(([key, product]) => {
+      const recentPcsCostPrices = recentCostsByProduct.get(key) ?? []
+      return {
+        ...product,
+        recentPcsCostPrices,
+        cheapestRecentPcsCostPrice: recentPcsCostPrices.length ? Math.min(...recentPcsCostPrices) : undefined,
+      }
+    })
+    return NextResponse.json(products)
   } catch (error) {
     console.error(error)
     return NextResponse.json([], { status: 200 })
@@ -117,6 +148,12 @@ export async function POST(req: Request) {
   try {
     const body = await req.json()
     const { date, rows } = body
+    const localSyncId = typeof body.localSyncId === "string" ? body.localSyncId : undefined
+
+    if (localSyncId) {
+      const existing = await prisma.inventory.findUnique({ where: { localSyncId }, select: { id: true } })
+      if (existing) return NextResponse.json({ id: existing.id, alreadySynced: true })
+    }
 
     if (!Array.isArray(rows) || rows.length === 0) {
       return NextResponse.json({ error: "No rows provided" }, { status: 400 })
@@ -127,6 +164,7 @@ export async function POST(req: Request) {
     const stock = await prisma.inventory.create({
       data: {
         type: "stock",
+        ...(localSyncId ? { localSyncId } : {}),
         date: date?.date ? new Date(date.date) : undefined,
         rangeFrom: date?.from ? new Date(date.from) : undefined,
         rangeTo: date?.to ? new Date(date.to) : undefined,

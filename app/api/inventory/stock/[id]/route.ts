@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server"
+import { auth } from "@/auth"
 import { prisma } from "@/lib/prisma"
 
 const parseExpiry = (value: unknown) => {
@@ -22,6 +23,8 @@ export async function GET(_request: Request, { params }: { params: Promise<{ id:
 
 export async function PUT(request: Request, { params }: { params: Promise<{ id: string }> }) {
   try {
+    const session = await auth()
+    if (session?.user?.role !== "admin") return NextResponse.json({ error: "Admin access required" }, { status: 403 })
     const { id } = await params
     if (!/^[a-f\d]{24}$/i.test(id)) {
       return NextResponse.json({ error: "Invalid stock purchase id" }, { status: 400 })
@@ -82,6 +85,8 @@ export async function PUT(request: Request, { params }: { params: Promise<{ id: 
 
 export async function PATCH(request: Request, { params }: { params: Promise<{ id: string }> }) {
   try {
+    const session = await auth()
+    if (session?.user?.role !== "admin") return NextResponse.json({ error: "Admin access required" }, { status: 403 })
     const { id } = await params
     if (!/^[a-f\d]{24}$/i.test(id)) {
       return NextResponse.json({ error: "Invalid stock row id" }, { status: 400 })
@@ -108,6 +113,8 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ id
 
 export async function DELETE(_request: Request, { params }: { params: Promise<{ id: string }> }) {
   try {
+    const session = await auth()
+    if (session?.user?.role !== "admin") return NextResponse.json({ error: "Admin access required" }, { status: 403 })
     const { id } = await params
     if (!/^[a-f\d]{24}$/i.test(id)) {
       return NextResponse.json({ error: "Invalid stock purchase id" }, { status: 400 })

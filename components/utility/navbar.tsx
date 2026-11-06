@@ -27,6 +27,7 @@ import { useEffect } from "react";
 import { usePathname } from "next/navigation";
 import { initializeAffiliateTracking } from "@/lib/affiliate-tracking";
 import { LocalSalesSyncButton } from "@/components/utility/LocalSalesSyncButton";
+import { LocalOperationModeToggle } from "@/components/utility/LocalOperationModeToggle";
 
 const Navbar = (): JSX.Element => {
   const { setUser, user } = useAppContext();
@@ -63,7 +64,7 @@ const Navbar = (): JSX.Element => {
           >
             <Image src={logo} alt="" className="w-[100px] h-auto" />
           </Link>
-          <div className="lg:hidden"><LocalSalesSyncButton /></div>
+          <div className="flex items-center gap-1 lg:hidden"><LocalOperationModeToggle /><LocalSalesSyncButton /></div>
 
           {!inventoryMode && <div className="flex items-center gap-2 lg:hidden">
             <Dialog>
@@ -93,6 +94,7 @@ const Navbar = (): JSX.Element => {
 
           <div className="hidden lg:flex items-center gap-8">
             <Nav />
+            <LocalOperationModeToggle />
             <LocalSalesSyncButton />
             {/*
                 <Link to="/contact">

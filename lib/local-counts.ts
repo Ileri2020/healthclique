@@ -4,6 +4,7 @@ export type LocalCountLine = {
   shelfId?: string
   expectedPcs: number
   countedPcs: number | null
+  countedPacks?: number | null
   expiry?: string
   packsPerCarton?: number
   piecesPerPack?: number

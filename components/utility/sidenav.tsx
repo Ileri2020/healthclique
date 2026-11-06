@@ -18,6 +18,7 @@ import { useAppContext } from "@/hooks/useAppContext";
 import { signOut, useSession } from "next-auth/react";
 import { Login, Signup } from "../myComponents/subs";
 import { LocalSalesSyncButton } from "@/components/utility/LocalSalesSyncButton";
+import { LocalOperationModeToggle } from "@/components/utility/LocalOperationModeToggle";
 
 const inventoryLinks = [
     { path: "/stock", name: "Stock", title: "Stock", icon: Package },
@@ -37,8 +38,9 @@ const Sidenav = () => {
     const { data: session } = useSession();
     const pathname = usePathname();
     const inventoryMode = pathname.startsWith("/inventory/") || pathname.startsWith("/stock/") || pathname.startsWith("/sales/") || pathname.startsWith("/count") || pathname.startsWith("/expenses") || pathname === "/stock" || pathname === "/sales" || pathname.startsWith("/vitals") || pathname.startsWith("/staff");
+    const canAccessInventory = session?.user?.role === "admin" || session?.user?.role === "staff";
     const canManageUsers = session?.user?.role === "admin" || session?.user?.role === "staff";
-    const navigationLinks = inventoryMode ? inventoryLinks.filter((link) => link.path !== "/staff" || canManageUsers) : Links.Links;
+    const navigationLinks = inventoryMode ? inventoryLinks.filter((link) => (link.path !== "/staff" || canManageUsers) && (link.path !== "/inventory/analytics" || canAccessInventory)) : Links.Links;
     const [categories, setCategories] = useState<any[]>([]);
     const [concerns, setConcerns] = useState<string[]>([]);
     const [open, setOpen] = useState(false);
@@ -102,6 +104,7 @@ const Sidenav = () => {
                     {/* Navigation Links */}
                     <div className="space-y-4">
                         <h3 className="text-xs font-black uppercase tracking-widest text-muted-foreground/60 px-2">Main Menu</h3>
+                        <LocalOperationModeToggle fullWidth />
                         <LocalSalesSyncButton fullWidth />
                         <nav className="flex flex-col gap-1">
                             {navigationLinks.map((link, index) => (

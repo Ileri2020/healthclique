@@ -26,6 +26,9 @@ const lineData = (line: Record<string, any>, existing?: Record<string, any>) => 
     shelfName: line.shelfName || existing?.shelfName || undefined,
     expectedPcs,
     countedPcs,
+    countedPacks: line.countedPacks === "" || line.countedPacks == null
+      ? (existing?.countedPacks ?? null)
+      : Number(line.countedPacks),
     differencePcs: countedPcs == null ? null : countedPcs - expectedPcs,
     expiry,
     packsPerCarton: line.packsPerCarton ? Number(line.packsPerCarton) : (existing?.packsPerCarton ?? null),

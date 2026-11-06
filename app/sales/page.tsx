@@ -12,7 +12,9 @@ import { Tables, AutocompleteOption, TableColumn, TableRow } from "@/components/
 import { formatReceiptMoney, openSalesReceiptPrintWindow, type SalesReceipt, type SalesReceiptLine } from "@/lib/sales-receipts"
 import { GitMerge } from "lucide-react"
 import { toast } from "sonner"
-import { isLocalDevelopment, readLocalProductCatalog, readLocalStaffName, saveLocalProductCatalog, saveLocalSale, saveLocalStaffName } from "@/lib/local-sales"
+import { readLocalProductCatalog, readLocalStaffName, saveLocalProductCatalog, saveLocalSale, saveLocalStaffName } from "@/lib/local-sales"
+import { saveLocalCountCatalog } from "@/lib/local-counts"
+import { useLocalOperationMode } from "@/lib/local-operation-mode"
 
 const salesColumns: TableColumn[] = [
   { key: "sn", label: "S/N", type: "number", required: true, className: "w-10" },
@@ -104,8 +106,10 @@ const createCustomerSection = (): SalesCustomerSection => ({
 })
 
 const SalesPage = () => {
-  const { data: session } = useSession()
-  const canMergeProducts = session?.user?.role === "admin" || session?.user?.role === "staff"
+  const { data: session, status } = useSession()
+  const { isLocal: localDev, mode: operationMode, ready: modeReady } = useLocalOperationMode()
+  const isAdmin = session?.user?.role === "admin"
+  const canMergeProducts = isAdmin
   const [customerSections, setCustomerSections] = useState<SalesCustomerSection[]>(() => [createCustomerSection()])
   const [paymentDialogSectionId, setPaymentDialogSectionId] = useState<string | null>(null)
   const [dateRangeOpen, setDateRangeOpen] = useState(false)
@@ -116,7 +120,6 @@ const SalesPage = () => {
   const [selectedRange, setSelectedRange] = useState<{ from: Date | undefined; to: Date | undefined }>({ from: undefined, to: undefined })
   const [cachedProducts, setCachedProducts] = useState<InventoryProductName[]>([])
   const [localStaffName, setLocalStaffName] = useState("")
-  const [localDev, setLocalDev] = useState(false)
   const [customerNames, setCustomerNames] = useState<string[]>([])
   const [customerNamesLoading, setCustomerNamesLoading] = useState(true)
   const [activeCustomerSectionId, setActiveCustomerSectionId] = useState<string | null>(null)
@@ -156,7 +159,6 @@ const SalesPage = () => {
     : []
 
   useEffect(() => {
-    setLocalDev(isLocalDevelopment())
     setLocalStaffName(readLocalStaffName() || session?.user?.name || "Local Staff")
     const localCatalog = readLocalProductCatalog()
     if (localCatalog) {
@@ -166,7 +168,11 @@ const SalesPage = () => {
   }, [session?.user?.name])
 
   useEffect(() => {
-    if (!editId) return
+    if (editId && status !== "loading" && !isAdmin) router.replace("/sales")
+  }, [editId, isAdmin, router, status])
+
+  useEffect(() => {
+    if (!editId || !isAdmin) return
     fetch(`/api/inventory/sales/${editId}`)
       .then((response) => response.json())
       .then((sale) => {
@@ -214,7 +220,7 @@ const SalesPage = () => {
         if (productName) setFocusRowIndex(sale.sales.findIndex((row: TableRow) => row.productName === productName))
       })
       .catch(() => toast.error("Unable to load saved sales"))
-  }, [editId, searchParams])
+  }, [editId, isAdmin, searchParams])
 
   const loadInventoryProducts = useCallback(async () => {
     setLoadingProducts(true)
@@ -297,10 +303,35 @@ const SalesPage = () => {
 
       const names = catalog.productNames.filter((name: unknown): name is string => typeof name === "string" && Boolean(name.trim()))
       const pricing = catalog.stockPricing && typeof catalog.stockPricing === "object" ? catalog.stockPricing : {}
-      saveLocalProductCatalog({ productNames: names, stockPricing: pricing })
+      saveLocalProductCatalog({
+        productNames: names,
+        stockPricing: pricing,
+        stockRows: Array.isArray(catalog.stockRows) ? catalog.stockRows : [],
+      })
       setCachedProducts(names)
       setStockPricing(pricing)
-      toast.success(`${names.length} products and their prices saved for offline sales`)
+
+      const countDate = format(new Date(), "yyyy-MM-dd")
+      const countResponse = await fetch(`/api/inventory/count?date=${countDate}`, { cache: "no-store" })
+      if (countResponse.ok) {
+        const countCatalog = await countResponse.json()
+        if (Array.isArray(countCatalog?.products)) {
+          saveLocalCountCatalog({
+            date: countDate,
+            shelfFilter: "__all_products__",
+            products: countCatalog.products.map((product: Record<string, unknown>) => ({
+              ...product,
+              countedPcs: product.savedCountedPcs ?? "",
+              expiryInput: typeof (product.savedExpiry || product.shortestExpiry) === "string"
+                ? String(product.savedExpiry || product.shortestExpiry).split("T")[0]
+                : "",
+            })),
+            shelves: Array.isArray(countCatalog.shelves) ? countCatalog.shelves : [],
+            maxCountOrder: Number(countCatalog.maxCountOrder) || 0,
+          })
+        }
+      }
+      toast.success(`${names.length} products and prices saved for offline sales and stock count`)
     } catch (error) {
       toast.error(error instanceof Error ? error.message : "Could not get products. Check the database connection.")
     } finally {
@@ -309,10 +340,18 @@ const SalesPage = () => {
   }
 
   useEffect(() => {
+    if (!modeReady) return
+    if (localDev && operationMode === "offline") {
+      const catalog = readLocalProductCatalog()
+      setCachedProducts(catalog?.productNames ?? [])
+      setStockPricing(catalog?.stockPricing ?? {})
+      setCustomerNamesLoading(false)
+      return
+    }
     void loadInventoryProducts()
     void loadStockPricing()
     void loadCustomerNames()
-  }, [loadInventoryProducts, loadStockPricing, loadCustomerNames])
+  }, [loadInventoryProducts, loadStockPricing, loadCustomerNames, localDev, operationMode, modeReady])
 
   const hasThreeCustomerLetters = (query: string) => (query.match(/[a-z]/gi)?.length ?? 0) >= 3
 
@@ -579,7 +618,7 @@ const SalesPage = () => {
     }
   }
 
-  const handleSubmit = async (saveMode: "online" | "offline" = "online") => {
+  const handleSubmit = async (saveMode: "online" | "offline" = operationMode) => {
     if (saveState === "saving") return
     const sectionsWithRows = customerSections.map((section) => ({ ...section, validRows: section.rows.filter((row) => row.productName) }))
     const validSections = sectionsWithRows.filter((section) => section.validRows.length > 0)
@@ -627,7 +666,7 @@ const SalesPage = () => {
 
     setSaveState("saving")
     try {
-      const saveOffline = saveMode === "offline" && isLocalDevelopment() && !editId
+      const saveOffline = saveMode === "offline" && localDev && !editId
       if (saveOffline) {
         const localId = typeof crypto !== "undefined" && "randomUUID" in crypto
           ? crypto.randomUUID()
@@ -686,6 +725,8 @@ const SalesPage = () => {
       toast.error("Unable to save sales")
     }
   }
+
+  if (editId && status !== "loading" && !isAdmin) return null
 
   return (
     <div className="space-y-6 p-6">
@@ -940,11 +981,11 @@ const SalesPage = () => {
         {localDev ? <label className="grid gap-1 text-sm"><span className="text-muted-foreground">Staff identity</span><input value={localStaffName} onChange={(event) => { setLocalStaffName(event.target.value); saveLocalStaffName(event.target.value) }} placeholder="Staff name" className="h-10 w-48 rounded-md border bg-background px-3" /></label> : null}
         {localDev ? <div className="grid gap-1"><span className="text-xs text-muted-foreground">Download current products and retail/wholesale prices for offline sales.</span><Button type="button" variant="outline" onClick={() => void getProductsFromDatabase()} disabled={loadingProducts}>{loadingProducts ? "Getting products…" : "Get products"}</Button></div> : null}
         {localDev && !editId ? <>
-          <Button type="button" variant="outline" onClick={() => void handleSubmit("online")} disabled={saveState === "saving" || saveState === "saved"}>
-            {saveState === "saving" ? "Saving…" : "Save sales online"}
+          <Button type="button" variant="default" onClick={() => void handleSubmit()} disabled={saveState === "saving" || saveState === "saved"}>
+            {saveState === "saving" ? "Saving…" : `Save sales ${operationMode}`}
           </Button>
-          <Button type="button" onClick={() => void handleSubmit("offline")} disabled={saveState === "saving" || saveState === "saved"}>
-            {saveState === "saving" ? "Saving…" : "Save sales offline"}
+          <Button type="button" variant="outline" onClick={() => void handleSubmit(operationMode === "online" ? "offline" : "online")} disabled={saveState === "saving" || saveState === "saved"}>
+            {saveState === "saving" ? "Saving…" : `Save ${operationMode === "online" ? "offline" : "online"} instead`}
           </Button>
         </> : <Button type="button" onClick={() => void handleSubmit("online")} disabled={saveState === "saving" || saveState === "saved"}>{saveState === "saving" ? "Saving..." : saveState === "saved" ? "Saved" : editId ? "Update sales" : "Save sales"}</Button>}
         <span className="text-sm text-muted-foreground">Selected: {currentLabel}</span>

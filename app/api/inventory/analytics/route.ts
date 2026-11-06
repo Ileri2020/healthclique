@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server"
+import { auth } from "@/auth"
 import { prisma } from "@/lib/prisma"
 
 export const dynamic = "force-dynamic"
@@ -29,14 +30,26 @@ const pcsOf = (row: {
   pcsCount?: number | null
   cartonQty?: number | null
   packsPerCarton?: number | null
-}) =>
-  row.totalPcs ??
-  row.qty ??
-  (row.cartonQty ?? 0) * (row.packsPerCarton ?? 1) * (row.pcsCount ?? 1) +
+  pack?: boolean
+  carton?: boolean
+}) => {
+  if (row.totalPcs != null && row.totalPcs > 0) return row.totalPcs
+  const hasUnitBreakdown = row.cartonQty != null || row.packQty != null || row.pcsQty != null
+  if (!hasUnitBreakdown) {
+    if (row.carton && row.qty != null) return row.qty * (row.packsPerCarton ?? 1) * (row.pcsCount ?? 1)
+    if (row.pack && row.qty != null) return row.qty * (row.pcsCount ?? 1)
+    return row.totalPcs ?? row.qty ?? 0
+  }
+  return (row.cartonQty ?? 0) * (row.packsPerCarton ?? 1) * (row.pcsCount ?? 1) +
     (row.packQty ?? 0) * (row.pcsCount ?? 1) +
     (row.pcsQty ?? 0)
+}
 
 export async function GET(request: Request) {
+  const session = await auth()
+  const role = session?.user?.role?.trim().toLowerCase()
+  if (role !== "admin" && role !== "staff") return NextResponse.json({ error: "Admin or staff access required" }, { status: 403 })
+
   const params = new URL(request.url).searchParams
   const fromValue = params.get("from")
   const toValue = params.get("to")
@@ -74,6 +87,8 @@ export async function GET(request: Request) {
             customerSn: true,
             customerName: true,
             productName: true,
+            carton: true,
+            pack: true,
             total: true,
             price: true,
             qty: true,
@@ -93,11 +108,18 @@ export async function GET(request: Request) {
     const allStockInventories = await prisma.inventory.findMany({
       where: { type: "stock" },
       select: {
+        id: true,
         date: true,
+        rangeFrom: true,
+        rangeTo: true,
         createdAt: true,
+        total: true,
         stocks: {
           select: {
             productName: true,
+            companyName: true,
+            carton: true,
+            pack: true,
             costPrice: true,
             pcsCostPrice: true,
             packCostPrice: true,
@@ -124,6 +146,8 @@ export async function GET(request: Request) {
           select: {
             productName: true,
             totalPcs: true,
+            carton: true,
+            pack: true,
             cartonQty: true,
             packsPerCarton: true,
             packQty: true,
@@ -135,6 +159,8 @@ export async function GET(request: Request) {
           select: {
             productName: true,
             totalPcs: true,
+            carton: true,
+            pack: true,
             qty: true,
             pcsQty: true,
             packQty: true,
@@ -317,6 +343,20 @@ export async function GET(request: Request) {
       .sort((a, b) => b.quantity - a.quantity)
       .slice(0, 12)
 
+    const stockPurchasesByCompany = new Map<string, { companyName: string; total: number; orders: number }>()
+    for (const inventory of allStockInventories) {
+      const purchaseDate = inventory.date ?? inventory.rangeTo ?? inventory.rangeFrom ?? inventory.createdAt
+      const purchaseDay = dayKey(purchaseDate)
+      if (purchaseDay < fromValue || purchaseDay > toValue) continue
+
+      const companyName = inventory.stocks.find((row) => row.companyName?.trim())?.companyName?.trim() || "Unknown supplier"
+      const company = stockPurchasesByCompany.get(companyName) ?? { companyName, total: 0, orders: 0 }
+      company.total += Number(inventory.total) || 0
+      company.orders += 1
+      stockPurchasesByCompany.set(companyName, company)
+    }
+    const stockPurchases = Array.from(stockPurchasesByCompany.values()).sort((a, b) => b.total - a.total)
+
     const totalRevenue = daily.reduce((s, d) => s + d.revenue, 0)
     const totalGrossProfit = daily.reduce((s, d) => s + d.grossProfit, 0)
     const totalExpenses = daily.reduce((s, d) => s + d.expenses, 0)
@@ -325,6 +365,7 @@ export async function GET(request: Request) {
     return NextResponse.json({
       daily,
       stock,
+      stockPurchases,
       summary: {
         customers: daily.reduce((s, d) => s + d.customers, 0),
         revenue: totalRevenue,
@@ -334,6 +375,8 @@ export async function GET(request: Request) {
         // Legacy alias kept for any client that reads .profit
         profit: totalNetProfit,
         stockUnits: stock.reduce((s, p) => s + p.quantity, 0),
+        stockPurchaseTotal: stockPurchases.reduce((sum, purchase) => sum + purchase.total, 0),
+        stockPurchaseCount: stockPurchases.reduce((sum, purchase) => sum + purchase.orders, 0),
       },
     }, { headers: { "Cache-Control": "no-store, max-age=0" } })
   } catch (error) {

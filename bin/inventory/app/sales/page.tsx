@@ -1,4 +1,4 @@
-import { InventoryShell } from "@/components/inventory-shell"
+import { InventoryShell } from "../../components/inventory-shell"
 
 const columns = [
   { key: "sn", label: "S/N", type: "number" as const },

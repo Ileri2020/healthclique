@@ -53,6 +53,7 @@ export async function GET(req: Request) {
         countOrder: dailyCountOrders.get(product.productKey) ?? null,
         ...(savedLines.has(product.productKey) ? {
           savedCountedPcs: savedLines.get(product.productKey)?.countedPcs ?? null,
+          savedCountedPacks: savedLines.get(product.productKey)?.countedPacks ?? null,
           savedExpiry: savedLines.get(product.productKey)?.expiry ?? null,
         } : {}),
       })),
@@ -253,6 +254,7 @@ export async function PUT(req: Request) {
               shelfName: line.shelfName || undefined,
               expectedPcs: Number(line.expectedPcs) || 0,
               countedPcs,
+              countedPacks: line.countedPacks === "" || line.countedPacks == null ? null : Number(line.countedPacks),
               differencePcs: countedPcs == null ? null : countedPcs - (Number(line.expectedPcs) || 0),
               expiry: line.expiry ? new Date(line.expiry) : null,
               packsPerCarton: line.packsPerCarton ? Number(line.packsPerCarton) : null,

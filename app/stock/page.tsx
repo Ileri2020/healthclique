@@ -2,6 +2,7 @@
 
 import { useEffect, useMemo, useState } from "react"
 import { useRouter, useSearchParams } from "next/navigation"
+import { useSession } from "next-auth/react"
 import Link from "next/link"
 import { format } from "date-fns"
 import { Button } from "@/components/ui/button"
@@ -10,6 +11,9 @@ import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, D
 import { Tables, TableColumn, TableRow } from "@/components/myComponents/tables"
 import { toast } from "sonner"
 import { Check, Loader2, X } from "lucide-react"
+import { useLocalOperationMode } from "@/lib/local-operation-mode"
+import { readLocalProductCatalog } from "@/lib/local-sales"
+import { saveLocalStock } from "@/lib/local-stocks"
 
 const stockColumns: TableColumn[] = [
   { key: "sn", label: "S/N", type: "number", required: true, className: "w-10" },
@@ -48,6 +52,7 @@ type InventoryProductName = string
 type SavedStockPricing = {
   costPrice?: number
   pcsCostPrice?: number
+  cheapestRecentPcsCostPrice?: number
   cartonSalesPrice?: number
   packSalesPrice?: number
   pcsSalesPrice?: number
@@ -87,6 +92,7 @@ const createBlankStockRow = () => ({
 })
 
 const StockPage = () => {
+  const { isLocal: localDev, mode: operationMode, ready: modeReady } = useLocalOperationMode()
   const [tableRows, setTableRows] = useState<TableRow[]>(
     () => Array.from({ length: 4 }, createBlankStockRow)
   )
@@ -97,6 +103,8 @@ const StockPage = () => {
   const router = useRouter()
   const searchParams = useSearchParams()
   const editId = searchParams.get("edit")
+  const { data: session, status } = useSession()
+  const isAdmin = session?.user?.role === "admin"
   const [companyName, setCompanyName] = useState("")
   const [repName, setRepName] = useState("")
   const [amountPaid, setAmountPaid] = useState("")
@@ -114,6 +122,14 @@ const StockPage = () => {
   )
 
   useEffect(() => {
+    if (!modeReady) return
+    if (localDev && operationMode === "offline") {
+      const catalog = readLocalProductCatalog()
+      setCachedProducts(catalog?.productNames ?? [])
+      setSavedStockPricing(Object.fromEntries(Object.entries(catalog?.stockPricing ?? {}).map(([key, value]) => [key, value])))
+      setLoadingProducts(false)
+      return
+    }
     loadInventoryProducts()
     fetch("/api/inventory/stock")
       .then((response) => response.json())
@@ -124,6 +140,7 @@ const StockPage = () => {
             acc[String(item.productName).trim().toLowerCase()] = {
               costPrice: item.costPrice,
               pcsCostPrice: item.pcsCostPrice,
+              cheapestRecentPcsCostPrice: item.cheapestRecentPcsCostPrice,
               cartonSalesPrice: item.cartonSalesPrice,
               packSalesPrice: item.packSalesPrice,
               pcsSalesPrice: item.pcsSalesPrice,
@@ -140,13 +157,13 @@ const StockPage = () => {
       .then((res) => res.json())
       .then((data) => setCompanies(Array.isArray(data) ? data : []))
       .catch(() => setCompanies([]))
-  }, [])
+  }, [localDev, operationMode, modeReady])
 
   useEffect(() => {
     if (!Object.keys(savedStockPricing).length) return
     setTableRows((current) => current.map((row) => {
       const productName = typeof row.productName === "string" ? row.productName.trim().toLowerCase() : ""
-      const previousRate = Number(savedStockPricing[productName]?.pcsCostPrice)
+      const previousRate = Number(savedStockPricing[productName]?.cheapestRecentPcsCostPrice ?? savedStockPricing[productName]?.pcsCostPrice)
       if (!productName || !Number.isFinite(previousRate) || previousRate <= 0) return row
 
       const totalPieces = Number(row.totalPcs) || 0
@@ -171,7 +188,11 @@ const StockPage = () => {
   }, [companyName, companies])
 
   useEffect(() => {
-    if (!editId) return
+    if (editId && status !== "loading" && !isAdmin) router.replace("/stock")
+  }, [editId, isAdmin, router, status])
+
+  useEffect(() => {
+    if (!editId || !isAdmin) return
     fetch(`/api/inventory/stock/${editId}`)
       .then((response) => response.json())
       .then((purchase) => {
@@ -216,7 +237,7 @@ const StockPage = () => {
         if (productName) setFocusRowIndex(purchase.stocks.findIndex((stock: TableRow) => stock.productName === productName))
       })
       .catch(() => toast.error("Unable to load stock purchase"))
-  }, [editId, searchParams])
+  }, [editId, isAdmin, searchParams])
 
   const loadInventoryProducts = async () => {
     setLoadingProducts(true)
@@ -273,7 +294,7 @@ const StockPage = () => {
 
       const usePreviousPcsRate = Boolean(row.usePreviousPcsRate)
       const wasUsingPreviousPcsRate = Boolean(previousRow?.usePreviousPcsRate)
-      const oldPcsRateValue = stockInfo?.pcsCostPrice ?? row._oldPcsRate
+      const oldPcsRateValue = stockInfo?.cheapestRecentPcsCostPrice ?? stockInfo?.pcsCostPrice ?? row._oldPcsRate
       const oldPcsRate = oldPcsRateValue === "" || oldPcsRateValue == null ? undefined : Number(oldPcsRateValue)
       let manualCostValue = row._costPriceBeforePreviousRate ?? row.costPrice
       if (usePreviousPcsRate && !wasUsingPreviousPcsRate) manualCostValue = row.costPrice
@@ -405,7 +426,7 @@ const StockPage = () => {
     setTableRows(normalizedRows)
   }
 
-  const handleSubmit = async () => {
+  const handleSubmit = async (saveMode: "online" | "offline" = operationMode) => {
     if (saveState === "saving") return
     const validRows = tableRows.filter((row) => row.productName)
     const invalidRow = validRows.find((row) => {
@@ -426,15 +447,21 @@ const StockPage = () => {
 
     setSaveState("saving")
     try {
-      const result = await fetch(editId ? `/api/inventory/stock/${editId}` : "/api/inventory/stock", {
-        method: editId ? "PUT" : "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(payload),
-      })
-      if (!result.ok) {
-        throw new Error("Failed to save stock")
+      const saveOffline = localDev && saveMode === "offline" && !editId
+      if (saveOffline) {
+        const localId = typeof crypto !== "undefined" && "randomUUID" in crypto
+          ? crypto.randomUUID()
+          : `${Date.now()}-${Math.random().toString(36).slice(2)}`
+        saveLocalStock({ localId, savedAt: new Date().toISOString(), payload })
+      } else {
+        const result = await fetch(editId ? `/api/inventory/stock/${editId}` : "/api/inventory/stock", {
+          method: editId ? "PUT" : "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(payload),
+        })
+        if (!result.ok) throw new Error("Failed to save stock")
       }
-      toast.success(editId ? "Stock purchase updated" : "Stock saved successfully")
+      toast.success(saveOffline ? "Stock intake saved locally. Sync it when online." : editId ? "Stock purchase updated" : "Stock saved successfully")
       setSaveState("saved")
       if (editId) {
         router.push("/stock")
@@ -450,6 +477,8 @@ const StockPage = () => {
       toast.error("Unable to save stock")
     }
   }
+
+  if (editId && status !== "loading" && !isAdmin) return null
 
   return (
     <div className="space-y-6 p-6">
@@ -608,9 +637,17 @@ const StockPage = () => {
       </div>
 
       <div className="flex flex-wrap items-center gap-3">
-        <Button
+        {localDev && !editId ? <>
+          <Button type="button" variant="default" onClick={() => void handleSubmit()} disabled={saveState === "saving" || saveState === "saved"}>
+            {saveState === "saving" ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : saveState === "error" ? <X className="mr-2 h-4 w-4" /> : saveState === "saved" ? <Check className="mr-2 h-4 w-4" /> : null}
+            {saveState === "saving" ? "Saving…" : saveState === "saved" ? "Saved" : saveState === "error" ? `Retry ${operationMode}` : `Save stock ${operationMode}`}
+          </Button>
+          <Button type="button" variant="outline" onClick={() => void handleSubmit(operationMode === "online" ? "offline" : "online")} disabled={saveState === "saving" || saveState === "saved"}>
+            {saveState === "saving" ? "Saving…" : `Save ${operationMode === "online" ? "offline" : "online"} instead`}
+          </Button>
+        </> : <Button
           type="button"
-          onClick={handleSubmit}
+          onClick={() => void handleSubmit("online")}
           disabled={saveState === "saving" || saveState === "saved"}
           className={saveState === "error" ? "bg-red-600 text-white hover:bg-red-700" : saveState === "saved" ? "bg-green-600 text-white hover:bg-green-700" : ""}
         >
@@ -618,7 +655,7 @@ const StockPage = () => {
           {saveState === "saved" ? <><Check className="mr-2 h-4 w-4" />Saved</> : null}
           {saveState === "error" ? <><X className="mr-2 h-4 w-4" />{editId ? "Retry edit" : "Retry save"}</> : null}
           {saveState === "idle" ? (editId ? "Edit stock" : "Save stock") : null}
-        </Button>
+        </Button>}
         <span className="text-sm text-muted-foreground">Selected: {currentLabel}</span>
         <span className="text-sm font-medium">Total: ₦{tableRows.reduce((sum, row) => sum + (Number(row.costPrice) || 0), 0).toLocaleString()}</span>
         <Label htmlFor="amount-paid">Amount paid</Label>

@@ -1,8 +1,12 @@
 import { NextResponse } from "next/server"
+import { auth } from "@/auth"
 import { prisma } from "@/lib/prisma"
 
 export async function PATCH(request: Request) {
   try {
+    const session = await auth()
+    const role = session?.user?.role?.trim().toLowerCase()
+    if (role !== "admin" && role !== "staff") return NextResponse.json({ error: "Admin or staff access required" }, { status: 403 })
     const body = await request.json()
     const oldName = String(body.oldName || "").trim()
     const newName = String(body.newName || "").trim()

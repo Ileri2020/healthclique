@@ -295,6 +295,7 @@ model StockCountLine {
   countOrder      Int?
   expectedPcs     Int         @default(0)
   countedPcs      Int?
+  countedPacks    Int?
   differencePcs   Int?
   expiry          DateTime?
   packsPerCarton  Int?

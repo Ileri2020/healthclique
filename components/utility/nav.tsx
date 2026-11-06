@@ -35,8 +35,9 @@ const Nav = () => {
   const { data: session } = useSession();
   const pathname = usePathname();        
   const inventoryMode = pathname.startsWith("/inventory/") || pathname.startsWith("/stock/") || pathname.startsWith("/sales/") || pathname.startsWith("/count") || pathname.startsWith("/expenses") || pathname === "/stock" || pathname === "/sales" || pathname.startsWith("/vitals") || pathname.startsWith("/staff")
+  const canAccessInventory = session?.user?.role === "admin" || session?.user?.role === "staff"
   const canManageUsers = session?.user?.role === "admin" || session?.user?.role === "staff"
-  const navigationLinks = inventoryMode ? inventoryLinks.filter((link) => link.path !== "/staff" || canManageUsers) : Links.Links
+  const navigationLinks = inventoryMode ? inventoryLinks.filter((link) => (link.path !== "/staff" || canManageUsers) && (link.path !== "/inventory/analytics" || canAccessInventory)) : Links.Links
   const visibleLinks = navigationLinks.slice(0, 6)
   const overflowLinks = navigationLinks.slice(6)
   const isLinkActive = (path: string) => pathname === path || (path === "/stock" && pathname.startsWith("/stock/")) || (path === "/sales" && pathname.startsWith("/sales/")) || (path === "/count" && pathname.startsWith("/count/")) || (path === "/expenses" && pathname.startsWith("/expenses")) || (path === "/vitals" && pathname.startsWith("/vitals")) || (path === "/staff" && pathname.startsWith("/staff"))

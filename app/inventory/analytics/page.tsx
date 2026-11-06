@@ -34,9 +34,11 @@ type DailyPoint = {
   netProfit: number
 }
 type StockPoint = { name: string; quantity: number }
+type StockPurchasePoint = { companyName: string; total: number; orders: number }
 type AnalyticsData = {
   daily: DailyPoint[]
   stock: StockPoint[]
+  stockPurchases: StockPurchasePoint[]
   summary: {
     customers: number
     revenue: number
@@ -44,6 +46,8 @@ type AnalyticsData = {
     expenses: number
     netProfit: number
     stockUnits: number
+    stockPurchaseTotal: number
+    stockPurchaseCount: number
   }
 }
 
@@ -106,6 +110,7 @@ export default function InventoryAnalyticsPage() {
 
   const chartData = useMemo(() => (data?.daily ?? []).map((item) => ({ ...item, dateLabel: shortDate(item.date) })), [data])
   const stockData = data?.stock ?? []
+  const stockPurchasesData = data?.stockPurchases ?? []
   const summary = data?.summary
   const isRangeInvalid = !from || !to || from > to
   const appliedRangeLabel = from === to
@@ -284,7 +289,30 @@ export default function InventoryAnalyticsPage() {
             </ResponsiveContainer>
           </div> : <EmptyChart label={loading ? "Loading stock levels…" : "No stock intake records found."} />}
         </ChartPanel>
+
+        <ChartPanel title="Stock purchases by supplier" description={`Purchase totals grouped by company for ${appliedRangeLabel}.`}>
+          <div className="mb-4 flex flex-wrap items-center justify-between gap-3 rounded-lg border bg-muted/30 px-4 py-3">
+            <div>
+              <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">Total stock orders · {appliedRangeLabel}</p>
+              <p className="mt-1 text-2xl font-semibold">{loading ? "Loading…" : money(summary?.stockPurchaseTotal ?? 0)}</p>
+            </div>
+            <p className="text-right text-xs text-muted-foreground">
+              {loading ? "—" : `${(summary?.stockPurchaseCount ?? 0).toLocaleString()} orders · ${stockPurchasesData.length.toLocaleString()} suppliers`}
+            </p>
+          </div>
+          {stockPurchasesData.length ? <div className="h-[320px] w-full">
+            <ResponsiveContainer width="100%" height="100%">
+              <BarChart data={stockPurchasesData} layout="vertical" margin={{ top: 4, right: 16, left: 8, bottom: 4 }}>
+                <CartesianGrid stroke="hsl(var(--border))" strokeDasharray="3 3" horizontal={false} />
+                <XAxis type="number" tickLine={false} axisLine={false} tick={{ fill: "hsl(var(--muted-foreground))", fontSize: 11 }} tickFormatter={(value) => value >= 1000 ? `₦${Math.round(value / 1000)}k` : `₦${value}`} />
+                <YAxis type="category" dataKey="companyName" width={132} tickLine={false} axisLine={false} tick={{ fill: "hsl(var(--muted-foreground))", fontSize: 10 }} />
+                <Tooltip contentStyle={tooltipStyle} formatter={(value) => [money(Number(value)), "Purchase total"]} />
+                <Bar dataKey="total" fill="#d97745" radius={[0, 5, 5, 0]} maxBarSize={22} />
+              </BarChart>
+            </ResponsiveContainer>
+          </div> : <EmptyChart label={loading ? "Loading stock purchases…" : "No stock purchases in this date range."} />}
+        </ChartPanel>
       </div>
-      <p className="text-xs text-muted-foreground">Stock reflects recorded purchases minus recorded sales; products with negative stock may indicate missing intake history. Gross profit deducts cost of goods sold using the latest recorded stock cost-per-piece on or before each sale. Net profit further deducts expenses recorded in the expenses ledger, including shared expenses prorated over their date spans. Sale-row cost fields are not used because some contain batch purchase totals rather than unit costs.</p>
+      <p className="text-xs text-muted-foreground">Stock reflects recorded purchases minus recorded sales; products with negative stock may indicate missing intake history. Gross profit deducts cost of goods sold using the latest recorded stock cost-per-piece on or before each sale. Net profit further deducts expenses recorded in the expenses ledger, including shared expenses prorated over their date spans. Legacy pack and carton quantities are converted to pieces before estimating cost.</p>
   </main>
 }

@@ -2,6 +2,7 @@
 
 import { use, useEffect, useState } from "react"
 import { useRouter } from "next/navigation"
+import { useSession } from "next-auth/react"
 import { format } from "date-fns"
 import { Button } from "@/components/ui/button"
 import { Tables, TableColumn, TableRow } from "@/components/myComponents/tables"
@@ -23,6 +24,8 @@ const stockColumns: TableColumn[] = [
 
 export default function StockPurchasePage({ params }: { params: Promise<{ id: string }> }) {
   const router = useRouter()
+  const { data: session } = useSession()
+  const isAdmin = session?.user?.role === "admin"
   const { id } = use(params)
   const [purchase, setPurchase] = useState<Purchase | null>(null)
 
@@ -37,7 +40,7 @@ export default function StockPurchasePage({ params }: { params: Promise<{ id: st
   return <main className="space-y-6 p-6">
     <div className="flex items-start justify-between gap-4">
       <div><p className="text-sm text-muted-foreground">Saved stock purchase</p><h1 className="text-3xl font-bold">{purchase.date ? format(new Date(purchase.date), "PPP") : "Stock purchase"}</h1></div>
-      <Button onClick={() => router.push(`/stock?edit=${purchase.id}`)}>Edit</Button>
+      {isAdmin ? <Button onClick={() => router.push(`/stock?edit=${purchase.id}`)}>Edit</Button> : null}
     </div>
     <div className="flex flex-wrap gap-4 text-sm"><span>Total: ₦{purchase.total.toLocaleString()}</span><span>Amount paid: ₦{purchase.amountPaid.toLocaleString()}</span><span>Balance: {purchase.amountPaid >= purchase.total ? "✓ Paid in full" : `₦${(purchase.total - purchase.amountPaid).toLocaleString()}`}</span></div>
     <div className="rounded-lg border bg-card p-2 sm:p-4 max-w-full">

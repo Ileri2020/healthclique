@@ -1,6 +1,7 @@
 "use client"
 
 import { use, useEffect, useMemo, useState } from "react"
+import { useSession } from "next-auth/react"
 import { format } from "date-fns"
 import { Button } from "@/components/ui/button"
 import Link from "next/link"
@@ -10,6 +11,8 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 type Stock = Record<string, string | number | boolean | null | undefined> & { date?: string; rangeFrom?: string; rangeTo?: string }
 
 export default function StockHistoryPage({ params }: { params: Promise<{ range: string }> }) {
+  const { data: session } = useSession()
+  const isAdmin = session?.user?.role === "admin"
   const [stocks, setStocks] = useState<Stock[]>([])
   const [loading, setLoading] = useState(true)
   const token = use(params).range
@@ -28,6 +31,7 @@ export default function StockHistoryPage({ params }: { params: Promise<{ range: 
   )
 
   const deletePurchase = async (id: string) => {
+    if (!isAdmin) return
     if (!window.confirm("Delete this saved stock purchase?")) return
     const response = await fetch(`/api/inventory/stock/${id}`, { method: "DELETE" })
     if (!response.ok) {
@@ -51,9 +55,9 @@ export default function StockHistoryPage({ params }: { params: Promise<{ range: 
       </div>
       <div className="overflow-x-auto rounded-lg border">
         <Table>
-          <TableHeader><TableRow><TableHead><div className="flex items-center justify-center text-center">Date</div></TableHead><TableHead className="min-w-[200px]"><div className="flex items-center justify-center text-center">Company name</div></TableHead><TableHead className="min-w-[200px]"><div className="flex items-center justify-center text-center">Rep name</div></TableHead><TableHead><div className="flex items-center justify-center text-center">Total</div></TableHead><TableHead><div className="flex items-center justify-center text-center">Amount paid</div></TableHead><TableHead><div className="flex items-center justify-center text-center">Balance</div></TableHead><TableHead><div className="flex items-center justify-center text-center">Delete</div></TableHead></TableRow></TableHeader>
+          <TableHeader><TableRow><TableHead><div className="flex items-center justify-center text-center">Date</div></TableHead><TableHead className="min-w-[200px]"><div className="flex items-center justify-center text-center">Company name</div></TableHead><TableHead className="min-w-[200px]"><div className="flex items-center justify-center text-center">Rep name</div></TableHead><TableHead><div className="flex items-center justify-center text-center">Total</div></TableHead><TableHead><div className="flex items-center justify-center text-center">Amount paid</div></TableHead><TableHead><div className="flex items-center justify-center text-center">Balance</div></TableHead>{isAdmin ? <TableHead><div className="flex items-center justify-center text-center">Delete</div></TableHead> : null}</TableRow></TableHeader>
           <TableBody>
-            {loading ? <TableRow><TableCell colSpan={7}>Loading stocks...</TableCell></TableRow> : stocks.length === 0 ? <TableRow><TableCell colSpan={7}>No stock purchases found.</TableCell></TableRow> : stocks.map((stock, index) => {
+            {loading ? <TableRow><TableCell colSpan={isAdmin ? 7 : 6}>Loading stocks...</TableCell></TableRow> : stocks.length === 0 ? <TableRow><TableCell colSpan={isAdmin ? 7 : 6}>No stock purchases found.</TableCell></TableRow> : stocks.map((stock, index) => {
               const id = String(stock.id)
               return <TableRow key={`${id}-${index}`} className="hover:bg-muted/50">
                 <TableCell><Link className="block py-1" href={`/stock/purchase/${id}`}>{stock.date ? format(new Date(stock.date), "PPP") : "-"}</Link></TableCell>
@@ -62,7 +66,7 @@ export default function StockHistoryPage({ params }: { params: Promise<{ range: 
                 <TableCell><Link className="block py-1" href={`/stock/purchase/${id}`}>₦{Number(stock.total || 0).toLocaleString()}</Link></TableCell>
                 <TableCell><Link className="block py-1" href={`/stock/purchase/${id}`}>₦{Number(stock.amountPaid || 0).toLocaleString()}</Link></TableCell>
                 <TableCell><Link className="block py-1" href={`/stock/purchase/${id}`}>{Number(stock.amountPaid || 0) >= Number(stock.total || 0) ? "✓" : `₦${Number(stock.balance || 0).toLocaleString()}`}</Link></TableCell>
-                <TableCell><button type="button" title="Delete stock purchase" className="rounded p-2 text-destructive hover:bg-destructive/10" onClick={() => deletePurchase(id)}><Trash2 className="h-4 w-4" /></button></TableCell>
+                {isAdmin ? <TableCell><button type="button" title="Delete stock purchase" className="rounded p-2 text-destructive hover:bg-destructive/10" onClick={() => deletePurchase(id)}><Trash2 className="h-4 w-4" /></button></TableCell> : null}
               </TableRow>
             })}
           </TableBody>

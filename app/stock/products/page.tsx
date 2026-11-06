@@ -35,7 +35,9 @@ type ProductHistoryEntry = {
 
 export default function StockProductsPage() {
   const { data: session } = useSession()
-  const canMergeProducts = session?.user?.role === "admin" || session?.user?.role === "staff"
+  const isAdmin = session?.user?.role === "admin"
+  const canManageProducts = isAdmin || session?.user?.role === "staff"
+  const canMergeProducts = canManageProducts
   const [products, setProducts] = useState<ProductAvailability[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState("")
@@ -218,7 +220,7 @@ export default function StockProductsPage() {
           <TableBody>
             {loading ? <TableRow><TableCell colSpan={canMergeProducts ? 6 : 5} className="justify-center items-center text-center">Loading stock products...</TableCell></TableRow> : error ? <TableRow><TableCell colSpan={canMergeProducts ? 6 : 5} className="justify-center items-center text-center">{error}</TableCell></TableRow> : filteredProducts.length === 0 ? <TableRow><TableCell colSpan={canMergeProducts ? 6 : 5} className="justify-center items-center text-center">No stock products found.</TableCell></TableRow> : visibleProducts.map((product, index) => <TableRow key={product.productName} className="cursor-pointer hover:bg-muted/50" onClick={() => setSelectedProduct(product.productName)}>
               <TableCell className="justify-center items-center text-center">{(currentPage - 1) * pageSize + index + 1}</TableCell>
-              <TableCell className="w-[200px] min-w-[200px] max-w-[200px] font-medium justify-center items-center text-center"><div className="flex items-center justify-center gap-1"><span className="truncate">{product.productName}</span><Button type="button" variant="ghost" size="icon" className="h-7 w-7 shrink-0" title={`Edit ${product.productName}`} onClick={(event) => { event.stopPropagation(); setRenameFrom(product.productName); setRenameTo(product.productName); setRenameOpen(true) }}><Pencil className="h-3.5 w-3.5" /></Button></div></TableCell>
+              <TableCell className="w-[200px] min-w-[200px] max-w-[200px] font-medium justify-center items-center text-center"><div className="flex items-center justify-center gap-1"><span className="truncate">{product.productName}</span>{canManageProducts ? <Button type="button" variant="ghost" size="icon" className="h-7 w-7 shrink-0" title={`Edit ${product.productName}`} onClick={(event) => { event.stopPropagation(); setRenameFrom(product.productName); setRenameTo(product.productName); setRenameOpen(true) }}><Pencil className="h-3.5 w-3.5" /></Button> : null}</div></TableCell>
               <TableCell className="justify-center items-center text-center">{product.cartons} carton{product.cartons === 1 ? "" : "s"}, {product.packs} pack{product.packs === 1 ? "" : "s"}, {product.pieces} pcs</TableCell>
               <TableCell className="max-w-[100px] truncate justify-center items-center text-center">{product.availablePieces.toLocaleString()}</TableCell>
               <TableCell className="justify-center items-center text-center">{product.expiry ? format(new Date(product.expiry), "MMM d, yyyy") : "-"}</TableCell>
@@ -244,8 +246,8 @@ export default function StockProductsPage() {
         <DialogHeader><DialogTitle>{selectedProduct}</DialogTitle><DialogDescription>Saved stock and sales records for this product.</DialogDescription></DialogHeader>
         <Tabs defaultValue="stock">
           <TabsList><TabsTrigger value="stock">Stock</TabsTrigger><TabsTrigger value="sales">Sales</TabsTrigger></TabsList>
-          <TabsContent value="stock"><HistoryList entries={history.stocks} loading={historyLoading} type="stock" productName={selectedProduct ?? ""} historyDate={historyDate} onExpiryChange={updateStockExpiry} /></TabsContent>
-          <TabsContent value="sales"><HistoryList entries={history.sales} loading={historyLoading} type="sale" productName={selectedProduct ?? ""} historyDate={historyDate} /></TabsContent>
+          <TabsContent value="stock"><HistoryList entries={history.stocks} loading={historyLoading} type="stock" productName={selectedProduct ?? ""} historyDate={historyDate} canEdit={isAdmin} onExpiryChange={isAdmin ? updateStockExpiry : undefined} /></TabsContent>
+          <TabsContent value="sales"><HistoryList entries={history.sales} loading={historyLoading} type="sale" productName={selectedProduct ?? ""} historyDate={historyDate} canEdit={isAdmin} /></TabsContent>
         </Tabs>
       </DialogContent>
     </Dialog>
@@ -279,7 +281,7 @@ export default function StockProductsPage() {
         </DialogFooter>
       </DialogContent>
     </Dialog> : null}
-    <Dialog open={renameOpen} onOpenChange={setRenameOpen}>
+    {canManageProducts ? <Dialog open={renameOpen} onOpenChange={setRenameOpen}>
       <DialogContent className="flex max-h-[90vh] max-w-md flex-col overflow-y-auto">
         <DialogHeader><DialogTitle>Edit product name</DialogTitle><DialogDescription>This renames every saved stock and sales reference for this product.</DialogDescription></DialogHeader>
         <div className="relative space-y-2 py-3"><Input autoFocus value={renameTo} onChange={(event) => setRenameTo(event.target.value)} placeholder="Product name" />{renameSuggestions.length > 0 ? <div className="absolute left-0 right-0 top-full z-10 mt-1 rounded-md border bg-popover p-1 shadow-md">{renameSuggestions.map((name) => <button key={name} type="button" className="block w-full rounded px-2 py-1.5 text-left text-sm hover:bg-accent" onMouseDown={(event) => { event.preventDefault(); setRenameTo(name) }}>{name}</button>)}</div> : null}</div>
@@ -289,18 +291,18 @@ export default function StockProductsPage() {
           </Button>
         </DialogFooter>
       </DialogContent>
-    </Dialog>
+    </Dialog> : null}
   </main>
 }
 
-function HistoryList({ entries, loading, type, productName, historyDate, onExpiryChange }: { entries: ProductHistoryEntry[]; loading: boolean; type: "stock" | "sale"; productName: string; historyDate: (entry: ProductHistoryEntry) => string; onExpiryChange?: (stockId: string, expiry: string) => Promise<void> }) {
+function HistoryList({ entries, loading, type, productName, historyDate, canEdit = false, onExpiryChange }: { entries: ProductHistoryEntry[]; loading: boolean; type: "stock" | "sale"; productName: string; historyDate: (entry: ProductHistoryEntry) => string; canEdit?: boolean; onExpiryChange?: (stockId: string, expiry: string) => Promise<void> }) {
   if (loading) return <p className="py-6 text-sm text-muted-foreground">Loading history...</p>
   if (!entries.length) return <p className="py-6 text-sm text-muted-foreground">No saved {type} records for this product.</p>
-  if (type === "stock") return <StockHistoryTable entries={entries} historyDate={historyDate} onExpiryChange={onExpiryChange} />
-  return <div className="space-y-2 pt-3">{entries.map((entry) => <Link key={entry.id} href={`/sales?edit=${entry.id}&product=${encodeURIComponent(productName)}`} className="flex items-center justify-between rounded-md border p-3 text-sm hover:bg-muted/50"><span>{historyDate(entry)}</span><span>{entry.rows.length} row{entry.rows.length === 1 ? "" : "s"}</span><span className="font-medium">Edit</span></Link>)}</div>
+  if (type === "stock") return <StockHistoryTable entries={entries} historyDate={historyDate} canEdit={canEdit} onExpiryChange={onExpiryChange} />
+  return <div className="space-y-2 pt-3">{entries.map((entry) => canEdit ? <Link key={entry.id} href={`/sales?edit=${entry.id}&product=${encodeURIComponent(productName)}`} className="flex items-center justify-between rounded-md border p-3 text-sm hover:bg-muted/50"><span>{historyDate(entry)}</span><span>{entry.rows.length} row{entry.rows.length === 1 ? "" : "s"}</span><span className="font-medium">Edit</span></Link> : <div key={entry.id} className="flex items-center justify-between rounded-md border p-3 text-sm"><span>{historyDate(entry)}</span><span>{entry.rows.length} row{entry.rows.length === 1 ? "" : "s"}</span></div>)}</div>
 }
 
-function StockHistoryTable({ entries, historyDate, onExpiryChange }: { entries: ProductHistoryEntry[]; historyDate: (entry: ProductHistoryEntry) => string; onExpiryChange?: (stockId: string, expiry: string) => Promise<void> }) {
+function StockHistoryTable({ entries, historyDate, canEdit, onExpiryChange }: { entries: ProductHistoryEntry[]; historyDate: (entry: ProductHistoryEntry) => string; canEdit: boolean; onExpiryChange?: (stockId: string, expiry: string) => Promise<void> }) {
   const [savingRowId, setSavingRowId] = useState<string | null>(null)
   const stockRows = entries.flatMap((entry) => entry.rows.map((row) => ({ entry, row })))
 
@@ -323,8 +325,8 @@ function StockHistoryTable({ entries, historyDate, onExpiryChange }: { entries: 
     }
   }
 
-  return <div className="overflow-x-auto pt-3"><Table><TableHeader><TableRow><TableHead>Date</TableHead><TableHead>Company</TableHead><TableHead>Representative</TableHead><TableHead>Quantity</TableHead><TableHead>Expiry</TableHead><TableHead>Action</TableHead></TableRow></TableHeader><TableBody>{stockRows.map(({ entry, row }) => {
+  return <div className="overflow-x-auto pt-3"><Table><TableHeader><TableRow><TableHead>Date</TableHead><TableHead>Company</TableHead><TableHead>Representative</TableHead><TableHead>Quantity</TableHead><TableHead>Expiry</TableHead>{canEdit ? <TableHead>Action</TableHead> : null}</TableRow></TableHeader><TableBody>{stockRows.map(({ entry, row }) => {
     const stockId = String(row.id)
-    return <TableRow key={stockId}><TableCell className="justify-center items-center text-center">{historyDate(entry)}</TableCell><TableCell className="justify-center items-center text-center">{entry.companyName || "-"}</TableCell><TableCell className="justify-center items-center text-center">{entry.repName || "-"}</TableCell><TableCell className="justify-center items-center text-center">{String(row.totalPcs ?? row.qty ?? "-")}</TableCell><TableCell className="justify-center items-center text-center"><Input type="date" defaultValue={expiryValue(row.expiry)} disabled={savingRowId === stockId} onBlur={(event) => { if (event.currentTarget.value !== expiryValue(row.expiry)) void saveExpiry(stockId, event.currentTarget.value) }} className="min-w-[145px]" /></TableCell><TableCell className="justify-center items-center text-center"><Link href={`/stock?edit=${entry.id}&product=${encodeURIComponent(String(row.productName ?? ""))}`} className="font-medium hover:underline">Edit</Link></TableCell></TableRow>
+    return <TableRow key={stockId}><TableCell className="justify-center items-center text-center">{historyDate(entry)}</TableCell><TableCell className="justify-center items-center text-center">{entry.companyName || "-"}</TableCell><TableCell className="justify-center items-center text-center">{entry.repName || "-"}</TableCell><TableCell className="justify-center items-center text-center">{String(row.totalPcs ?? row.qty ?? "-")}</TableCell><TableCell className="justify-center items-center text-center">{canEdit ? <Input type="date" defaultValue={expiryValue(row.expiry)} disabled={savingRowId === stockId} onBlur={(event) => { if (event.currentTarget.value !== expiryValue(row.expiry)) void saveExpiry(stockId, event.currentTarget.value) }} className="min-w-[145px]" /> : expiryValue(row.expiry) || "-"}</TableCell>{canEdit ? <TableCell className="justify-center items-center text-center"><Link href={`/stock?edit=${entry.id}&product=${encodeURIComponent(String(row.productName ?? ""))}`} className="font-medium hover:underline">Edit</Link></TableCell> : null}</TableRow>
   })}</TableBody></Table></div>
 }

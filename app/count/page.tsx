@@ -26,7 +26,8 @@ import {
 } from "@/components/ui/table"
 import { Check, Calendar as CalendarIcon, Loader2, Plus, Search, Layers, X, GitMerge } from "lucide-react"
 import { toast } from "sonner"
-import { isLocalDevelopment, readLocalStaffName } from "@/lib/local-sales"
+import { readLocalProductCatalog, readLocalStaffName } from "@/lib/local-sales"
+import { useLocalOperationMode } from "@/lib/local-operation-mode"
 import { readLocalCountCatalog, readLocalCountForDate, readLocalCounts, saveLocalDailyCount, saveLocalCountCatalog } from "@/lib/local-counts"
 
 const ADD_TO_SHELF_OPTION = "__add_to_shelf__"
@@ -47,9 +48,11 @@ type ProductCountItem = {
   cartonSalesPrice?: number
   countOrder?: number | null
   savedCountedPcs?: number | null
+  savedCountedPacks?: number | null
   savedExpiry?: string | null
   // Local state fields
   countedPcs?: string | number
+  countedPacks?: string | number | null
   expiryInput?: string
 }
 
@@ -61,6 +64,77 @@ type ShelfItem = {
   rowTo?: number
   columnFrom?: number
   columnTo?: number
+}
+
+type CachedStockRow = {
+  productName: string
+  carton?: boolean
+  cartonQty?: number | null
+  packsPerCarton?: number | null
+  pack?: boolean
+  packQty?: number | null
+  pcsCount?: number | null
+  pcsQty?: number | null
+  totalPcs?: number | null
+  pcsSalesPrice?: number | null
+  packSalesPrice?: number | null
+  cartonSalesPrice?: number | null
+  expiry?: string | null
+}
+
+const countProductKey = (name: string) => name.replace(/\s+/g, " ").trim().toLowerCase()
+
+function addOfflineStockProducts(products: ProductCountItem[], stockRows: CachedStockRow[]): ProductCountItem[] {
+  const byName = new Map(products.map((product) => [countProductKey(product.productName), { ...product }]))
+  const packSizes = new Map<string, number>()
+  const quantities = new Map<string, number>()
+
+  stockRows.forEach((stock) => {
+    const name = stock.productName?.trim()
+    const key = name ? countProductKey(name) : ""
+    if (!key) return
+    if (!byName.has(key)) {
+      byName.set(key, {
+        productName: name,
+        availablePieces: 0,
+        shortestExpiry: stock.expiry ?? null,
+        shelfId: null,
+        shelfName: null,
+        packsPerCarton: 0,
+        piecesPerPack: 0,
+        cartonEnabled: false,
+        packEnabled: false,
+        pcsSalesPrice: stock.pcsSalesPrice ?? undefined,
+        packSalesPrice: stock.packSalesPrice ?? undefined,
+        cartonSalesPrice: stock.cartonSalesPrice ?? undefined,
+        countedPcs: "",
+      })
+    }
+    const currentQuantity = quantities.get(key) ?? 0
+    const rowPieces = Number(stock.totalPcs) > 0
+      ? Number(stock.totalPcs)
+      : (Number(stock.cartonQty) || 0) * (Number(stock.packsPerCarton) || 1) * (Number(stock.pcsCount) || 1)
+        + (Number(stock.packQty) || 0) * (Number(stock.pcsCount) || 1)
+        + (Number(stock.pcsQty) || 0)
+    quantities.set(key, currentQuantity + rowPieces)
+    if (!packSizes.has(key) && stock.pack && Number(stock.packQty) > 0 && Number(stock.pcsCount) > 0) {
+      packSizes.set(key, Number(stock.pcsCount))
+    }
+  })
+
+  stockRows.forEach((stock) => {
+    const key = countProductKey(stock.productName || "")
+    const product = byName.get(key)
+    if (!product) return
+    if (product.availablePieces === 0) product.availablePieces = quantities.get(key) ?? 0
+    const piecesPerPack = packSizes.get(key) ?? product.piecesPerPack ?? 0
+    if (piecesPerPack > 0) {
+      product.piecesPerPack = piecesPerPack
+      product.packEnabled = true
+    }
+  })
+
+  return [...byName.values()].sort((left, right) => left.productName.localeCompare(right.productName))
 }
 
 function formatPcsToUnits(pcs: number, ppc: number, pCount: number, cartonEnabled: boolean, packEnabled: boolean): string {
@@ -92,7 +166,9 @@ function formatPcsToUnits(pcs: number, ppc: number, pCount: number, cartonEnable
 
 export default function StockCountPage() {
   const { data: session } = useSession()
+  const { isLocal: localDev, mode: operationMode, ready: modeReady } = useLocalOperationMode()
   const canMergeProducts = session?.user?.role === "admin" || session?.user?.role === "staff"
+    || (localDev && operationMode === "offline")
   const router = useRouter()
   const searchParams = useSearchParams()
   const editId = searchParams.get("edit")
@@ -101,7 +177,6 @@ export default function StockCountPage() {
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
   const [saveState, setSaveState] = useState<"idle" | "saving" | "saved" | "error">("idle")
-  const [localDev, setLocalDev] = useState(false)
   const [dailyCountSaved, setDailyCountSaved] = useState(false)
   const [editingSavedCount, setEditingSavedCount] = useState(false)
 
@@ -141,15 +216,37 @@ export default function StockCountPage() {
   const tableTopRef = useRef<HTMLDivElement>(null)
   const nextCountOrderRef = useRef(0)
 
-  useEffect(() => setLocalDev(isLocalDevelopment()), [])
-
-  useEffect(() => { loadCountData() }, [editId, countDate, selectedShelfFilter])
+  useEffect(() => { if (modeReady) void loadCountData() }, [editId, countDate, selectedShelfFilter, localDev, operationMode, modeReady])
 
   const loadCountData = async () => {
     setLoading(true)
     setDailyCountSaved(false)
     setEditingSavedCount(Boolean(editId))
     try {
+      if (localDev && operationMode === "offline" && !editId) {
+        const dateKey = format(countDate, "yyyy-MM-dd")
+        const cached = readLocalCountCatalog(dateKey, selectedShelfFilter) ?? readLocalCountCatalog(dateKey, ALL_PRODUCTS_OPTION)
+        const savedStocks = readLocalProductCatalog()?.stockRows ?? []
+        if (!cached && !savedStocks.length) throw new Error("No locally saved stock catalog. Use Get products while online to download products and stock pack sizes.")
+        const localCount = readLocalCountForDate(dateKey)
+        const savedLines = new Map(localCount?.payload.lines.map((line) => [line.productName.trim().toLowerCase(), line]) ?? [])
+        const cachedProducts = addOfflineStockProducts((cached?.products ?? []) as ProductCountItem[], savedStocks).map((item) => {
+          const product = item as ProductCountItem
+          const saved = savedLines.get(product.productName.trim().toLowerCase())
+          return {
+            ...product,
+            countOrder: saved?.countOrder ?? product.countOrder ?? null,
+            countedPcs: saved?.countedPcs ?? product.savedCountedPcs ?? "",
+            countedPacks: saved?.countedPacks ?? product.savedCountedPacks ?? null,
+            expiryInput: saved?.expiry?.slice(0, 10) || product.expiryInput || product.shortestExpiry?.split("T")[0] || "",
+          }
+        })
+        setProducts(cachedProducts)
+        setShelves((cached?.shelves ?? []) as ShelfItem[])
+        setDailyCountSaved(Boolean(localCount || cachedProducts.some((product) => product.countedPcs !== "" && product.countedPcs != null)))
+        nextCountOrderRef.current = Math.max(Number(cached?.maxCountOrder) || 0, ...cachedProducts.map((product) => Number(product.countOrder) || 0))
+        return
+      }
       let loadedShelves: ShelfItem[] = []
       const shelvesResponse = await fetch("/api/inventory/shelves")
       if (shelvesResponse.ok) {
@@ -171,6 +268,7 @@ export default function StockCountPage() {
           ...p,
           countOrder: savedLines.get(p.productName.trim().toLowerCase())?.countOrder ?? p.countOrder ?? localOrders.get(p.productName.trim().toLowerCase()) ?? null,
           countedPcs: savedLines.get(p.productName.trim().toLowerCase())?.countedPcs ?? p.savedCountedPcs ?? "",
+          countedPacks: savedLines.get(p.productName.trim().toLowerCase())?.countedPacks ?? p.savedCountedPacks ?? null,
           expiryInput: (savedLines.get(p.productName.trim().toLowerCase())?.expiry || p.savedExpiry || p.shortestExpiry)?.split("T")[0] ?? "",
         }))
         if (editId) {
@@ -195,6 +293,7 @@ export default function StockCountPage() {
                 cartonEnabled: Boolean(line.packsPerCarton),
                 packEnabled: Boolean(line.piecesPerPack),
                 countedPcs: line.countedPcs == null ? "" : line.countedPcs,
+                countedPacks: line.countedPacks ?? null,
                 expiryInput: line.expiry ? line.expiry.split("T")[0] : "",
               }))
           }
@@ -229,6 +328,7 @@ export default function StockCountPage() {
           ...p,
           countOrder: savedLines.get(p.productName.trim().toLowerCase())?.countOrder ?? p.countOrder ?? localOrders.get(p.productName.trim().toLowerCase()) ?? null,
           countedPcs: savedLines.get(p.productName.trim().toLowerCase())?.countedPcs ?? p.savedCountedPcs ?? "",
+          countedPacks: savedLines.get(p.productName.trim().toLowerCase())?.countedPacks ?? p.savedCountedPacks ?? null,
           expiryInput: (savedLines.get(p.productName.trim().toLowerCase())?.expiry || p.savedExpiry || p.shortestExpiry)?.split("T")[0] ?? "",
         }))
       if (editId) {
@@ -253,6 +353,7 @@ export default function StockCountPage() {
               cartonEnabled: Boolean(line.packsPerCarton),
               packEnabled: Boolean(line.piecesPerPack),
               countedPcs: line.countedPcs == null ? "" : line.countedPcs,
+              countedPacks: line.countedPacks ?? null,
               expiryInput: line.expiry ? line.expiry.split("T")[0] : "",
             }))
         }
@@ -280,6 +381,7 @@ export default function StockCountPage() {
           ...(product as ProductCountItem),
           countOrder: savedLines.get((product as ProductCountItem).productName.trim().toLowerCase())?.countOrder ?? (product as ProductCountItem).countOrder ?? null,
           countedPcs: savedLines.get((product as ProductCountItem).productName.trim().toLowerCase())?.countedPcs ?? (product as ProductCountItem).countedPcs ?? "",
+          countedPacks: savedLines.get((product as ProductCountItem).productName.trim().toLowerCase())?.countedPacks ?? (product as ProductCountItem).countedPacks ?? null,
           expiryInput: savedLines.get((product as ProductCountItem).productName.trim().toLowerCase())?.expiry?.slice(0, 10) || (product as ProductCountItem).expiryInput || ((product as ProductCountItem).shortestExpiry ? (product as ProductCountItem).shortestExpiry!.split("T")[0] : ""),
         })))
         setDailyCountSaved(Boolean(localCount || cached.products.some((product) => (product as ProductCountItem).countedPcs !== "" && (product as ProductCountItem).countedPcs != null)))
@@ -346,16 +448,30 @@ export default function StockCountPage() {
     }
   }
 
-  const handleCountChange = (productName: string, val: string) => {
+  const handleCountChange = (productName: string, val: string, unit: "pcs" | "pack" = "pcs") => {
     setSaveState("idle")
     const currentProduct = products.find((product) => product.productName === productName)
     const localOrder = getLocalCountOrders(format(countDate, "yyyy-MM-dd")).get(productName.trim().toLowerCase())
     const countOrder = currentProduct?.countOrder ?? localOrder ?? (val !== "" ? ++nextCountOrderRef.current : null)
     setProducts((prev) => prev.map((product) => {
       if (product.productName !== productName) return product
-      return { ...product, countOrder, countedPcs: val }
+      const piecesPerPack = Number(product.piecesPerPack) || 0
+      if (piecesPerPack <= 0) return { ...product, countOrder, countedPcs: val, countedPacks: null }
+      const totalCount = product.countedPcs === "" || product.countedPcs == null ? null : Number(product.countedPcs)
+      const currentPacks = product.countedPacks == null
+        ? (totalCount == null ? "" : String(Math.floor(totalCount / piecesPerPack)))
+        : String(product.countedPacks)
+      const currentLoosePcs = totalCount == null ? "" : String(totalCount - (Number(currentPacks) || 0) * piecesPerPack)
+      const nextPacks = unit === "pack" ? val : currentPacks
+      const nextLoosePcs = unit === "pcs" ? val : currentLoosePcs
+      const counted = nextPacks === "" && nextLoosePcs === ""
+        ? ""
+        : (Number(nextPacks) || 0) * piecesPerPack + (Number(nextLoosePcs) || 0)
+      return { ...product, countOrder, countedPcs: counted, countedPacks: nextPacks }
     }))
   }
+
+  const normalizeProductSearch = (value: string) => value.toLocaleLowerCase().replace(/[^a-z0-9]/g, "")
 
   const getLocalCountOrders = (dateText: string) => {
     const orders = new Map<string, number>()
@@ -448,7 +564,7 @@ export default function StockCountPage() {
     }
   }
 
-  const handleSaveStockCount = async (saveMode: "online" | "offline" = "online") => {
+  const handleSaveStockCount = async (saveMode: "online" | "offline" = operationMode) => {
     setSaving(true)
     setSaveState("saving")
     try {
@@ -466,6 +582,7 @@ export default function StockCountPage() {
           shelfId: p.shelfId || undefined,
           expectedPcs: p.availablePieces,
           countedPcs: countedPcs != null && Number.isFinite(countedPcs) ? countedPcs : null,
+          countedPacks: p.countedPacks === "" || p.countedPacks == null ? null : Number(p.countedPacks),
           countOrder: p.countOrder,
           expiry: p.expiryInput ? new Date(p.expiryInput).toISOString() : undefined,
           packsPerCarton: p.packsPerCarton || undefined,
@@ -517,16 +634,16 @@ export default function StockCountPage() {
 
   // Filter & Search suggestions
   const searchSuggestions = useMemo(() => {
-    const query = searchTerm.trim().toLowerCase()
+    const query = normalizeProductSearch(searchTerm)
     if (query.length < 3) return []
-    return products.filter((p) => p.productName.toLowerCase().includes(query)).slice(0, 10)
+    return products.filter((p) => normalizeProductSearch(p.productName).includes(query)).slice(0, 10)
   }, [searchTerm, products])
 
   const mergeTargetSuggestions = useMemo(() => {
-    const query = mergeTarget.trim().toLowerCase()
+    const query = normalizeProductSearch(mergeTarget)
     if (query.length < 3) return []
     return products
-      .filter((p) => p.productName !== mergeSource && p.productName.toLowerCase().includes(query))
+      .filter((p) => p.productName !== mergeSource && normalizeProductSearch(p.productName).includes(query))
       .slice(0, 8)
   }, [mergeTarget, mergeSource, products])
 
@@ -534,9 +651,9 @@ export default function StockCountPage() {
   const filteredProducts = useMemo(() => {
     let list = [...products]
 
-    const query = searchTerm.trim().toLowerCase()
+    const query = normalizeProductSearch(searchTerm)
     if (query) {
-      list = list.filter((p) => p.productName.toLowerCase().includes(query))
+      list = list.filter((p) => normalizeProductSearch(p.productName).includes(query))
     }
 
     if (selectedShelfFilter && selectedShelfFilter !== ADD_TO_SHELF_OPTION && selectedShelfFilter !== ALL_PRODUCTS_OPTION) {
@@ -720,6 +837,7 @@ export default function StockCountPage() {
               <TableHead className="w-12">S/N</TableHead>
               <TableHead className="w-[240px]">Product name</TableHead>
               {selectedShelfFilter !== ADD_TO_SHELF_OPTION ? <TableHead className="w-[120px]">Count (Pcs)</TableHead> : null}
+              {selectedShelfFilter !== ADD_TO_SHELF_OPTION ? <TableHead className="w-[120px]">Count (Pack)</TableHead> : null}
               {canMergeProducts ? <TableHead className="w-16 text-center"><span className="sr-only">Merge</span><GitMerge className="mx-auto h-4 w-4" /></TableHead> : null}
               {selectedShelfFilter === ADD_TO_SHELF_OPTION ? (
                 <TableHead className="w-[120px] text-center">Add to shelf</TableHead>
@@ -735,13 +853,13 @@ export default function StockCountPage() {
           <TableBody>
             {loading ? (
               <TableRow>
-                <TableCell colSpan={canMergeProducts ? (selectedShelfFilter === ADD_TO_SHELF_OPTION ? 8 : 9) : (selectedShelfFilter === ADD_TO_SHELF_OPTION ? 7 : 8)} className="py-8 justify-center items-center text-center text-muted-foreground">
+                <TableCell colSpan={canMergeProducts ? (selectedShelfFilter === ADD_TO_SHELF_OPTION ? 8 : 10) : (selectedShelfFilter === ADD_TO_SHELF_OPTION ? 7 : 9)} className="py-8 justify-center items-center text-center text-muted-foreground">
                   Loading stock count products...
                 </TableCell>
               </TableRow>
             ) : filteredProducts.length === 0 ? (
               <TableRow>
-                <TableCell colSpan={canMergeProducts ? (selectedShelfFilter === ADD_TO_SHELF_OPTION ? 8 : 9) : (selectedShelfFilter === ADD_TO_SHELF_OPTION ? 7 : 8)} className="py-8 justify-center items-center text-center text-muted-foreground">
+                <TableCell colSpan={canMergeProducts ? (selectedShelfFilter === ADD_TO_SHELF_OPTION ? 8 : 10) : (selectedShelfFilter === ADD_TO_SHELF_OPTION ? 7 : 9)} className="py-8 justify-center items-center text-center text-muted-foreground">
                   No stock products found for audit.
                 </TableCell>
               </TableRow>
@@ -750,6 +868,13 @@ export default function StockCountPage() {
                 const hasCount = p.countedPcs !== "" && p.countedPcs !== undefined && p.countedPcs !== null
                 const countNum = hasCount ? Number(p.countedPcs) : null
                 const diffPcs = countNum !== null ? countNum - p.availablePieces : null
+                const piecesPerPack = Number(p.piecesPerPack) || 0
+                const countedPacks = p.countedPacks == null
+                  ? (countNum == null || piecesPerPack <= 0 ? "" : String(Math.floor(countNum / piecesPerPack)))
+                  : String(p.countedPacks)
+                const looseCountedPcs = countNum == null
+                  ? ""
+                  : String(countNum - (Number(countedPacks) || 0) * piecesPerPack)
 
                 const expectedFormatted = formatPcsToUnits(p.availablePieces, p.packsPerCarton, p.piecesPerPack, p.cartonEnabled, p.packEnabled)
                 const diffFormatted = diffPcs !== null ? formatPcsToUnits(diffPcs, p.packsPerCarton, p.piecesPerPack, p.cartonEnabled, p.packEnabled) : "-"
@@ -767,10 +892,22 @@ export default function StockCountPage() {
                         min="0"
                         placeholder="Count pcs"
                         className="h-8 text-xs font-semibold"
-                        value={p.countedPcs ?? ""}
+                        value={piecesPerPack > 0 ? looseCountedPcs : p.countedPcs ?? ""}
                         disabled={dailyCountSaved && !editingSavedCount}
-                        onChange={(e) => handleCountChange(p.productName, e.target.value)}
+                        onChange={(e) => handleCountChange(p.productName, e.target.value, "pcs")}
                       />
+                    </TableCell> : null}
+                    {selectedShelfFilter !== ADD_TO_SHELF_OPTION ? <TableCell className="justify-center items-center text-center">
+                      <Input
+                        type="number"
+                        min="0"
+                        placeholder={piecesPerPack > 0 ? "Count packs" : "No pack size"}
+                        className="h-8 text-xs font-semibold"
+                        value={countedPacks}
+                        disabled={piecesPerPack <= 0 || (dailyCountSaved && !editingSavedCount)}
+                        onChange={(e) => handleCountChange(p.productName, e.target.value, "pack")}
+                      />
+                      {piecesPerPack > 0 ? <span className="text-[10px] text-muted-foreground">{piecesPerPack} pcs/pack</span> : null}
                     </TableCell> : null}
                     {canMergeProducts ? <TableCell className="justify-center items-center text-center">
                       <Button
@@ -862,11 +999,11 @@ export default function StockCountPage() {
             <Check className="h-4 w-4" />Edit count for this day
           </Button>
         ) : localDev ? <>
-          <Button type="button" variant="outline" onClick={() => void handleSaveStockCount("online")} disabled={saving || saveState === "saved"} className="h-12 rounded-full px-5 shadow-xl">
-            {saving ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}{editingSavedCount ? "Save edits online" : "Save online"}
+          <Button type="button" variant="default" onClick={() => void handleSaveStockCount()} disabled={saving || saveState === "saved"} className="h-12 rounded-full px-5 shadow-xl">
+            {saving ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}{editingSavedCount ? `Save edits ${operationMode}` : `Save ${operationMode}`}
           </Button>
-          <Button type="button" onClick={() => void handleSaveStockCount("offline")} disabled={saving || saveState === "saved"} className="h-12 gap-2 rounded-full px-5 shadow-xl">
-            {saving ? <Loader2 className="h-4 w-4 animate-spin" /> : <Check className="h-4 w-4" />}{editingSavedCount ? "Save edits offline" : "Save offline"}
+          <Button type="button" variant="outline" onClick={() => void handleSaveStockCount(operationMode === "online" ? "offline" : "online")} disabled={saving || saveState === "saved"} className="h-12 gap-2 rounded-full px-5 shadow-xl">
+            {saving ? "Saving…" : `Save ${operationMode === "online" ? "offline" : "online"} instead`}
           </Button>
         </> : <Button type="button" onClick={() => void handleSaveStockCount("online")} disabled={saving || saveState === "saved"} className="h-12 gap-2 rounded-full px-6 shadow-xl">
           {saving ? <Loader2 className="h-4 w-4 animate-spin" /> : <Check className="h-4 w-4" />}{editingSavedCount ? "Save count edits" : "Save count"}

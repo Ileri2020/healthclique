@@ -20,6 +20,21 @@ export type LocalSale = {
 
 export type LocalProductCatalog = {
   productNames: string[]
+  stockRows: Array<{
+    productName: string
+    carton?: boolean
+    cartonQty?: number | null
+    packsPerCarton?: number | null
+    pack?: boolean
+    packQty?: number | null
+    pcsCount?: number | null
+    pcsQty?: number | null
+    totalPcs?: number | null
+    pcsSalesPrice?: number | null
+    packSalesPrice?: number | null
+    cartonSalesPrice?: number | null
+    expiry?: string | null
+  }>
   stockPricing: Record<string, {
     costPrice?: number
     cartonSalesPrice?: number
@@ -30,6 +45,9 @@ export type LocalProductCatalog = {
     wholesalePcsSalesPrice?: number
     packsPerCarton?: number
     pcsCount?: number
+    pcsCostPrice?: number
+    cheapestRecentPcsCostPrice?: number
+    recentPcsCostPrices?: number[]
   }>
   updatedAt: string
 }
@@ -86,16 +104,19 @@ export const readLocalProductCatalog = (): LocalProductCatalog | null => {
   if (typeof window === "undefined") return null
   try {
     const catalog = JSON.parse(window.localStorage.getItem(CATALOG_STORAGE_KEY) ?? "null")
-    return catalog && Array.isArray(catalog.productNames) && catalog.stockPricing ? catalog : null
+    return catalog && Array.isArray(catalog.productNames) && catalog.stockPricing
+      ? { ...catalog, stockRows: Array.isArray(catalog.stockRows) ? catalog.stockRows : [] }
+      : null
   } catch {
     return null
   }
 }
 
-export const saveLocalProductCatalog = (update: Partial<Pick<LocalProductCatalog, "productNames" | "stockPricing">>) => {
+export const saveLocalProductCatalog = (update: Partial<Pick<LocalProductCatalog, "productNames" | "stockPricing" | "stockRows">>) => {
   const current = readLocalProductCatalog()
   const next: LocalProductCatalog = {
     productNames: update.productNames ?? current?.productNames ?? [],
+    stockRows: update.stockRows ?? current?.stockRows ?? [],
     stockPricing: update.stockPricing ?? current?.stockPricing ?? {},
     updatedAt: new Date().toISOString(),
   }

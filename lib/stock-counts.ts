@@ -113,6 +113,9 @@ export async function getCountProducts(asOfDate?: Date) {
     })
 
     const latestStock = [...productStocks].sort((left, right) => eventDate(right).getTime() - eventDate(left).getTime())[0]
+    const latestPackStock = [...productStocks]
+      .filter((stock) => stock.pack && (stock.packQty || 0) > 0 && (stock.pcsCount || 0) > 0)
+      .sort((left, right) => eventDate(right).getTime() - eventDate(left).getTime())[0]
     const remainingLots = lots.filter((lot) => lot.remaining > 0)
     const expiry = remainingLots
       .map((lot) => lot.stock.expiry)
@@ -131,7 +134,7 @@ export async function getCountProducts(asOfDate?: Date) {
       expectedPcs,
       expiry: normalized?.expiry ?? expiry,
       packsPerCarton: latestStock?.packsPerCarton ?? 0,
-      pcsCount: latestStock?.pcsCount ?? 0,
+      pcsCount: latestPackStock?.pcsCount ?? 0,
       cartonEnabled: productStocks.some((stock) => stock.carton || (stock.packsPerCarton || 0) > 0),
       packEnabled: productStocks.some((stock) => stock.pack || (stock.pcsCount || 0) > 0),
       salesPrice: latestStock?.pcsSalesPrice ?? latestStock?.packSalesPrice ?? latestStock?.cartonSalesPrice ?? null,
