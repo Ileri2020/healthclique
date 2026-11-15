@@ -1,10 +1,17 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { sendAdminCustomEmail } from "@/lib/nodemailer";
+import { auth } from "@/auth";
 
 
 export async function POST(req: NextRequest) {
   try {
+    const session = await auth();
+    const role = (session?.user as { role?: string } | undefined)?.role;
+    if (role !== "admin" && role !== "staff") {
+      return NextResponse.json({ error: "Unauthorized" }, { status: 403 });
+    }
+
     const { cartId, message } = await req.json();
 
     if (!cartId || !message) {

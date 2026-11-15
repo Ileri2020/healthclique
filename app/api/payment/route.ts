@@ -3,30 +3,38 @@ import { prisma } from "@/lib/prisma";
 import crypto from "crypto";
 import axios from "axios";
 import { sendOrderNotification, sendPaymentConfirmationEmail } from "@/lib/nodemailer";
+import { PRICE_MARKUPS } from "@/lib/stock-pricing";
+import { auth } from "@/auth";
 
 
 function generateTxRef() {
   return `HC-${Date.now()}-${crypto.randomBytes(4).toString("hex")}`;
 }
 
-const PRICE_MARKUPS: Record<string, number> = {
-  customer: 1.3,
-  professional: 1.2,
-  wholesaler: 1.1,
-  admin: 1.0,
-  staff: 1.0,
-};
-
 export async function POST(req: NextRequest) {
   try {
     const url = new URL(req.url);
     const action = url.searchParams.get("action");
     const body = await req.json();
+    const session = await auth();
+    const sessionUser = session?.user as { id?: string; role?: string } | undefined;
+    if (!sessionUser?.id) {
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    }
+    const isStaff = sessionUser.role === "admin" || sessionUser.role === "staff";
 
     // ---------------- CONFIRM PAYMENT ----------------
     if (action === "confirm") {
       const { tx_ref: confirm_tx_ref, method } = body;
       if (!confirm_tx_ref) return NextResponse.json({ error: "tx_ref is required" }, { status: 400 });
+      const existingPayment = await prisma.payment.findUnique({
+        where: { tx_ref: confirm_tx_ref },
+        select: { cart: { select: { userId: true } } },
+      });
+      if (!existingPayment) return NextResponse.json({ error: "Transaction not found" }, { status: 404 });
+      if (!isStaff && existingPayment.cart.userId !== sessionUser.id) {
+        return NextResponse.json({ error: "Unauthorized" }, { status: 403 });
+      }
 
       // Verification Logic
       let isVerified = false;
@@ -198,13 +206,17 @@ export async function POST(req: NextRequest) {
     if (!userId || !items?.length) {
       return NextResponse.json({ error: "Invalid payload" }, { status: 400 });
     }
+    if (!isStaff && userId !== sessionUser.id) {
+      return NextResponse.json({ error: "Unauthorized" }, { status: 403 });
+    }
 
     const user = await prisma.user.findUnique({ where: { id: userId } });
     if (!user) return NextResponse.json({ error: "User not found" }, { status: 404 });
 
     // Server-side total calculation
+    const regularItems = items.filter((item: any) => !item.isSpecial && !item.productId?.startsWith("special-"));
     const products = await prisma.product.findMany({
-      where: { id: { in: items.map((i: any) => i.productId) } },
+      where: { id: { in: regularItems.map((item: any) => item.productId).filter(Boolean) } },
       include: { bulkPrices: true }
     });
 
@@ -212,6 +224,11 @@ export async function POST(req: NextRequest) {
     
     let subtotal = 0;
     for (const item of items) {
+      if (item.isSpecial || item.productId?.startsWith("special-")) {
+        subtotal += Number(item.customPrice || 0) * Number(item.quantity);
+        continue;
+      }
+
       const product = products.find(p => p.id === item.productId);
       if (!product) continue;
 
@@ -219,8 +236,6 @@ export async function POST(req: NextRequest) {
       if (item.bulkPriceId) {
         const bulk = product.bulkPrices.find(b => b.id === item.bulkPriceId);
         if (bulk) price = bulk.price;
-      } else if (item.isSpecial && item.customPrice) {
-        price = item.customPrice;
       }
       
       subtotal += (Number(price) * Number(markup)) * Number(item.quantity);
@@ -253,12 +268,12 @@ export async function POST(req: NextRequest) {
           affiliateId: affiliateId || null,
           products: {
             create: items.map((i: any) => ({
-              productId: i.productId,
+              productId: i.isSpecial || i.productId?.startsWith("special-") ? null : i.productId,
               quantity: i.quantity,
-              bulkPriceId: i.bulkPriceId,
-              customName: i.customName,
+              bulkPriceId: i.isSpecial ? null : i.bulkPriceId,
+              customName: i.customName || (i.productId?.startsWith("special-") ? i.name : null),
               customPrice: i.customPrice,
-              isSpecial: !!i.isSpecial,
+              isSpecial: !!i.isSpecial || !!i.productId?.startsWith("special-"),
             }))
           }
         }
@@ -277,12 +292,12 @@ export async function POST(req: NextRequest) {
           affiliateId: affiliateId || null,
           products: {
             create: items.map((i: any) => ({
-              productId: i.productId,
+              productId: i.isSpecial || i.productId?.startsWith("special-") ? null : i.productId,
               quantity: i.quantity,
-              bulkPriceId: i.bulkPriceId,
-              customName: i.customName,
+              bulkPriceId: i.isSpecial ? null : i.bulkPriceId,
+              customName: i.customName || (i.productId?.startsWith("special-") ? i.name : null),
               customPrice: i.customPrice,
-              isSpecial: !!i.isSpecial,
+              isSpecial: !!i.isSpecial || !!i.productId?.startsWith("special-"),
             }))
           }
         }

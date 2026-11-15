@@ -203,18 +203,38 @@ export async function GET(request: Request) {
     })
 
     // 5. Build date-aware cost-per-piece histories from stock entries.
+    //    Always derive cost-per-piece from (batch total cost ÷ batch pieces).
+    //    pcsCostPrice is used only when it differs from costPrice (i.e. was explicitly
+    //    set as a true per-unit cost); when pcsCostPrice equals costPrice and totalPcs
+    //    is 1 (a common data-entry artefact for single-pack products), it represents
+    //    the whole-batch cost and must be divided by batchPcs just like costPrice.
     const productCostHistory = new Map<string, Array<{ date: string; costPerPiece: number }>>()
     for (const inv of allStockInventories) {
       for (const stock of inv.stocks) {
         const key = stock.productName.trim().toLowerCase()
         if (!key) continue
 
+        const batchPcs = pcsOf(stock)
         let costPerPiece: number | null = null
-        if (stock.pcsCostPrice != null && stock.pcsCostPrice > 0) {
+
+        if (
+          stock.pcsCostPrice != null &&
+          stock.pcsCostPrice > 0 &&
+          stock.costPrice != null &&
+          stock.costPrice > 0 &&
+          // pcsCostPrice is a genuine per-unit cost only when it is strictly less than
+          // costPrice (batch total). When equal, it was stored as the batch total price.
+          Math.abs(stock.pcsCostPrice - stock.costPrice) > 0.01
+        ) {
+          // pcsCostPrice was explicitly computed as a per-unit value
           costPerPiece = stock.pcsCostPrice
         } else if (stock.costPrice != null && stock.costPrice > 0) {
-          const batchPcs = pcsOf(stock)
+          // Fall back to batch total ÷ batch pieces
           if (batchPcs > 0) costPerPiece = stock.costPrice / batchPcs
+        } else if (stock.pcsCostPrice != null && stock.pcsCostPrice > 0 && batchPcs > 0) {
+          // pcsCostPrice with no costPrice — treat as per-unit only if batchPcs > 1,
+          // otherwise it may be a whole-batch value with unknown piece count.
+          costPerPiece = batchPcs > 1 ? stock.pcsCostPrice : null
         }
 
         if (costPerPiece != null) {
@@ -264,14 +284,21 @@ export async function GET(request: Request) {
         const revenue = sale.total ?? (sale.price ?? 0) * ((soldPcs || sale.qty) ?? 1)
         totals.revenue += revenue
 
-        // InventorySale.costPrice may contain the stock batch's total cost, not
-        // a unit cost. Use the latest stock cost-per-piece on or before the sale.
+        // Look up the latest cost-per-piece from stock history on or before this sale date.
+        // Cap COGS to the line's own revenue as a safety net against unit-definition
+        // mismatches (e.g. a product stocked as "1 pack" but sold by individual pieces).
         let cogs = 0
         if (soldPcs > 0) {
           const key = sale.productName.trim().toLowerCase()
           const history = productCostHistory.get(key) ?? []
           const saleCost = [...history].reverse().find((entry) => entry.date <= date)
-          if (saleCost) cogs = saleCost.costPerPiece * soldPcs
+          if (saleCost) {
+            const rawCogs = saleCost.costPerPiece * soldPcs
+            // If COGS would exceed revenue by more than 50 % on a single line, the
+            // cost-per-piece is almost certainly the result of a unit-definition mismatch.
+            // Fall back to 0 for that line to avoid distorting the aggregate.
+            cogs = rawCogs <= revenue * 1.5 ? rawCogs : 0
+          }
         }
 
         totals.grossProfit += revenue - cogs

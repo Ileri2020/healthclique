@@ -57,6 +57,9 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
           role: user.role,
           avatarUrl: user.avatarUrl || undefined,
           addresses: user.addresses,
+          acceptedTerms: user.acceptedTerms,
+          acceptedPrivacy: user.acceptedPrivacy,
+          acceptedReturns: user.acceptedReturns,
         };
 
         return userData;
@@ -77,6 +80,15 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
       }
       if (Array.isArray(token?.addresses)) {
         session.user.addresses = token.addresses;
+      }
+      if (typeof token?.acceptedTerms === "boolean") {
+        session.user.acceptedTerms = token.acceptedTerms;
+      }
+      if (typeof token?.acceptedPrivacy === "boolean") {
+        session.user.acceptedPrivacy = token.acceptedPrivacy;
+      }
+      if (typeof token?.acceptedReturns === "boolean") {
+        session.user.acceptedReturns = token.acceptedReturns;
       }
       if (token?.isAffiliate !== undefined) {
         session.user.isAffiliate = token.isAffiliate as boolean;
@@ -100,6 +112,9 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
             token.role = dbUser.role ?? "customer";
             token.avatarUrl = dbUser.avatarUrl;
             token.addresses = await prisma.shippingAddress.findMany({ where: { userId: dbUser.id } });
+            token.acceptedTerms = dbUser.acceptedTerms;
+            token.acceptedPrivacy = dbUser.acceptedPrivacy;
+            token.acceptedReturns = dbUser.acceptedReturns;
             
             // Add affiliate status
             const affiliate = await prisma.affiliate.findUnique({
@@ -119,6 +134,9 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
         token.role = u.role;
         token.avatarUrl = u.avatarUrl;
         token.addresses = u.addresses;
+        token.acceptedTerms = u.acceptedTerms;
+        token.acceptedPrivacy = u.acceptedPrivacy;
+        token.acceptedReturns = u.acceptedReturns;
         
         // Add affiliate status
         const affiliate = await prisma.affiliate.findUnique({

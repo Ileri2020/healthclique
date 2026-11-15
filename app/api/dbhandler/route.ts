@@ -39,6 +39,10 @@ const modelMap: Record<string, any> = {
   stock: prisma.stock,
   user: prisma.user,
   message: prisma.message,
+  comment: prisma.comment,
+  comments: prisma.comment,
+  like: prisma.like,
+  likes: prisma.like,
   brand: prisma.brand,
   activeIngredient: prisma.activeIngredient,
   healthConcern: prisma.healthConcern,
@@ -53,7 +57,7 @@ const modelMap: Record<string, any> = {
 // =====================
 function parseId(id: string | null, model: string) {
   if (!id) return null;
-  return ["user", "category", "product", "brand"].includes(model) ? id : Number(id);
+  return id;
 }
 
 async function handleUpload(file: File | string) {
@@ -77,9 +81,74 @@ export async function GET(req: NextRequest) {
 
   if (!model || !modelMap[model]) return NextResponse.json({ error: "Invalid model" }, { status: 400 });
 
+  const session = await auth();
+  const sessionUser = session?.user as { id?: string; role?: string } | undefined;
+  const isStaff = sessionUser?.role === "admin" || sessionUser?.role === "staff";
   const prismaModel = modelMap[model];
 
   try {
+    if (["comment", "comments", "like", "likes"].includes(model) && id) {
+      return NextResponse.json(await prismaModel.findMany({
+        where: { contentId: id },
+        take: limit,
+        skip: offset,
+        orderBy: { createdAt: "desc" },
+      }));
+    }
+    if (["comment", "comments", "like", "likes"].includes(model)) {
+      return NextResponse.json({ error: "A post ID is required." }, { status: 400 });
+    }
+
+    if (model === "user") {
+      const select = {
+        id: true,
+        name: true,
+        email: true,
+        contact: true,
+        role: true,
+        verificationStatus: true,
+        avatarUrl: true,
+        licenseImage: true,
+        professionalType: true,
+        regNumber: true,
+        facilityName: true,
+        facilityAddress: true,
+        facilityRegNumber: true,
+        acceptedTerms: true,
+        acceptedPrivacy: true,
+        acceptedReturns: true,
+      };
+      if (id) {
+        if (!sessionUser?.id || (!isStaff && sessionUser.id !== id)) {
+          return NextResponse.json({ error: "Unauthorized" }, { status: 403 });
+        }
+        const user = await prisma.user.findUnique({ where: { id }, select });
+        if (!user) return NextResponse.json({ error: "Document not found" }, { status: 404 });
+        return NextResponse.json(user);
+      }
+      if (!sessionUser?.id) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+      const users = await prisma.user.findMany({
+        where: isStaff ? {} : { role: { in: ["admin", "staff"] } },
+        select,
+        take: limit,
+        skip: offset,
+        orderBy: { createdAt: "desc" },
+      });
+      return NextResponse.json(users);
+    }
+
+    if (model === "message" && !id) {
+      if (!sessionUser?.id) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+      const messages = await prisma.message.findMany({
+        where: { OR: [{ senderId: sessionUser.id }, { receiverId: sessionUser.id }] },
+        include: { sender: { select: { id: true, name: true, email: true, role: true, avatarUrl: true } } },
+        take: limit,
+        skip: offset,
+        orderBy: { createdAt: "desc" },
+      });
+      return NextResponse.json(messages);
+    }
+
     if (!id) {
       if (model === "featuredProduct") {
         return NextResponse.json(await prisma.featuredProduct.findMany({
@@ -97,13 +166,23 @@ export async function GET(req: NextRequest) {
         }));
       }
 
-      if (model === "review" || model === "post") {
+      if (model === "review") {
         return NextResponse.json(await prismaModel.findMany({
           take: limit,
           skip: offset,
           include: { user: { select: { id: true, email: true, name: true, avatarUrl: true } } },
           orderBy: { createdAt: 'desc' }
         }));
+      }
+
+      if (model === "post") {
+        const posts = await prisma.post.findMany({
+          take: limit,
+          skip: offset,
+          include: { author: { select: { id: true, email: true, name: true, avatarUrl: true } } },
+          orderBy: { createdAt: "desc" },
+        });
+        return NextResponse.json(posts.map(({ author, ...post }) => ({ ...post, user: author })));
       }
 
       if (model === "category") {
@@ -228,6 +307,13 @@ export async function GET(req: NextRequest) {
       const where: any = {};
 
       if (userId) where.userId = userId;
+      if (model === "shippingAddress") {
+        if (!sessionUser?.id) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+        if (userId && !isStaff && userId !== sessionUser.id) {
+          return NextResponse.json({ error: "Unauthorized" }, { status: 403 });
+        }
+        if (!isStaff) where.userId = sessionUser.id;
+      }
       if (model === "coupon" && code) where.code = code;
       if (model === "deliveryFee" && state) where.state = state;
       
@@ -236,6 +322,8 @@ export async function GET(req: NextRequest) {
       }
 
       if (model === "cart") {
+          if (!sessionUser?.id) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+          if (!isStaff) where.userId = sessionUser.id;
           return NextResponse.json(await prisma.cart.findMany({
               where,
               include: {
@@ -279,6 +367,24 @@ export async function GET(req: NextRequest) {
         include: Object.keys(include).length > 0 ? include : undefined
       });
       if (!item) return NextResponse.json({ error: "Document not found" }, { status: 404 });
+      if (model === "post") {
+        const post = await prisma.post.findUnique({
+          where: { id },
+          include: { author: { select: { id: true, email: true, name: true, avatarUrl: true } } },
+        });
+        if (!post) return NextResponse.json({ error: "Document not found" }, { status: 404 });
+        const { author, ...postData } = post;
+        return NextResponse.json({ ...postData, user: author });
+      }
+      if (model === "cart" && !isStaff && item.userId !== sessionUser?.id) {
+        return NextResponse.json({ error: "Unauthorized" }, { status: 403 });
+      }
+      if (model === "shippingAddress" && !isStaff && item.userId !== sessionUser?.id) {
+        return NextResponse.json({ error: "Unauthorized" }, { status: 403 });
+      }
+      if (model === "message" && item.senderId !== sessionUser?.id && item.receiverId !== sessionUser?.id) {
+        return NextResponse.json({ error: "Unauthorized" }, { status: 403 });
+      }
       return NextResponse.json(item);
     }
   } catch (error) {
@@ -322,6 +428,62 @@ export async function POST(req: NextRequest) {
     formData.forEach((value, key) => { if (key !== "file") body[key] = value; });
   } else {
     body = await req.json();
+  }
+
+  const sessionUser = session?.user as { id?: string } | undefined;
+  if (model === "review" || model === "priceFeedback") {
+    if (!sessionUser?.id) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    if (body.userId && body.userId !== sessionUser.id) {
+      return NextResponse.json({ error: "The submitted user does not match the signed-in account." }, { status: 403 });
+    }
+    if (typeof body.productId !== "string" || !body.productId) {
+      return NextResponse.json({ error: "A product ID is required." }, { status: 400 });
+    }
+    const product = await prisma.product.findUnique({ where: { id: body.productId }, select: { id: true } });
+    if (!product) return NextResponse.json({ error: "Product not found." }, { status: 404 });
+    body.userId = sessionUser.id;
+    if (model === "review" && (!Number.isInteger(body.rating) || body.rating < 1 || body.rating > 5)) {
+      return NextResponse.json({ error: "Rating must be a whole number from 1 to 5." }, { status: 400 });
+    }
+    if (model === "priceFeedback" && (typeof body.feedback !== "string" || !body.feedback.trim())) {
+      return NextResponse.json({ error: "Price feedback is required." }, { status: 400 });
+    }
+  }
+
+  if (["comment", "comments", "like", "likes"].includes(model)) {
+    if (!sessionUser?.id) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    const contentId = typeof body.contentId === "string" ? body.contentId : "";
+    if (!contentId || (body.userId && body.userId !== sessionUser.id)) {
+      return NextResponse.json({ error: "Invalid content or user." }, { status: 400 });
+    }
+    const content = await prisma.post.findUnique({ where: { id: contentId }, select: { id: true } });
+    if (!content) return NextResponse.json({ error: "Post not found." }, { status: 404 });
+
+    if (model === "like" || model === "likes") {
+      const like = await prisma.like.upsert({
+        where: { userId_contentId: { userId: sessionUser.id, contentId } },
+        update: {},
+        create: { userId: sessionUser.id, contentId },
+      });
+      return NextResponse.json(like, { status: 201 });
+    }
+
+    const username = typeof session?.user?.name === "string" ? session.user.name : "User";
+    const comment = typeof body.comment === "string" ? body.comment.trim() : "";
+    if (!comment) return NextResponse.json({ error: "Comment cannot be empty." }, { status: 400 });
+    return NextResponse.json(await prisma.comment.create({
+      data: { userId: sessionUser.id, username, contentId, comment },
+    }), { status: 201 });
+  }
+
+  if (model === "shippingAddress" && (!sessionUser?.id || body.userId !== sessionUser.id)) {
+    return NextResponse.json({ error: "Unauthorized" }, { status: 403 });
+  }
+  if (model === "cart" && (!sessionUser?.id || body.userId !== sessionUser.id)) {
+    return NextResponse.json({ error: "Unauthorized" }, { status: 403 });
+  }
+  if (model === "message" && (!sessionUser?.id || body.senderId !== sessionUser.id)) {
+    return NextResponse.json({ error: "Unauthorized" }, { status: 403 });
   }
 
   try {
@@ -425,10 +587,6 @@ export async function PUT(req: NextRequest) {
   const session = await auth();
   const role = (session?.user as any)?.role || "visitor";
 
-  if (model !== "user" && role !== "admin" && role !== "staff") {
-    return NextResponse.json({ error: "Unauthorized access" }, { status: 403 });
-  }
-
   if (!model || !modelMap[model]) return NextResponse.json({ error: "Invalid model" }, { status: 400 });
 
   const prismaModel = modelMap[model];
@@ -451,6 +609,9 @@ export async function PUT(req: NextRequest) {
 
   // Support for bulk brand reordering
   if (model === "brand" && Array.isArray(body)) {
+    if (role !== "admin" && role !== "staff") {
+      return NextResponse.json({ error: "Unauthorized access" }, { status: 403 });
+    }
     try {
       const updates = body.map((item: any) => 
         prisma.brand.update({
@@ -470,6 +631,38 @@ export async function PUT(req: NextRequest) {
   if (!id) return NextResponse.json({ error: "Missing ID" }, { status: 400 });
 
   const { id: _, ...updatedData } = body;
+  const sessionUser = session?.user as { id?: string; role?: string } | undefined;
+  const isStaff = role === "admin" || role === "staff";
+  if (!isStaff) {
+    if (model === "user") {
+      if (!sessionUser?.id || sessionUser.id !== id) {
+        return NextResponse.json({ error: "Unauthorized access" }, { status: 403 });
+      }
+      if (updatedData.role !== undefined && !["customer", "professional", "wholesaler"].includes(updatedData.role)) {
+        return NextResponse.json({ error: "Invalid account role" }, { status: 403 });
+      }
+      if (updatedData.verificationStatus !== undefined && !["unverified", "pending"].includes(updatedData.verificationStatus)) {
+        return NextResponse.json({ error: "Invalid verification status" }, { status: 403 });
+      }
+    } else if (model === "cart" && Object.keys(updatedData).every(key => key === "name")) {
+      const cart = await prisma.cart.findUnique({ where: { id }, select: { userId: true } });
+      if (!sessionUser?.id || cart?.userId !== sessionUser.id) {
+        return NextResponse.json({ error: "Unauthorized access" }, { status: 403 });
+      }
+    } else if (model === "shippingAddress") {
+      const address = await prisma.shippingAddress.findUnique({ where: { id }, select: { userId: true } });
+      if (!sessionUser?.id || address?.userId !== sessionUser.id || (updatedData.userId !== undefined && updatedData.userId !== sessionUser.id)) {
+        return NextResponse.json({ error: "Unauthorized access" }, { status: 403 });
+      }
+    } else if (model === "message" && Object.keys(updatedData).every(key => key === "isRead") && updatedData.isRead === true) {
+      const message = await prisma.message.findUnique({ where: { id }, select: { receiverId: true } });
+      if (!sessionUser?.id || message?.receiverId !== sessionUser.id) {
+        return NextResponse.json({ error: "Unauthorized access" }, { status: 403 });
+      }
+    } else {
+      return NextResponse.json({ error: "Unauthorized access" }, { status: 403 });
+    }
+  }
   
   if (updatedData.isRead === "true") updatedData.isRead = true;
   if (updatedData.isRead === "false") updatedData.isRead = false;
@@ -543,13 +736,25 @@ export async function DELETE(req: NextRequest) {
   const session = await auth();
   const role = (session?.user as any)?.role || "visitor";
 
-  if (role !== "admin" && role !== "staff") {
-    return NextResponse.json({ error: "Unauthorized" }, { status: 403 });
-  }
-
   if (!model || !modelMap[model] || !id) return NextResponse.json({ error: "Invalid request" }, { status: 400 });
 
   try {
+    if (["comment", "comments", "like", "likes"].includes(model)) {
+      const session = await auth();
+      const sessionUser = session?.user as { id?: string; role?: string } | undefined;
+      if (!sessionUser?.id) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+      const item = await modelMap[model].findUnique({ where: { id }, select: { userId: true } });
+      if (!item) return NextResponse.json({ error: "Document not found" }, { status: 404 });
+      if (item.userId !== sessionUser.id && sessionUser.role !== "admin" && sessionUser.role !== "staff") {
+        return NextResponse.json({ error: "Unauthorized" }, { status: 403 });
+      }
+      await modelMap[model].delete({ where: { id } });
+      return NextResponse.json({ success: true });
+    }
+    if (role !== "admin" && role !== "staff") {
+      return NextResponse.json({ error: "Unauthorized" }, { status: 403 });
+    }
+
     await modelMap[model].delete({ where: { id } });
     return NextResponse.json({ success: true });
   } catch (error) {

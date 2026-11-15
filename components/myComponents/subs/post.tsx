@@ -139,14 +139,14 @@ const Post = ({ post }: any) => {
   const handleDelete = async () => {
     if (!confirm("Delete this post?")) return;
     try {
-      await axios.delete(`/api/dbhandler?model=posts&id=${post.id}`);
+      await axios.delete(`/api/dbhandler?model=post&id=${post.id}`);
       window.location.reload();
     } catch (err) {}
   };
 
   const handleSaveEdit = async () => {
     try {
-      await axios.put(`/api/dbhandler?model=posts&id=${post.id}`, { ...editData, _id: post.id });
+      await axios.put(`/api/dbhandler?model=post&id=${post.id}`, editData);
       setIsEditing(false);
       window.location.reload();
     } catch (err) {}

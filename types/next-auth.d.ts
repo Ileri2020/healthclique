@@ -10,6 +10,9 @@ declare module "next-auth" {
       role?: string
       avatarUrl?: string
       addresses?: any[]
+      acceptedTerms?: boolean
+      acceptedPrivacy?: boolean
+      acceptedReturns?: boolean
       isAffiliate?: boolean
       affiliate?: {
         id: string
@@ -25,6 +28,9 @@ declare module "next-auth" {
     role?: string
     avatarUrl?: string
     addresses?: any[]
+    acceptedTerms?: boolean
+    acceptedPrivacy?: boolean
+    acceptedReturns?: boolean
     isAffiliate?: boolean
     affiliate?: {
       id: string
@@ -43,6 +49,9 @@ declare module "next-auth/jwt" {
     role?: string
     avatarUrl?: string
     addresses?: any[]
+    acceptedTerms?: boolean
+    acceptedPrivacy?: boolean
+    acceptedReturns?: boolean
     isAffiliate?: boolean
     affiliate?: {
       id: string

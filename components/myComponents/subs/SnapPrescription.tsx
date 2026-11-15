@@ -18,7 +18,6 @@ import {
   X,
   Plus,
 } from "lucide-react";
-import { GoogleGenerativeAI } from "@google/generative-ai";
 import axios from "axios";
 import { useCart } from "@/hooks/use-cart";
 import { toast } from "sonner"; // Assuming sonner is used for toasts, otherwise I can use alert or a custom toast
@@ -67,46 +66,11 @@ export const SnapPrescription = ({
     setSelectedItems({});
 
     try {
-      const {
-        data: { apiKey },
-      } = await axios.get("/api/keys/gemini");
-      const genAI = new GoogleGenerativeAI(apiKey);
-      const model = genAI.getGenerativeModel(
-        { model: "gemini-2.5-flash" },
-        { apiVersion: "v1" },
-      );
-
-      const prompt = `
-        Analyze this ${image ? "medical prescription or list of products (image)" : "list of products/prescription (text)"}.
-        ${manualText ? `USER TEXT: "${manualText}"` : ""}
-        Extract the items. For each, give:
-        - name: Drug Name (text)
-        - quantity: Quantity requested
-        - grams: Dosage/Strength (e.g., 500mg, 100mg/5ml)
-        - form: SPECIFY if it is a Tablet, Syrup, Capsule, Injection, Suspension, Gel, Cream, or Ointment. (CRITICAL for matching)
-        - activeIngredients: List of active ingredients if identifiable
-        - category: Type of drug (e.g., Antimalarial, Antibiotic, Painkiller, Supplement)
-        - instructions: Dosage instructions if visible
-        
-        Return ONLY a JSON object: { "products": [...] }
-      `;
-
-      let result;
-      if (image) {
-        const mimeType = image.match(/data:(.*?);base64/)?.[1] || "image/jpeg";
-        const base64Data = image.split(",")[1];
-        const part = { inlineData: { data: base64Data, mimeType } };
-        result = await model.generateContent([prompt, part]);
-      } else {
-        result = await model.generateContent(prompt);
-      }
-      const response = await result.response;
-      const parsed = JSON.parse(
-        response
-          .text()
-          .replace(/```json|```/g, "")
-          .trim(),
-      );
+      const { data: parsed } = await axios.post("/api/products/parse-prescription", {
+        image: image?.split(",")[1] || "",
+        mimeType: image?.match(/data:(.*?);base64/)?.[1] || "image/jpeg",
+        manualText,
+      });
 
       if (!parsed.products?.length) throw new Error("No products identified.");
 

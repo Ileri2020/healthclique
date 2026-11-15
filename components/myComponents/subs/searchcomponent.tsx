@@ -11,23 +11,20 @@ export function SearchInput() {
   const [searchResults, setSearchResults] = useState<any[]>([]);
   const [isOpen, setIsOpen] = useState(false);
 
-  const handleSearch = async () => {
+  const handleSearch = async (query = searchValue) => {
     try {
-      const response = await axios.get(`/api/db?model=product`);
+      const response = await axios.get(`/api/dbhandler?model=product&minimal=true&query=${encodeURIComponent(query)}`);
       const products = response.data;
-      const filteredProducts = products.filter((product: any) =>
-        product.name.toLowerCase().includes(searchValue.toLowerCase())
-      );
-
-      setSearchResults(filteredProducts);
+      setSearchResults(Array.isArray(products) ? products : []);
     } catch (error) {
       console.error(error);
     }
   };
 
   const handleInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    setSearchValue(e.target.value);
-    handleSearch();
+    const query = e.target.value;
+    setSearchValue(query);
+    handleSearch(query);
   };
 
   return (
@@ -54,4 +51,3 @@ export function SearchInput() {
     </Popover>
   );
 }
-
