@@ -259,6 +259,9 @@ export async function GET(request: Request) {
     }
 
     // 7. Accumulate revenue + COGS per day
+    // Also track products sold with no cost history (never stocked / cost = 0)
+    const unstockedMap = new Map<string, { name: string; lastSalePrice: number; lastDate: string }>()
+
     for (const inventory of salesInventories) {
       if (!inventory.date) continue
       const date = dayKey(inventory.date)
@@ -282,6 +285,30 @@ export async function GET(request: Request) {
         // Revenue: use stored total; fallback to price × soldPcs
         const soldPcs = pcsOf(sale)
         const revenue = sale.total ?? (sale.price ?? 0) * ((soldPcs || sale.qty) ?? 1)
+
+        const key = sale.productName.trim().toLowerCase()
+        const history = productCostHistory.get(key) ?? []
+        const saleCost = [...history].reverse().find((entry) => entry.date <= date) ?? history[0]
+
+        // Skip products with 0 cost price (never stocked) from profit and loss calculation.
+        // These are tracked separately in the unstockedProducts table.
+        if (!saleCost || saleCost.costPerPiece <= 0) {
+          // Still count sales revenue
+          totals.revenue += revenue
+          // Track last sold unit price for the unstocked products datatable
+          const saleUnitPrice = (sale.price != null && sale.price > 0)
+            ? sale.price
+            : (soldPcs > 0 ? revenue / soldPcs : revenue)
+          const existing = unstockedMap.get(key)
+          if (!existing) {
+            unstockedMap.set(key, { name: sale.productName.trim(), lastSalePrice: saleUnitPrice, lastDate: date })
+          } else if (date >= existing.lastDate) {
+            existing.lastSalePrice = saleUnitPrice
+            existing.lastDate = date
+          }
+          continue
+        }
+
         totals.revenue += revenue
 
         // Look up the latest cost-per-piece from stock history on or before this sale date.
@@ -289,16 +316,11 @@ export async function GET(request: Request) {
         // mismatches (e.g. a product stocked as "1 pack" but sold by individual pieces).
         let cogs = 0
         if (soldPcs > 0) {
-          const key = sale.productName.trim().toLowerCase()
-          const history = productCostHistory.get(key) ?? []
-          const saleCost = [...history].reverse().find((entry) => entry.date <= date)
-          if (saleCost) {
-            const rawCogs = saleCost.costPerPiece * soldPcs
-            // If COGS would exceed revenue by more than 50 % on a single line, the
-            // cost-per-piece is almost certainly the result of a unit-definition mismatch.
-            // Fall back to 0 for that line to avoid distorting the aggregate.
-            cogs = rawCogs <= revenue * 1.5 ? rawCogs : 0
-          }
+          const rawCogs = saleCost.costPerPiece * soldPcs
+          // If COGS would exceed revenue by more than 50 % on a single line, the
+          // cost-per-piece is almost certainly the result of a unit-definition mismatch.
+          // Fall back to 0 for that line to avoid distorting the aggregate.
+          cogs = rawCogs <= revenue * 1.5 ? rawCogs : 0
         }
 
         totals.grossProfit += revenue - cogs
@@ -371,18 +393,38 @@ export async function GET(request: Request) {
       .slice(0, 12)
 
     const stockPurchasesByCompany = new Map<string, { companyName: string; total: number; orders: number }>()
+    const stockPurchasesByDateMap = new Map<string, { date: string; dateLabel: string; companyName: string; total: number; orders: number }>()
+
     for (const inventory of allStockInventories) {
       const purchaseDate = inventory.date ?? inventory.rangeTo ?? inventory.rangeFrom ?? inventory.createdAt
       const purchaseDay = dayKey(purchaseDate)
       if (purchaseDay < fromValue || purchaseDay > toValue) continue
 
       const companyName = inventory.stocks.find((row) => row.companyName?.trim())?.companyName?.trim() || "Unknown supplier"
+      const amount = Number(inventory.total) || 0
+
+      // By-company totals (for supplier view)
       const company = stockPurchasesByCompany.get(companyName) ?? { companyName, total: 0, orders: 0 }
-      company.total += Number(inventory.total) || 0
+      company.total += amount
       company.orders += 1
       stockPurchasesByCompany.set(companyName, company)
+
+      // By-date-and-supplier totals (for date view)
+      const dateKeyStr = `${purchaseDay}__${companyName}`
+      const dateRow = stockPurchasesByDateMap.get(dateKeyStr) ?? {
+        date: purchaseDay,
+        dateLabel: purchaseDay,
+        companyName,
+        total: 0,
+        orders: 0,
+      }
+      dateRow.total += amount
+      dateRow.orders += 1
+      stockPurchasesByDateMap.set(dateKeyStr, dateRow)
     }
+
     const stockPurchases = Array.from(stockPurchasesByCompany.values()).sort((a, b) => b.total - a.total)
+    const stockPurchasesByDate = Array.from(stockPurchasesByDateMap.values()).sort((a, b) => a.date.localeCompare(b.date))
 
     const totalRevenue = daily.reduce((s, d) => s + d.revenue, 0)
     const totalGrossProfit = daily.reduce((s, d) => s + d.grossProfit, 0)
@@ -393,6 +435,10 @@ export async function GET(request: Request) {
       daily,
       stock,
       stockPurchases,
+      stockPurchasesByDate,
+      unstockedProducts: Array.from(unstockedMap.values())
+        .map(({ name, lastSalePrice }) => ({ name, lastSalePrice }))
+        .sort((a, b) => a.name.localeCompare(b.name)),
       summary: {
         customers: daily.reduce((s, d) => s + d.customers, 0),
         revenue: totalRevenue,
