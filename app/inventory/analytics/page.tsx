@@ -45,7 +45,14 @@ type DailyPoint = {
   expenses: number
   netProfit: number
 }
+type ProductSalesPoint = { name: string; revenue: number; quantity: number; grossProfit: number }
 type StockPoint = { name: string; quantity: number }
+type StockSalesPrices = {
+  name: string
+  pcsSalesPrice?: number
+  packSalesPrice?: number
+  cartonSalesPrice?: number
+}
 type StockPurchasePoint = { companyName: string; total: number; orders: number }
 type StockPurchaseDatePoint = {
   date: string
@@ -57,10 +64,13 @@ type StockPurchaseDatePoint = {
 type UnstockedProduct = {
   name: string
   lastSalePrice: number
+  revenue: number
 }
 type AnalyticsData = {
   daily: DailyPoint[]
   stock: StockPoint[]
+  products: ProductSalesPoint[]
+  stockSalesPrices: StockSalesPrices[]
   stockPurchases: StockPurchasePoint[]
   stockPurchasesByDate: StockPurchaseDatePoint[]
   unstockedProducts: UnstockedProduct[]
@@ -146,6 +156,11 @@ export default function InventoryAnalyticsPage() {
   // Stock purchases chart options
   const [stockSortMode, setStockSortMode] = useState<"date" | "supplier">("date")
 
+  // Product sales chart mode and visible range
+  const [productMetric, setProductMetric] = useState<"revenue" | "quantity" | "grossProfit">("revenue")
+  const [showAllProducts, setShowAllProducts] = useState(false)
+  const [selectedProductName, setSelectedProductName] = useState<string | null>(null)
+
   // Unstocked products table search & merge state
   const [unstockedSearch, setUnstockedSearch] = useState("")
   const [mergeDialogOpen, setMergeDialogOpen] = useState(false)
@@ -198,7 +213,21 @@ export default function InventoryAnalyticsPage() {
     () => (data?.daily ?? []).map((item) => ({ ...item, dateLabel: shortDate(item.date) })),
     [data]
   )
-  const stockData = data?.stock ?? []
+  const productSalesData = useMemo(
+    () => [...(data?.products ?? [])].sort((a, b) =>
+      b[productMetric] - a[productMetric] || a.name.localeCompare(b.name)
+    ),
+    [data, productMetric]
+  )
+  const visibleProductData = showAllProducts ? productSalesData : productSalesData.slice(0, 30)
+  const selectedProduct = productSalesData.find((product) => product.name === selectedProductName)
+  const productMetricLabel = productMetric === "revenue"
+    ? "Total amount sold"
+    : productMetric === "quantity"
+      ? "Quantity sold"
+      : "Total profit"
+  const productMetricValue = (product: ProductSalesPoint) =>
+    productMetric === "quantity" ? `${product.quantity.toLocaleString()} units` : money(product[productMetric])
   const stockPurchasesData = data?.stockPurchases ?? []
   const stockPurchasesByDateData = useMemo(() => {
     return (data?.stockPurchasesByDate ?? []).map((item) => ({
@@ -221,6 +250,11 @@ export default function InventoryAnalyticsPage() {
       .filter((name) => name !== mergeSource && name.toLowerCase().includes(query))
       .slice(0, 8)
   }, [mergeTarget, mergeSource, allProducts])
+  const mergeTargetPrices = useMemo(() => {
+    return new Map(
+      (data?.stockSalesPrices ?? []).map((prices) => [prices.name.trim().toLowerCase(), prices])
+    )
+  }, [data])
 
   const summary = data?.summary
   const isRangeInvalid = !from || !to || from > to
@@ -450,25 +484,91 @@ export default function InventoryAnalyticsPage() {
           )}
         </ChartPanel>
 
-        <ChartPanel title="Current stock by product" description={`On-hand units from recorded stock intake less recorded sales. ${stockData.length} products shown.`}>
-          {stockData.length ? (
-            <div className="h-[280px] w-full">
-              <ResponsiveContainer width="100%" height="100%">
-                <BarChart data={stockData} layout="vertical" margin={{ top: 4, right: 16, left: 8, bottom: 4 }}>
-                  <CartesianGrid stroke="hsl(var(--border))" strokeDasharray="3 3" horizontal={false} />
-                  <XAxis type="number" tickLine={false} axisLine={false} tick={{ fill: "hsl(var(--muted-foreground))", fontSize: 11 }} />
-                  <YAxis type="category" dataKey="name" width={112} tickLine={false} axisLine={false} tick={{ fill: "hsl(var(--muted-foreground))", fontSize: 10 }} />
-                  <Tooltip contentStyle={tooltipStyle} formatter={(value) => [`${Number(value).toLocaleString()} units`, "On hand"]} />
-                  <Bar dataKey="quantity" radius={[0, 5, 5, 0]} maxBarSize={20}>
-                    {stockData.map((item, index) => (
-                      <Cell key={`${item.name}-${index}`} fill={item.quantity < 0 ? "#dc5b4e" : index === 0 ? "#176b4d" : "#8bb5a0"} />
-                    ))}
-                  </Bar>
-                </BarChart>
-              </ResponsiveContainer>
-            </div>
+        <ChartPanel
+          title="Product sales by product"
+          description={`${productMetricLabel} in ${appliedRangeLabel}. ${visibleProductData.length.toLocaleString()} of ${productSalesData.length.toLocaleString()} products shown.`}
+        >
+          <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
+            <Label className="flex items-center gap-2 text-xs font-medium">
+              Graph mode
+              <select
+                aria-label="Product graph mode"
+                className="rounded-md border bg-background px-3 py-2 text-sm text-foreground"
+                value={productMetric}
+                onChange={(event) => setProductMetric(event.target.value as typeof productMetric)}
+              >
+                <option value="revenue">Total amount sold</option>
+                <option value="quantity">Quantity sold</option>
+                <option value="grossProfit">Total profit</option>
+              </select>
+            </Label>
+            {selectedProduct ? (
+              <p className="text-xs text-muted-foreground" aria-live="polite">
+                Selected product: <span className="font-medium text-foreground">{selectedProduct.name}</span>
+                {" · "}{productMetricLabel}: {productMetricValue(selectedProduct)}
+              </p>
+            ) : null}
+          </div>
+          {productSalesData.length ? (
+            <>
+              <div className="max-h-[60vh] overflow-y-auto rounded-md">
+                <div className="w-full" style={{ height: Math.max(280, visibleProductData.length * 30 + 36) }}>
+                  <ResponsiveContainer width="100%" height="100%">
+                    <BarChart data={visibleProductData} layout="vertical" margin={{ top: 4, right: 16, left: 8, bottom: 4 }}>
+                      <CartesianGrid stroke="hsl(var(--border))" strokeDasharray="3 3" horizontal={false} />
+                      <XAxis
+                        type="number"
+                        tickLine={false}
+                        axisLine={false}
+                        tick={{ fill: "hsl(var(--muted-foreground))", fontSize: 11 }}
+                        tickFormatter={(value) => productMetric === "quantity"
+                          ? Number(value).toLocaleString()
+                          : value >= 1000 ? `₦${Math.round(value / 1000)}k` : `₦${value}`}
+                      />
+                      <YAxis type="category" dataKey="name" hide />
+                      <Tooltip
+                        contentStyle={tooltipStyle}
+                        content={({ active, payload }) => {
+                          if (!active || !payload?.length) return null
+                          const product = payload[0].payload as ProductSalesPoint
+                          return (
+                            <div className="rounded-lg border bg-popover p-2.5 text-xs text-popover-foreground shadow-md">
+                              <p className="font-semibold text-foreground">{product.name}</p>
+                              <p className="mt-1 text-muted-foreground">
+                                {productMetricLabel}: <strong className="text-foreground">{productMetricValue(product)}</strong>
+                              </p>
+                            </div>
+                          )
+                        }}
+                      />
+                      <Bar
+                        dataKey={productMetric}
+                        radius={[0, 5, 5, 0]}
+                        maxBarSize={20}
+                        cursor="pointer"
+                        onClick={(_, index) => setSelectedProductName(visibleProductData[index]?.name ?? null)}
+                      >
+                        {visibleProductData.map((product, index) => (
+                          <Cell
+                            key={`${product.name}-${index}`}
+                            fill={product[productMetric] < 0 ? "#dc5b4e" : index === 0 ? "#176b4d" : "#8bb5a0"}
+                          />
+                        ))}
+                      </Bar>
+                    </BarChart>
+                  </ResponsiveContainer>
+                </div>
+              </div>
+              {productSalesData.length > 30 ? (
+                <div className="mt-3 flex justify-center">
+                  <Button type="button" variant="outline" size="sm" onClick={() => setShowAllProducts((showAll) => !showAll)}>
+                    {showAllProducts ? "Show top 30 products" : `Show all ${productSalesData.length.toLocaleString()} products`}
+                  </Button>
+                </div>
+              ) : null}
+            </>
           ) : (
-            <EmptyChart label={loading ? "Loading stock levels…" : "No stock intake records found."} />
+            <EmptyChart label={loading ? "Loading product sales…" : "No product sales in this date range."} />
           )}
         </ChartPanel>
 
@@ -678,13 +778,14 @@ export default function InventoryAnalyticsPage() {
                 <TableHead className="w-12 text-center text-xs">#</TableHead>
                 <TableHead className="text-xs">Product Name</TableHead>
                 <TableHead className="text-xs">Last Sold Unit Sales Price</TableHead>
+                <TableHead className="text-right text-xs">Revenue Generated</TableHead>
                 <TableHead className="w-28 text-right text-xs">Actions</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
               {loading ? (
                 <TableRow>
-                  <TableCell colSpan={4} className="h-24 text-center text-sm text-muted-foreground">
+                  <TableCell colSpan={5} className="h-24 text-center text-sm text-muted-foreground">
                     <div className="flex items-center justify-center gap-2">
                       <Loader2 className="h-4 w-4 animate-spin" />
                       Loading unstocked products…
@@ -693,7 +794,7 @@ export default function InventoryAnalyticsPage() {
                 </TableRow>
               ) : unstockedProducts.length === 0 ? (
                 <TableRow>
-                  <TableCell colSpan={4} className="h-24 text-center text-sm text-muted-foreground">
+                  <TableCell colSpan={5} className="h-24 text-center text-sm text-muted-foreground">
                     {unstockedSearch ? "No matching unstocked products found." : "No unstocked products found in this date range. All sold items have recorded cost prices!"}
                   </TableCell>
                 </TableRow>
@@ -703,6 +804,7 @@ export default function InventoryAnalyticsPage() {
                     <TableCell className="text-center text-xs text-muted-foreground">{index + 1}</TableCell>
                     <TableCell className="font-medium text-foreground">{product.name}</TableCell>
                     <TableCell className="text-sm font-semibold">{money(product.lastSalePrice)}</TableCell>
+                    <TableCell className="text-right text-sm font-semibold">{money(product.revenue)}</TableCell>
                     <TableCell className="text-right">
                       <Button
                         type="button"
@@ -764,6 +866,16 @@ export default function InventoryAnalyticsPage() {
                       }}
                     >
                       {name}
+                      {(() => {
+                        const prices = mergeTargetPrices.get(name.trim().toLowerCase())
+                        if (!prices) return null
+                        const labels = [
+                          prices.pcsSalesPrice != null ? `${money(prices.pcsSalesPrice)}/pc` : null,
+                          prices.packSalesPrice != null ? `${money(prices.packSalesPrice)}/pack` : null,
+                          prices.cartonSalesPrice != null ? `${money(prices.cartonSalesPrice)}/carton` : null,
+                        ].filter((price): price is string => price !== null)
+                        return labels.length ? <span className="ml-1 text-muted-foreground">· {labels.join(" · ")}</span> : null
+                      })()}
                     </button>
                   ))}
                 </div>

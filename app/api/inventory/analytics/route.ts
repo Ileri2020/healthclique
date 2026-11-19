@@ -13,6 +13,20 @@ type DailyTotals = {
   netProfit: number
 }
 
+type ProductSalesTotals = {
+  name: string
+  revenue: number
+  quantity: number
+  grossProfit: number
+}
+
+type StockSalesPrices = {
+  name: string
+  pcsSalesPrice?: number
+  packSalesPrice?: number
+  cartonSalesPrice?: number
+}
+
 const dayKey = (date: Date) =>
   new Intl.DateTimeFormat("en-CA", {
     timeZone: "Africa/Lagos",
@@ -124,6 +138,9 @@ export async function GET(request: Request) {
             pcsCostPrice: true,
             packCostPrice: true,
             cartonCostPrice: true,
+            pcsSalesPrice: true,
+            packSalesPrice: true,
+            cartonSalesPrice: true,
             totalPcs: true,
             qty: true,
             pcsQty: true,
@@ -260,7 +277,19 @@ export async function GET(request: Request) {
 
     // 7. Accumulate revenue + COGS per day
     // Also track products sold with no cost history (never stocked / cost = 0)
-    const unstockedMap = new Map<string, { name: string; lastSalePrice: number; lastDate: string }>()
+    const unstockedMap = new Map<string, { name: string; lastSalePrice: number; lastDate: string; revenue: number }>()
+    const productSalesMap = new Map<string, ProductSalesTotals>()
+    for (const inventory of allInventoriesForStock) {
+      for (const productName of [
+        ...inventory.stocks.map((stock) => stock.productName),
+        ...inventory.sales.map((sale) => sale.productName),
+      ]) {
+        const key = productName.trim().toLowerCase()
+        if (key && !productSalesMap.has(key)) {
+          productSalesMap.set(key, { name: productName.trim(), revenue: 0, quantity: 0, grossProfit: 0 })
+        }
+      }
+    }
 
     for (const inventory of salesInventories) {
       if (!inventory.date) continue
@@ -287,6 +316,16 @@ export async function GET(request: Request) {
         const revenue = sale.total ?? (sale.price ?? 0) * ((soldPcs || sale.qty) ?? 1)
 
         const key = sale.productName.trim().toLowerCase()
+        const productTotals = productSalesMap.get(key) ?? {
+          name: sale.productName.trim(),
+          revenue: 0,
+          quantity: 0,
+          grossProfit: 0,
+        }
+        productTotals.revenue += revenue
+        productTotals.quantity += soldPcs
+        productSalesMap.set(key, productTotals)
+
         const history = productCostHistory.get(key) ?? []
         const saleCost = [...history].reverse().find((entry) => entry.date <= date) ?? history[0]
 
@@ -301,10 +340,13 @@ export async function GET(request: Request) {
             : (soldPcs > 0 ? revenue / soldPcs : revenue)
           const existing = unstockedMap.get(key)
           if (!existing) {
-            unstockedMap.set(key, { name: sale.productName.trim(), lastSalePrice: saleUnitPrice, lastDate: date })
-          } else if (date >= existing.lastDate) {
-            existing.lastSalePrice = saleUnitPrice
-            existing.lastDate = date
+            unstockedMap.set(key, { name: sale.productName.trim(), lastSalePrice: saleUnitPrice, lastDate: date, revenue })
+          } else {
+            existing.revenue += revenue
+            if (date >= existing.lastDate) {
+              existing.lastSalePrice = saleUnitPrice
+              existing.lastDate = date
+            }
           }
           continue
         }
@@ -323,7 +365,9 @@ export async function GET(request: Request) {
           cogs = rawCogs <= revenue * 1.5 ? rawCogs : 0
         }
 
-        totals.grossProfit += revenue - cogs
+        const grossProfit = revenue - cogs
+        totals.grossProfit += grossProfit
+        productTotals.grossProfit += grossProfit
       }
     }
 
@@ -431,14 +475,34 @@ export async function GET(request: Request) {
     const totalExpenses = daily.reduce((s, d) => s + d.expenses, 0)
     const totalNetProfit = daily.reduce((s, d) => s + d.netProfit, 0)
 
+    const stockSalesPrices = new Map<string, StockSalesPrices>()
+    const stockInventoriesByDate = [...allStockInventories].sort((a, b) => {
+      const aDate = dayKey(a.date ?? a.rangeTo ?? a.rangeFrom ?? a.createdAt)
+      const bDate = dayKey(b.date ?? b.rangeTo ?? b.rangeFrom ?? b.createdAt)
+      return aDate.localeCompare(bDate)
+    })
+    for (const inventory of stockInventoriesByDate) {
+      for (const stock of inventory.stocks) {
+        const key = stock.productName.trim().toLowerCase()
+        if (!key) continue
+        const prices: StockSalesPrices = stockSalesPrices.get(key) ?? { name: stock.productName.trim() }
+        if (stock.pcsSalesPrice != null && stock.pcsSalesPrice > 0) prices.pcsSalesPrice = stock.pcsSalesPrice
+        if (stock.packSalesPrice != null && stock.packSalesPrice > 0) prices.packSalesPrice = stock.packSalesPrice
+        if (stock.cartonSalesPrice != null && stock.cartonSalesPrice > 0) prices.cartonSalesPrice = stock.cartonSalesPrice
+        stockSalesPrices.set(key, prices)
+      }
+    }
+
     return NextResponse.json({
       daily,
       stock,
+      products: Array.from(productSalesMap.values()),
+      stockSalesPrices: Array.from(stockSalesPrices.values()),
       stockPurchases,
       stockPurchasesByDate,
       unstockedProducts: Array.from(unstockedMap.values())
-        .map(({ name, lastSalePrice }) => ({ name, lastSalePrice }))
-        .sort((a, b) => a.name.localeCompare(b.name)),
+        .map(({ name, lastSalePrice, revenue }) => ({ name, lastSalePrice, revenue }))
+        .sort((a, b) => b.revenue - a.revenue || a.name.localeCompare(b.name)),
       summary: {
         customers: daily.reduce((s, d) => s + d.customers, 0),
         revenue: totalRevenue,
