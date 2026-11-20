@@ -166,9 +166,9 @@ export default function InventoryAnalyticsPage() {
   const [mergeDialogOpen, setMergeDialogOpen] = useState(false)
   const [mergeSource, setMergeSource] = useState<string | null>(null)
   const [mergeTarget, setMergeTarget] = useState("")
-  const [mergeTargetDropdownOpen, setMergeTargetDropdownOpen] = useState(false)
   const [merging, setMerging] = useState(false)
-  const [allProducts, setAllProducts] = useState<string[]>([])
+  const [allProducts, setAllProducts] = useState<Array<{ name: string; price?: number }>>([])
+  const [selectedMergeProducts, setSelectedMergeProducts] = useState<string[]>([])
 
   const fetchAnalytics = useCallback(async (signal?: AbortSignal) => {
     if (!from || !to || from > to) return
@@ -199,12 +199,17 @@ export default function InventoryAnalyticsPage() {
     return () => controller.abort()
   }, [fetchAnalytics])
 
-  // Fetch product names for merge autocomplete
+  // Fetch product names and prices for merge autocomplete
   useEffect(() => {
-    fetch("/api/inventory/products")
+    fetch("/api/inventory/products?withPrices=true")
       .then((res) => (res.ok ? res.json() : []))
-      .then((names: string[]) => {
-        if (Array.isArray(names)) setAllProducts(names)
+      .then((items: any) => {
+        if (Array.isArray(items)) {
+          const formatted = items.map((it) =>
+            typeof it === "string" ? { name: it } : { name: it.name, price: it.price }
+          )
+          setAllProducts(formatted)
+        }
       })
       .catch(() => {})
   }, [])
@@ -247,14 +252,45 @@ export default function InventoryAnalyticsPage() {
     const query = mergeTarget.trim().toLowerCase()
     if (query.length < 2) return []
     return allProducts
-      .filter((name) => name !== mergeSource && name.toLowerCase().includes(query))
-      .slice(0, 8)
-  }, [mergeTarget, mergeSource, allProducts])
-  const mergeTargetPrices = useMemo(() => {
-    return new Map(
-      (data?.stockSalesPrices ?? []).map((prices) => [prices.name.trim().toLowerCase(), prices])
-    )
-  }, [data])
+      .filter((p) => p.name.toLowerCase().includes(query))
+      .slice(0, 15)
+  }, [mergeTarget, allProducts])
+
+  // The last checked product is the preserved target name
+  const preservedTarget = selectedMergeProducts.length > 0
+    ? selectedMergeProducts[selectedMergeProducts.length - 1]
+    : null
+
+  const sourcesToMerge = useMemo(() => {
+    if (!preservedTarget) return []
+    const set = new Set<string>()
+    if (mergeSource && mergeSource.toLowerCase() !== preservedTarget.toLowerCase()) {
+      set.add(mergeSource)
+    }
+    for (const p of selectedMergeProducts) {
+      if (p.toLowerCase() !== preservedTarget.toLowerCase()) {
+        set.add(p)
+      }
+    }
+    return Array.from(set)
+  }, [mergeSource, selectedMergeProducts, preservedTarget])
+
+  const toggleMergeProduct = (name: string) => {
+    setSelectedMergeProducts((prev) => {
+      const exists = prev.some((p) => p.toLowerCase() === name.toLowerCase())
+      if (exists) {
+        return prev.filter((p) => p.toLowerCase() !== name.toLowerCase())
+      }
+      return [...prev.filter((p) => p.toLowerCase() !== name.toLowerCase()), name]
+    })
+  }
+
+  const setAsPreservedTarget = (name: string) => {
+    setSelectedMergeProducts((prev) => [
+      ...prev.filter((p) => p.toLowerCase() !== name.toLowerCase()),
+      name,
+    ])
+  }
 
   const summary = data?.summary
   const isRangeInvalid = !from || !to || from > to
@@ -289,16 +325,17 @@ export default function InventoryAnalyticsPage() {
   const handleOpenMerge = (productName: string) => {
     setMergeSource(productName)
     setMergeTarget("")
+    setSelectedMergeProducts([])
     setMergeDialogOpen(true)
   }
 
   const handleMergeExecute = async () => {
-    if (!mergeSource || !mergeTarget.trim()) {
-      toast.error("Select a target product")
+    if (!preservedTarget) {
+      toast.error("Please tick at least one product with checkbox to merge")
       return
     }
-    if (mergeSource.toLowerCase() === mergeTarget.trim().toLowerCase()) {
-      toast.error("Select a different product to merge into")
+    if (sourcesToMerge.length === 0) {
+      toast.error("Tick other duplicate versions to merge into '" + preservedTarget + "'")
       return
     }
     setMerging(true)
@@ -307,19 +344,19 @@ export default function InventoryAnalyticsPage() {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          sourceProductName: mergeSource,
-          targetProductName: mergeTarget.trim(),
+          sourceProductNames: sourcesToMerge,
+          targetProductName: preservedTarget,
         }),
       })
       if (!response.ok) {
         const err = await response.json().catch(() => null)
         throw new Error(err?.error || "Unable to merge products")
       }
-      toast.success(`Merged '${mergeSource}' into '${mergeTarget.trim()}'`)
+      toast.success(`Merged ${sourcesToMerge.length} product(s) into '${preservedTarget}'`)
       setMergeDialogOpen(false)
       setMergeSource(null)
+      setSelectedMergeProducts([])
       setMergeTarget("")
-      // Reload analytics to refresh calculations and unstocked list
       fetchAnalytics()
     } catch (err) {
       toast.error(err instanceof Error ? err.message : "Unable to merge products")
@@ -827,66 +864,135 @@ export default function InventoryAnalyticsPage() {
 
       {/* Merge Product Dialog */}
       <Dialog open={mergeDialogOpen} onOpenChange={setMergeDialogOpen}>
-        <DialogContent className="max-w-md">
+        <DialogContent className="max-w-lg">
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2">
               <GitMerge className="h-5 w-5 text-amber-500" />
-              Merge unstocked product
+              Combine &amp; Merge Products
             </DialogTitle>
             <DialogDescription>
-              Merge all previous stock and sales records of <strong className="text-foreground">{mergeSource}</strong> into another target product.
+              Search and tick checkboxes for duplicate versions to combine into 1 product.
+              The <strong>last checked product</strong> is the preserved target name.
             </DialogDescription>
           </DialogHeader>
+
           <div className="space-y-4 py-2">
-            <div className="relative">
-              <Label htmlFor="analytics-merge-target">Target product name (2+ letters)</Label>
+            <div>
+              <Label htmlFor="analytics-merge-search" className="text-xs font-semibold">
+                Type product name to search &amp; select duplicates
+              </Label>
               <Input
-                id="analytics-merge-target"
+                id="analytics-merge-search"
                 className="mt-1"
-                placeholder="Search target product name..."
+                placeholder="Search products (e.g. Paracetamol, Amox...)"
                 value={mergeTarget}
-                onFocus={() => { if (mergeTarget.trim().length >= 2) setMergeTargetDropdownOpen(true) }}
-                onChange={(e) => {
-                  setMergeTarget(e.target.value)
-                  setMergeTargetDropdownOpen(e.target.value.trim().length >= 2)
-                }}
-                onBlur={() => { setTimeout(() => setMergeTargetDropdownOpen(false), 200) }}
+                onChange={(e) => setMergeTarget(e.target.value)}
               />
-              {mergeTargetDropdownOpen && mergeTargetSuggestions.length > 0 ? (
-                <div className="absolute left-0 right-0 top-full z-50 mt-1 max-h-48 overflow-y-auto rounded-md border bg-popover p-1 text-popover-foreground shadow-md">
-                  {mergeTargetSuggestions.map((name) => (
-                    <button
-                      key={name}
-                      type="button"
-                      className="block w-full rounded px-2 py-1.5 text-left text-sm font-medium hover:bg-accent"
-                      onMouseDown={(e) => {
-                        e.preventDefault()
-                        setMergeTarget(name)
-                        setMergeTargetDropdownOpen(false)
-                      }}
-                    >
-                      {name}
-                      {(() => {
-                        const prices = mergeTargetPrices.get(name.trim().toLowerCase())
-                        if (!prices) return null
-                        const labels = [
-                          prices.pcsSalesPrice != null ? `${money(prices.pcsSalesPrice)}/pc` : null,
-                          prices.packSalesPrice != null ? `${money(prices.packSalesPrice)}/pack` : null,
-                          prices.cartonSalesPrice != null ? `${money(prices.cartonSalesPrice)}/carton` : null,
-                        ].filter((price): price is string => price !== null)
-                        return labels.length ? <span className="ml-1 text-muted-foreground">· {labels.join(" · ")}</span> : null
-                      })()}
-                    </button>
-                  ))}
-                </div>
-              ) : null}
             </div>
 
-            <div className="rounded-md border border-amber-500/30 bg-amber-500/10 p-3 text-xs text-amber-800 dark:text-amber-300">
-              <strong>Warning:</strong> Are you sure you want to merge <em>{mergeSource}</em> into <em>{mergeTarget || "selected target"}</em>?
-              This will update all previous stock and sales entries in the database to prevent duplicate product listings and ensure future cost calculation succeeds.
+            {/* Suggestions list with checkboxes and prices */}
+            {mergeTarget.trim().length >= 2 ? (
+              <div className="rounded-md border bg-muted/20 p-2">
+                <p className="mb-2 text-[11px] font-medium text-muted-foreground">
+                  Matching products (tick to select, last ticked becomes preserved name):
+                </p>
+                {mergeTargetSuggestions.length === 0 ? (
+                  <p className="py-2 text-center text-xs text-muted-foreground">No matching products found.</p>
+                ) : (
+                  <div className="max-h-56 space-y-1.5 overflow-y-auto pr-1">
+                    {mergeTargetSuggestions.map((item) => {
+                      const isChecked = selectedMergeProducts.some(
+                        (p) => p.toLowerCase() === item.name.toLowerCase()
+                      )
+                      const isPreserved = preservedTarget?.toLowerCase() === item.name.toLowerCase()
+
+                      return (
+                        <div
+                          key={item.name}
+                          className={`flex items-center justify-between gap-2 rounded-md border p-2 text-xs transition-colors ${
+                            isPreserved
+                              ? "border-emerald-500/60 bg-emerald-500/10 dark:bg-emerald-950/20"
+                              : isChecked
+                              ? "border-amber-500/50 bg-amber-500/10 dark:bg-amber-950/20"
+                              : "hover:bg-muted/50"
+                          }`}
+                        >
+                          <label className="flex flex-1 cursor-pointer items-center gap-2.5">
+                            <input
+                              type="checkbox"
+                              className="h-4 w-4 rounded border-gray-300 text-primary focus:ring-primary"
+                              checked={isChecked}
+                              onChange={() => toggleMergeProduct(item.name)}
+                            />
+                            <span className="font-medium text-foreground">{item.name}</span>
+                          </label>
+
+                          <div className="flex items-center gap-2">
+                            {item.price != null ? (
+                              <span className="rounded bg-background px-1.5 py-0.5 text-[11px] font-semibold text-foreground border shadow-xs">
+                                {money(item.price)}
+                              </span>
+                            ) : null}
+
+                            {isPreserved ? (
+                              <span className="rounded-full bg-emerald-600 px-2 py-0.5 text-[10px] font-bold text-white">
+                                ★ Preserved Target
+                              </span>
+                            ) : isChecked ? (
+                              <button
+                                type="button"
+                                className="text-[10px] text-muted-foreground underline hover:text-foreground"
+                                onClick={() => setAsPreservedTarget(item.name)}
+                              >
+                                Set as Target
+                              </button>
+                            ) : null}
+                          </div>
+                        </div>
+                      )
+                    })}
+                  </div>
+                )}
+              </div>
+            ) : null}
+
+            {/* Merge Plan Summary */}
+            {preservedTarget ? (
+              <div className="rounded-md border border-emerald-500/40 bg-emerald-500/10 p-3 text-xs space-y-2">
+                <div className="flex items-center gap-1.5 font-semibold text-emerald-800 dark:text-emerald-300">
+                  <span className="inline-block h-2 w-2 rounded-full bg-emerald-500" />
+                  Preserved Target Name (Surviving Product):
+                </div>
+                <div className="rounded bg-background/80 p-2 font-bold text-foreground border border-emerald-500/20">
+                  {preservedTarget}
+                </div>
+
+                <div className="mt-2 text-[11px] text-emerald-900 dark:text-emerald-200">
+                  <strong>{sourcesToMerge.length} product(s)</strong> will be merged into <em>{preservedTarget}</em>:
+                </div>
+                <div className="flex flex-wrap gap-1">
+                  {sourcesToMerge.map((src) => (
+                    <span
+                      key={src}
+                      className="inline-flex items-center gap-1 rounded bg-muted/80 px-2 py-0.5 text-[11px] font-medium border"
+                    >
+                      <span>{src}</span>
+                    </span>
+                  ))}
+                </div>
+              </div>
+            ) : (
+              <div className="rounded-md border border-dashed p-3 text-center text-xs text-muted-foreground">
+                Search above and tick checkboxes for the versions you want to combine.
+                The last checked product will be the preserved name.
+              </div>
+            )}
+
+            <div className="rounded-md border border-amber-500/30 bg-amber-500/10 p-3 text-[11px] text-amber-800 dark:text-amber-300">
+              <strong>Note:</strong> All past stock intake, sales ledger entries, and shelf assignments for the selected duplicate products will be permanently updated to the preserved target name.
             </div>
           </div>
+
           <DialogFooter>
             <Button variant="outline" type="button" onClick={() => setMergeDialogOpen(false)}>
               Cancel
@@ -895,10 +1001,10 @@ export default function InventoryAnalyticsPage() {
               type="button"
               variant="destructive"
               onClick={handleMergeExecute}
-              disabled={merging || !mergeTarget.trim()}
+              disabled={merging || !preservedTarget || sourcesToMerge.length === 0}
             >
               {merging ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
-              Confirm merge
+              Confirm combine &amp; merge ({sourcesToMerge.length + (preservedTarget ? 1 : 0)} products)
             </Button>
           </DialogFooter>
         </DialogContent>
